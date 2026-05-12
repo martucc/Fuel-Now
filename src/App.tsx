@@ -73,6 +73,7 @@ export default function App() {
   const [tab, setTab] = useState<TabType>('home');
   const [userLoc, setUserLoc] = useState<{lat:number;lng:number}|null>(null);
   const [stations, setStations] = useState<FuelStation[]>([]);
+  const [nationalStats, setNationalStats] = useState<any>({});
   const [marketAnalyses, setMarketAnalyses] = useState<Record<string, MarketAnalysis>>({});
   const [fuel, setFuel] = useState<FuelType>('Benzina');
   const [loading, setLoading] = useState(true);
@@ -181,7 +182,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => { try { const [nR, cR] = await Promise.all([fetch('news.json').then(r=>r.ok?r.json():[]).catch(()=>[]), fetch('cars.json').then(r=>r.json()).catch(()=>[])]); setFuelNews(normalizeFuelNews(nR)); const cd = Array.isArray(cR)?cR:[]; setCars(cd); const sid = localStorage.getItem('mf_car'); if (sid && cd.length) { const c = cd.find((x:any)=>x.model===sid); if (c) { setSelCar(c); if(c.liters) setTankL(c.liters); if(c.kml) setTripKml(c.kml); } } } catch {} })();
-    const load = async (loc:{lat:number;lng:number}) => { setLoading(true); setAiErr(null); try { const d = await getStations(loc); setStations(d); const fuels: FuelType[]=['Benzina','Diesel','GPL','Metano']; await Promise.all(fuels.map(f=>fetchAnalysis(f, false, undefined, d))); } catch {} finally { initDone.current=true; setLoading(false); } };
+    const load = async (loc:{lat:number;lng:number}) => { setLoading(true); setAiErr(null); try { const {stations: d, nationalStats: ns} = await getStations(loc); setStations(d); setNationalStats(ns); const fuels: FuelType[]=['Benzina','Diesel','GPL','Metano']; await Promise.all(fuels.map(f=>fetchAnalysis(f, false, undefined, d))); } catch {} finally { initDone.current=true; setLoading(false); } };
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(p => { const l={lat:p.coords.latitude,lng:p.coords.longitude}; setUserLoc(l); load(l); }, () => { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }, {enableHighAccuracy:true,timeout:10000});
     } else { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }
@@ -192,7 +193,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('mf_favs', JSON.stringify(favs)); }, [favs]);
   useEffect(() => { localStorage.setItem('mf_alerts', JSON.stringify(alerts)); }, [alerts]);
 
-  const handleMapMove = async (c:{lat:number;lng:number}) => { const d = await getStations(c); setStations(d); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
+  const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
   const toggleFav = (id:string) => setFavs(p => p.includes(id) ? p.filter(f=>f!==id) : [...p,id]);
   const handleSelectCar = (car:any) => { setSelCar(car); if(car.liters) setTankL(car.liters); if(car.kml) setTripKml(car.kml); localStorage.setItem('mf_car', car.model); };
 
@@ -242,9 +243,12 @@ export default function App() {
 
   const isPriceAnom = (s: FuelStation, f: FuelType) => {
     const p = s.prices.find(pp => pp.type === f)?.price || 0;
-    const avg = allAverages[f];
-    // An anomaly is a price < 88% of average or < 0.5 EUR (obvious error)
-    return p > 0 && ((avg !== Infinity && p < avg * 0.88) || p < 0.5);
+    const jsonKey = f.toLowerCase();
+    const natAvg = nationalStats[jsonKey]?.avg;
+    const avg = natAvg || allAverages[f];
+    
+    // An anomaly is a price < 93% of average (national if available) or < 0.5 EUR
+    return p > 0 && ((avg !== Infinity && p < avg * 0.93) || p < 0.5);
   };
 
   const avgP = allAverages[fuel];

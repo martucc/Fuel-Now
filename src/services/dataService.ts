@@ -72,13 +72,16 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         );
       }
 
-      return parsedStations;
+      return {
+        stations: parsedStations,
+        nationalStats: data.national || {}
+      };
     }
   } catch (error) {
     console.error('Error fetching stations data:', error);
   }
 
-  return [];
+  return { stations: [], nationalStats: {} };
 }
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
