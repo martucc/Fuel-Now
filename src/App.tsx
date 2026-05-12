@@ -243,7 +243,8 @@ export default function App() {
   const isPriceAnom = (s: FuelStation, f: FuelType) => {
     const p = s.prices.find(pp => pp.type === f)?.price || 0;
     const avg = allAverages[f];
-    return p > 0 && avg !== Infinity && p < avg * 0.90;
+    // An anomaly is a price < 75% of average or < 0.5 EUR (obvious error)
+    return p > 0 && ((avg !== Infinity && p < avg * 0.75) || p < 0.5);
   };
 
   const avgP = allAverages[fuel];
@@ -255,8 +256,9 @@ export default function App() {
     const distMatch = s.distance === undefined || s.distance <= radius;
     const h24Match = !h24 || s.services.includes('H24');
     const hwyMatch = !noHwy || !s.services.includes('Autostrada');
+    const anomMatch = !isPriceAnom(s, fuel);
     
-    return cp > 0 && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch;
+    return cp > 0 && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch && anomMatch;
   }).sort((a, b) => (a.prices.find(p => p.type === fuel)?.price || Infinity) - (b.prices.find(p => p.type === fuel)?.price || Infinity));
 
   const validPrices = filtered
