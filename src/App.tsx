@@ -269,6 +269,7 @@ export default function App() {
     const h24Match = !h24 || s.services.includes('H24');
     const hwyMatch = !noHwy || !s.services.includes('Autostrada');
     const isBlocked = blockedIds.includes(s.id);
+    const anomMatch = !isPriceAnom(s, fuel);
     
     return cp > 0 && !isBlocked && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch && anomMatch;
   }).sort((a, b) => (a.prices.find(p => p.type === fuel)?.price || Infinity) - (b.prices.find(p => p.type === fuel)?.price || Infinity));
