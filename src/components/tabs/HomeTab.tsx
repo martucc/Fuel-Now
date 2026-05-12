@@ -32,6 +32,8 @@ interface Props {
   analysisLoading: boolean;
   fetchAnalysis: (f: FuelType, force?: boolean) => void;
   isPriceAnom: (s: FuelStation, f: FuelType) => boolean;
+  radius: number;
+  setRadius: (v: number) => void;
 }
 
 export function HomeTab(p: Props) {
@@ -78,6 +80,26 @@ export function HomeTab(p: Props) {
         
         <div className="mb-4">
           <FuelTypeSelector current={p.selectedFuel} onSelect={p.setSelectedFuel} />
+        </div>
+
+        {/* Radius Slider */}
+        <div className="mb-6 px-3 py-4 bg-[#1c1c1e] rounded-[24px] border border-white/5">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-[10px] font-black text-[#8e8e93] uppercase tracking-[0.2em]">Raggio Ricerca</span>
+            <span className="text-xs font-black text-blue-400">{p.radius} km</span>
+          </div>
+          <input 
+            type="range" 
+            min="1" 
+            max="100" 
+            value={p.radius} 
+            onChange={(e) => p.setRadius(Number(e.target.value))}
+            className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+          />
+          <div className="flex justify-between mt-2 px-1">
+            <span className="text-[9px] font-bold text-[#48484a]">1km</span>
+            <span className="text-[9px] font-bold text-[#48484a]">100km</span>
+          </div>
         </div>
       </div>
 
