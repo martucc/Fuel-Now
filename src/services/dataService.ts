@@ -2,7 +2,7 @@ import type { FuelStation } from '../types';
 
 export async function getStations(userLocation?: { lat: number; lng: number }): Promise<FuelStation[]> {
   try {
-    const response = await fetch('/stations.json');
+    const response = await fetch('stations.json');
     if (!response.ok) throw new Error('Failed to fetch stations.json');
     const data = await response.json();
 
