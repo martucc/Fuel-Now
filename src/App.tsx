@@ -5,7 +5,7 @@ import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
 import { analyzeFuelMarket } from './services/geminiService';
 import { buildLocalMarketAnalysis, calculateMarketStats } from './services/localAnalysis';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 // @ts-ignore
