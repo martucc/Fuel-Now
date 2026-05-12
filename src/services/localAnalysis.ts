@@ -34,10 +34,20 @@ function getFuelEntries(stations: FuelStation[], fuelType: FuelType) {
 }
 
 export function calculateMarketStats(stations: FuelStation[], fuelType: FuelType): MarketStats {
-  const entries = getFuelEntries(stations, fuelType);
-  if (entries.length === 0) {
+  const allEntries = getFuelEntries(stations, fuelType);
+  if (allEntries.length === 0) {
     const fallback = FALLBACK_AVERAGE[fuelType] || 1.8;
     return { average: fallback, min: fallback, max: fallback, spread: 0, sampleSize: 0 };
+  }
+
+  // Pre-calculate raw average to identify anomalies
+  const rawAvg = allEntries.reduce((s, e) => s + e.price.price, 0) / allEntries.length;
+  
+  // Filter out anomalies (below 90% of average)
+  const entries = allEntries.filter(e => e.price.price >= rawAvg * 0.90);
+  
+  if (entries.length === 0) {
+    return { average: rawAvg, min: rawAvg, max: rawAvg, spread: 0, sampleSize: 0 };
   }
 
   const sorted = entries.map((e) => e.price.price).sort((a, b) => a - b);
@@ -86,17 +96,25 @@ function buildSeries(basePrice: number, trend: MarketAnalysis['trend']) {
 
 function pickTrend(stats: MarketStats): MarketAnalysis['trend'] {
   if (stats.sampleSize === 0) return 'STABLE';
+  // Heuristic: high spread often precedes a drop, high absolute price often precedes more rises in the current market
   if (stats.spread >= 0.18) return 'DOWN';
-  if (stats.average >= 2.08) return 'UP';
+  if (stats.average >= 2.05) return 'UP';
+  if (stats.average <= 1.70) return 'DOWN';
   return 'STABLE';
 }
 
-function pickAdvice(stats: MarketStats): MarketAnalysis['advice'] {
+function pickAdvice(stats: MarketStats, trend: MarketAnalysis['trend']): MarketAnalysis['advice'] {
   if (stats.sampleSize === 0) return 'WAIT';
-  if (stats.min <= stats.average - 0.045) return 'FILL-FULL';
-  if (stats.average >= 2.08) return 'TEN-EURO';
-  if (stats.spread <= 0.035) return 'WAIT';
-  return 'FILL-FULL';
+  
+  // Consistency logic:
+  if (trend === 'UP') return 'FILL-FULL'; // If prices are going up, buy now
+  if (trend === 'DOWN' && stats.spread < 0.05) return 'WAIT'; // If falling and prices are similar, wait
+  
+  // Tactical logic for stable or high-spread markets
+  if (stats.min <= stats.average - 0.040) return 'FILL-FULL'; // Found a deal? Fill up.
+  if (stats.average >= 2.10) return 'TEN-EURO'; // Extreme price? Just enough to survive.
+  
+  return 'WAIT';
 }
 
 export function buildLocalMarketAnalysis(
@@ -106,7 +124,7 @@ export function buildLocalMarketAnalysis(
 ): MarketAnalysis {
   const stats = calculateMarketStats(stations, fuelType);
   const trend = pickTrend(stats);
-  const advice = pickAdvice(stats);
+  const advice = pickAdvice(stats, trend);
   const { historicalData, forecast } = buildSeries(stats.average, trend);
   const bestStation = stats.cheapestStationName || 'la stazione più economica';
   const questionText = question?.trim()

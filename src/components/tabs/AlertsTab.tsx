@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Bell, BellOff, X } from 'lucide-react';
+import { BellOff, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { FuelType, Alert } from '../../types';
 

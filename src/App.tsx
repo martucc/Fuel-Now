@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Fuel, MapPin, Bell, Settings, X, Home, BarChart3, Car, Target, RefreshCw, Route, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from './lib/utils';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
 import { analyzeFuelMarket } from './services/geminiService';
@@ -21,10 +20,32 @@ import { AnalysisTab } from './components/tabs/AnalysisTab';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { FiltersModal } from './components/modals/FiltersModal';
 import { SettingsModal } from './components/modals/SettingsModal';
-import { FuelTypeSelector } from './components/FuelTypeSelector';
+import { SplashScreen } from './components/SplashScreen';
+import { BottomNav } from './components/BottomNav';
+import { getBrandLogo } from './lib/brandLogos';
 
 const DefaultIcon = L.icon({ iconUrl: markerIcon, shadowUrl: markerShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+type TabType = 'home'|'map'|'veicolo'|'analysis'|'alerts'|'trip';
+const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'alerts'];
+
+const pageVariants = {
+  initial: (direction: number) => ({
+    x: direction > 0 ? 50 : -50,
+    opacity: 0,
+  }),
+  animate: {
+    x: 0,
+    opacity: 1,
+    transition: { type: "spring" as any, stiffness: 400, damping: 35 },
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -50 : 50,
+    opacity: 0,
+    transition: { duration: 0.15 },
+  }),
+};
 
 function MapUpdater({ onMove }: { onMove: (c: { lat: number; lng: number }) => void }) {
   useMapEvents({ moveend: (e: any) => { const c = e.target.getCenter(); onMove({ lat: c.lat, lng: c.lng }); } });
@@ -49,8 +70,7 @@ function calcDist(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export default function App() {
-  type Tab = 'home'|'map'|'veicolo'|'analysis'|'alerts'|'trip';
-  const [tab, setTab] = useState<Tab>('home');
+  const [tab, setTab] = useState<TabType>('home');
   const [userLoc, setUserLoc] = useState<{lat:number;lng:number}|null>(null);
   const [stations, setStations] = useState<FuelStation[]>([]);
   const [marketAnalyses, setMarketAnalyses] = useState<Record<string, MarketAnalysis>>({});
@@ -86,7 +106,9 @@ export default function App() {
   const [aiErr, setAiErr] = useState<string|null>(null);
   const [userQ, setUserQ] = useState('');
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [driveMode, setDriveMode] = useState(() => {
+  const [direction, setDirection] = useState(0);
+  const [showSplash, setShowSplash] = useState(true);
+  const [driveMode] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('drive')==='1') localStorage.setItem('mf_drive','on');
     if (p.get('drive')==='0') localStorage.setItem('mf_drive','off');
@@ -94,25 +116,64 @@ export default function App() {
   });
   const initDone = useRef(false);
 
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => setShowSplash(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
+  const handleTabChange = (newTab: TabType) => {
+    const currentIndex = tabOrder.indexOf(tab);
+    const newIndex = tabOrder.indexOf(newTab);
+    setDirection(newIndex > currentIndex ? 1 : -1);
+    setTab(newTab);
+  };
   const fetchAnalysis = async (f: FuelType, force=false, q?: string, src: FuelStation[] = stations) => {
     const today = new Date().toISOString().split('T')[0];
     const hasKey = apiKey.trim().length > 0;
-    const ck = `mf_analysis_${f}_${apiModel}`;
+    const ck = `mf_analysis_${f}_${apiModel}_${hasKey ? 'ai' : 'local'}`;
+    
     if (force && !q) localStorage.removeItem(ck);
-    if (hasKey && !force && !q) { const c = localStorage.getItem(ck); if (c) { const p = JSON.parse(c); if (p.date===today && p.analysis?.categories) { setMarketAnalyses(pr=>({...pr, [f]: {...p.analysis, source: p.analysis.source||'ai'}})); return; } } }
+    
+    if (!force && !q) {
+      const c = localStorage.getItem(ck);
+      if (c) {
+        const p = JSON.parse(c);
+        if (p.date === today && p.analysis?.categories) {
+          setMarketAnalyses(pr => ({ ...pr, [f]: { ...p.analysis, source: p.analysis.source || (hasKey ? 'ai' : 'local') } }));
+          return;
+        }
+      }
+    }
+
     setAnalysisLoading(true);
     try {
       const mStats = calculateMarketStats(src, f);
       const lCtx = `Media: €${mStats.average}, Minimo: €${mStats.min}, Spread: €${mStats.spread}`;
-      if (!hasKey) { setMarketAnalyses(pr=>({...pr, [f]: buildLocalMarketAnalysis(f, src, q)})); setAiErr(null); return; }
-      const a = await analyzeFuelMarket(apiKey, apiModel, f, q, lCtx);
-      const enriched = {...a, source:'ai', generatedAt: new Date().toISOString()};
-      setMarketAnalyses(pr=>({...pr, [f]: enriched}));
-      if (!q) localStorage.setItem(ck, JSON.stringify({date:today, analysis:enriched}));
+      
+      let analysis: MarketAnalysis;
+      if (!hasKey) {
+        analysis = buildLocalMarketAnalysis(f, src, q);
+        setAiErr(null);
+      } else {
+        analysis = await analyzeFuelMarket(apiKey, apiModel, f, q, lCtx);
+      }
+
+      const enriched = { ...analysis, source: (hasKey ? 'ai' : 'local') as any, generatedAt: new Date().toISOString() };
+      setMarketAnalyses(pr => ({ ...pr, [f]: enriched }));
+      
+      if (!q) {
+        localStorage.setItem(ck, JSON.stringify({ date: today, analysis: enriched }));
+      }
     } catch (e: any) {
-      setMarketAnalyses(pr=>({...pr, [f]: buildLocalMarketAnalysis(f, src, q)}));
-      setAiErr(e.message==='MISSING_KEY' ? null : 'Gemini non disponibile: analisi locale attiva.');
-    } finally { setAnalysisLoading(false); }
+      console.error('Analysis error:', e);
+      const fallback = buildLocalMarketAnalysis(f, src, q);
+      setMarketAnalyses(pr => ({ ...pr, [f]: { ...fallback, source: 'local' } }));
+      setAiErr(hasKey && e.message !== 'MISSING_KEY' ? 'Gemini non disponibile: analisi locale attiva.' : null);
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   useEffect(() => { driveMode ? document.documentElement.dataset.drive='on' : delete document.documentElement.dataset.drive; }, [driveMode]);
@@ -165,16 +226,44 @@ export default function App() {
     } catch (e:any) { setTripStatus(e.message); }
   };
 
-  const vp = stations.map(s=>s.prices.find(p=>p.type===fuel)?.price).filter(p=>p&&p>0) as number[];
-  const avgP = vp.length>0 ? vp.reduce((a,b)=>a+b,0)/vp.length : Infinity;
-  const isAnom = (p: number) => p > 0 && avgP !== Infinity && p < avgP * 0.91;
+  const fuels: FuelType[] = ['Benzina', 'Diesel', 'GPL', 'Metano'];
+  const allAverages = fuels.reduce((acc, f) => {
+    const vp = stations.map(s => s.prices.find(p => p.type === f)?.price).filter(p => p && p > 0.5) as number[];
+    if (vp.length === 0) {
+      acc[f] = Infinity;
+    } else {
+      vp.sort((a, b) => a - b);
+      const trim = Math.floor(vp.length * 0.15);
+      const trimmed = vp.slice(trim, vp.length - trim || vp.length);
+      acc[f] = (trimmed.reduce((a, b) => a + b, 0) / trimmed.length) || (vp.reduce((a, b) => a + b, 0) / vp.length);
+    }
+    return acc;
+  }, {} as Record<FuelType, number>);
+
+  const isPriceAnom = (s: FuelStation, f: FuelType) => {
+    const p = s.prices.find(pp => pp.type === f)?.price || 0;
+    const avg = allAverages[f];
+    return p > 0 && avg !== Infinity && p < avg * 0.90;
+  };
+
+  const avgP = allAverages[fuel];
+  
   const filtered = stations.filter(s => {
-    const cp = s.prices.find(p=>p.type===fuel)?.price||0;
-    const anom = isAnom(cp);
-    return s.prices.some(p=>p.type===fuel) && (brands.length===0||brands.includes(s.brand)) && (services.length===0||services.every(sv=>s.services.includes(sv))) && (s.distance===undefined||s.distance<=radius) && (!h24||s.services.includes('H24')) && (!noHwy||!s.services.includes('Autostrada')) && (!hideAnom||!anom);
-  }).sort((a,b)=>(a.prices.find(p=>p.type===fuel)?.price||Infinity)-(b.prices.find(p=>p.type===fuel)?.price||Infinity));
-  const validPrices = filtered.map(s=>s.prices.find(p=>p.type===fuel)?.price||Infinity).filter(p=>p!==Infinity && !isAnom(p));
-  const cheapP = validPrices.length>0 ? Math.min(...validPrices) : Infinity;
+    const cp = s.prices.find(p => p.type === fuel)?.price || 0;
+    const brandMatch = brands.length === 0 || brands.includes(s.brand);
+    const serviceMatch = services.length === 0 || services.every(sv => s.services.includes(sv));
+    const distMatch = s.distance === undefined || s.distance <= radius;
+    const h24Match = !h24 || s.services.includes('H24');
+    const hwyMatch = !noHwy || !s.services.includes('Autostrada');
+    
+    return cp > 0 && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch;
+  }).sort((a, b) => (a.prices.find(p => p.type === fuel)?.price || Infinity) - (b.prices.find(p => p.type === fuel)?.price || Infinity));
+
+  const validPrices = filtered
+    .filter(s => !isPriceAnom(s, fuel))
+    .map(s => s.prices.find(p => p.type === fuel)?.price || Infinity)
+    .filter(p => p !== Infinity);
+  const cheapP = validPrices.length > 0 ? Math.min(...validPrices) : Infinity;
   const mStats = calculateMarketStats(filtered, fuel);
   const marketRef = marketAnalyses[fuel] || null;
   const isLocal = marketRef?.source !== 'ai';
@@ -182,50 +271,127 @@ export default function App() {
   const allBrands = [...new Set(stations.map(s=>s.brand))].filter(Boolean).sort();
   const mapSt = filtered.slice(0,250);
 
-  const tabs: {id:Tab;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'alerts',icon:Bell,label:'Alert'}];
+  // @ts-ignore - tabs is intended for future menu expansions or logging
+  const tabs: {id:TabType;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'alerts',icon:Bell,label:'Alert'}];
 
   return (
     <div className="min-h-screen bg-black text-[#f5f5f7] font-sans">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-[60] bg-black/90 backdrop-blur-2xl px-6 py-5 flex items-center justify-between border-b border-white/10 shadow-2xl">
+      <AnimatePresence>
+        {showSplash && <SplashScreen key="splash" />}
+      </AnimatePresence>
+      {/* Header / Top Bar */}
+      <header className="fixed top-0 left-0 right-0 z-[60] bg-black/80 backdrop-blur-3xl px-6 py-4 flex items-center justify-between border-b border-white/5 shadow-2xl">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-[0_8px_30px_rgba(37,99,235,0.4)] border border-blue-400/20"><Fuel size={24}/></div>
-          <div><h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Martucc<span className="text-blue-500">Fuel</span></h1><div className="flex items-center gap-2 mt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"/><p className="text-[9px] text-[#8e8e93] uppercase font-black tracking-[0.2em] italic">{userLoc?"Signal Active":"Scanning..."}</p></div></div>
+          <div className="flex items-baseline gap-1">
+            <h1 className="text-xl font-black italic tracking-tighter text-white uppercase">
+              Martucc<span className="text-blue-500">Fuel</span>
+            </h1>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse ml-1" />
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          {loading && <motion.div animate={{rotate:360}} transition={{repeat:Infinity,duration:1.5,ease:"linear"}} className="text-blue-500"><RefreshCw size={18}/></motion.div>}
-          <button onClick={() => { setDriveMode(d => { const n=!d; localStorage.setItem('mf_drive',n?'on':'off'); return n; }); }} className={cn("w-10 h-10 flex items-center justify-center rounded-xl transition-all border", driveMode?"bg-blue-600 text-white border-blue-400 shadow-xl":"bg-white/5 text-[#8e8e93] border-white/5")}><Car size={20}/></button>
-          <button onClick={()=>setShowSettings(true)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-xl border border-white/5"><Settings size={20} className="text-[#8e8e93]"/></button>
+        
+        <div className="flex items-center gap-3">
+          {selCar && (
+            <button 
+              onClick={() => setTab('veicolo')}
+              className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all active:scale-95"
+            >
+              <Car size={14} className="text-[#8e8e93]" />
+              <span className="text-[11px] font-bold text-white uppercase tracking-wider">{selCar.model}</span>
+            </button>
+          )}
+          <button 
+            onClick={() => setShowSettings(true)} 
+            className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
+          >
+            <Settings size={20} className="text-[#8e8e93]" />
+          </button>
         </div>
       </header>
 
       {/* Content Area */}
-      <div className="pt-[100px] pb-[90px] min-h-screen overflow-y-auto no-scrollbar">
+      <div className="pt-[80px] pb-[90px] min-h-screen overflow-y-auto no-scrollbar">
         {/* Map Tab - Full area map */}
         {tab === 'map' && (
-          <div className="fixed inset-0 top-[100px] bottom-[80px] z-[10]">
-            <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full grayscale-[0.8] contrast-[1.2]" zoomControl={false}>
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
+          <div className="fixed inset-0 top-[80px] bottom-[80px] z-[10]">
+            <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
               <MapUpdater onMove={handleMapMove} />
               <CenterBtn loc={userLoc} />
-              {userLoc && (<><Marker position={[userLoc.lat,userLoc.lng]} icon={L.divIcon({className:'user-location-div-icon',html:'<div class="user-location-marker"><span></span></div>',iconSize:[30,30],iconAnchor:[15,15]})}><Popup>Base Operativa</Popup></Marker>{/* @ts-ignore */}<Circle center={[userLoc.lat,userLoc.lng]} radius={radius*1000} pathOptions={{color:'#3b82f6',weight:1,fillColor:'#3b82f6',fillOpacity:0.03,dashArray:'5,5'}} /></>)}
+              {userLoc && (
+                <>
+                  <Marker 
+                    position={[userLoc.lat, userLoc.lng]} 
+                    icon={L.divIcon({
+                      className: 'user-location-div-icon',
+                      html: '<div class="user-location-marker"><span></span></div>',
+                      iconSize: [30, 30],
+                      iconAnchor: [15, 15]
+                    })}
+                  >
+                    <Popup>Base Operativa</Popup>
+                  </Marker>
+                  {/* @ts-ignore */}
+                  <Circle 
+                    center={[userLoc.lat, userLoc.lng]} 
+                    radius={radius * 1000} 
+                    pathOptions={{ color: '#3b82f6', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.03, dashArray: '5,5' }} 
+                  />
+                </>
+              )}
               {mapSt.map(s => {
-                const cp=s.prices.find(p=>p.type===fuel)?.price||0; const best=cp===cheapP&&cheapP!==Infinity; const anom=isAnom(cp);
-                let bg='bg-[#1c1c1e]', bc='border-white/20', tc='text-white', gl='', extra=' ';
+                const cp = s.prices.find(p => p.type === fuel)?.price || 0;
+                const best = cp === cheapP && cheapP !== Infinity;
+                const anom = isPriceAnom(s, fuel);
+                let bg = 'bg-[#1c1c1e]', bc = 'border-white/20', tc = 'text-white', gl = '', extra = ' ', arrowBorder = 'border-t-[#1c1c1e]';
+                
                 if (anom) {
-                  bg='bg-black/60'; bc='border-gray-600/50'; tc='text-gray-500'; extra='line-through grayscale opacity-60';
+                  bg = 'bg-black/60'; bc = 'border-gray-600/50'; tc = 'text-gray-500'; extra = 'grayscale opacity-60'; arrowBorder = 'border-t-black/60';
                 } else if (best) {
-                  bg='bg-blue-600'; bc='border-blue-400'; tc='text-white'; gl='shadow-[0_0_20px_rgba(59,130,246,0.9)]'; extra='scale-110 z-50';
+                  bg = 'bg-blue-600'; bc = 'border-blue-400'; tc = 'text-white'; gl = 'alpha-glow'; extra = 'scale-110 z-50'; arrowBorder = 'border-t-blue-600';
                 } else if (cp > 0 && avgP !== Infinity) {
                   if (cp > avgP + 0.015) {
-                    bg='bg-red-500'; bc='border-red-400'; tc='text-white'; gl='shadow-[0_0_15px_rgba(239,68,68,0.6)]';
+                    bg = 'bg-red-500'; bc = 'border-red-400'; tc = 'text-white'; gl = 'shadow-[0_0_15px_rgba(239,68,68,0.6)]'; arrowBorder = 'border-t-red-500';
                   } else if (cp < avgP - 0.015) {
-                    bg='bg-emerald-500'; bc='border-emerald-300'; tc='text-black'; gl='shadow-[0_0_15px_rgba(16,185,129,0.6)]';
+                    bg = 'bg-emerald-500'; bc = 'border-emerald-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(16,185,129,0.6)]'; arrowBorder = 'border-t-emerald-500';
                   } else {
-                    bg='bg-amber-500'; bc='border-amber-300'; tc='text-black'; gl='shadow-[0_0_15px_rgba(245,158,11,0.6)]';
+                    bg = 'bg-amber-500'; bc = 'border-amber-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(245,158,11,0.6)]'; arrowBorder = 'border-t-amber-500';
                   }
                 }
-                return <Marker key={s.id} position={[s.location.lat,s.location.lng]} icon={L.divIcon({className:'custom-div-icon',html:`<div class="px-3 py-1.5 rounded-2xl border-2 ${bc} text-[11px] font-black tracking-tight ${gl} ${tc} ${bg} backdrop-blur-md whitespace-nowrap hover:scale-125 transition-all ${extra}">€${cp.toFixed(3)}</div>`,iconSize:[60,24],iconAnchor:[30,12]})}><Popup><div className="p-2 min-w-[180px]"><div className="font-black text-sm text-black uppercase italic">{s.brand}</div><div className="text-[10px] text-gray-400 flex items-center gap-1"><MapPin size={10}/>{s.address}</div><div className="text-2xl font-black text-blue-600 mt-1">€{cp.toFixed(3)}</div>{anom&&<div className="text-[10px] text-red-600 font-black mt-1 uppercase tracking-wider">⚠ Potrebbe essere chiuso</div>}<a href={`https://www.google.com/maps/dir/?api=1&destination=${s.location.lat},${s.location.lng}`} target="_blank" rel="noreferrer" className="block w-full mt-2 py-2 bg-black text-white rounded-xl text-center text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">Naviga</a></div></Popup></Marker>;
+
+                const logo = getBrandLogo(s.brand || s.name || '');
+                const markerLogoHtml = `<div class="absolute -top-6 -right-3 w-8 h-8 rounded-full bg-black border border-white/20 flex items-center justify-center overflow-hidden shadow-lg z-[100] grayscale-0"><img src="${logo}" class="w-full h-full object-contain scale-[0.9]" /></div>`;
+
+                const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2.5 py-1.5 rounded-[12px] border-2 ${bc} text-xs font-black tracking-tight ${gl} ${tc} ${bg} backdrop-blur-md whitespace-nowrap shadow-xl">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent ${arrowBorder} drop-shadow-md -mt-[2px]"></div></div>`;
+                
+                return (
+                  <Marker key={s.id} position={[s.location.lat, s.location.lng]} icon={L.divIcon({ className: 'custom-div-icon', html: htmlStr, iconSize: [60, 40], iconAnchor: [30, 40] })}>
+                    <Popup>
+                      <div className="p-3 min-w-[200px] flex flex-col gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-black border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0 grayscale-0 shadow-sm">
+                            <img src={logo} alt={s.brand} className="w-full h-full object-contain scale-[0.9]" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-black text-[13px] text-black uppercase italic truncate leading-tight">{s.brand || s.name}</div>
+                            <div className="text-[9px] text-gray-400 flex items-center gap-1 truncate"><MapPin size={9}/>{s.address}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-1 bg-blue-50 p-2 rounded-xl">
+                          <div className="text-[10px] font-bold text-blue-900/50 uppercase tracking-widest">Prezzo</div>
+                          <div className="text-xl font-black text-blue-600 tabular-nums">€{cp.toFixed(3)}</div>
+                        </div>
+
+                        {anom && <div className="text-[9px] text-red-600 font-black mt-0.5 uppercase tracking-widest flex items-center gap-1 bg-red-50 p-1.5 rounded-lg border border-red-100"><AlertTriangle size={10}/> Anomalia Rilevata</div>}
+                        
+                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${s.location.lat},${s.location.lng}`} target="_blank" rel="noreferrer" className="block w-full py-2.5 bg-black text-white rounded-xl text-center text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-lg mt-1">
+                          Naviga Ora
+                        </a>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
               })}
             </MapContainer>
           </div>
@@ -233,30 +399,29 @@ export default function App() {
 
         {/* Other Tabs - Scrollable content */}
         {tab !== 'map' && (
-          <main className="max-w-md mx-auto px-4 pt-4">
-            <AnimatePresence mode="wait">
-              {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar}/>}
-              {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip}/>}
-              {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
-              {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings}/>}
-              {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
+          <main className="max-w-md mx-auto px-4 pt-4 relative overflow-hidden">
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={tab}
+                custom={direction}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom}/>}
+                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip}/>}
+                {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
+                {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings}/>}
+                {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
+              </motion.div>
             </AnimatePresence>
           </main>
         )}
       </div>
 
       {/* Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[55] bg-black/90 backdrop-blur-2xl border-t border-white/5 px-2 pb-[env(safe-area-inset-bottom)]">
-        <div className="max-w-md mx-auto flex items-center justify-around py-3">
-          {tabs.map(t => (
-            <button key={t.id} onClick={()=>setTab(t.id)} className={cn("flex flex-col items-center gap-1 p-2 rounded-2xl transition-all min-w-[56px]", tab===t.id?"text-blue-500":"text-[#48484a] hover:text-white")}>
-              <t.icon size={22} className={cn(tab===t.id&&"drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]")}/>
-              <span className="text-[8px] font-black uppercase tracking-widest">{t.label}</span>
-              {tab===t.id && <div className="w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)]"/>}
-            </button>
-          ))}
-        </div>
-      </nav>
+      <BottomNav activeTab={tab} onTabChange={handleTabChange} />
 
       <FiltersModal show={showFilters} setShow={setShowFilters} selectedBrands={brands} setSelectedBrands={setBrands} selectedServices={services} setSelectedServices={setServices} h24={h24} setH24={setH24} noHighway={noHwy} setNoHighway={setNoHwy} hideAnomalies={hideAnom} setHideAnomalies={setHideAnom} radius={radius} setRadius={setRadius} brands={allBrands}/>
       <SettingsModal show={showSettings} setShow={setShowSettings} apiKey={apiKey} setApiKey={setApiKey} apiModel={apiModel} setApiModel={setApiModel}/>
