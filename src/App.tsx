@@ -198,9 +198,13 @@ export default function App() {
 
   const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
   const toggleFav = (id:string) => setFavs(p => p.includes(id) ? p.filter(f=>f!==id) : [...p,id]);
-  const blockStation = (id:string) => {
-    if (confirm("Vuoi nascondere questa stazione per sempre? (Segnalata come chiusa/errata)")) {
-      setBlockedIds(prev => [...prev, id]);
+  const blockStation = (s: FuelStation) => {
+    const choice = confirm(`Cosa vuoi fare per "${s.city || s.name}"?\n\n[OK] Nascondi solo per me\n[ANNULLA] Segnala alla Community (per tutti)`);
+    if (choice) {
+      setBlockedIds(prev => [...prev, s.id]);
+    } else {
+      const body = encodeURIComponent(`ID Stazione: ${s.id}\nNome: ${s.name}\nCittà: ${s.city}\nIndirizzo: ${s.address}\n\nMotivo: Segnalata come CHIUSA o ERRATA dal proprietario.`);
+      window.open(`https://github.com/martucc/Fuel-Now/issues/new?title=%5BBLOCCHIAMO%5D+Stazione+${s.id}&body=${body}`, '_blank');
     }
   };
   const handleSelectCar = (car:any) => { setSelCar(car); if(car.liters) setTankL(car.liters); if(car.kml) setTripKml(car.kml); localStorage.setItem('mf_car', car.model); };
@@ -405,7 +409,7 @@ export default function App() {
                         </a>
 
                         <button 
-                          onClick={() => blockStation(s.id)}
+                          onClick={() => blockStation(s)}
                           className="block w-full py-2 bg-red-50 text-red-600 rounded-lg text-center text-[8px] font-black uppercase tracking-wider hover:bg-red-100 transition-all border border-red-100 mt-1"
                         >
                           Segnala Chiuso / Errato

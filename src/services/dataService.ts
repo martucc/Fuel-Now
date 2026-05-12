@@ -50,7 +50,14 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
       });
 
       const now = new Date();
+      let communityBlocked: string[] = [];
+      try {
+        const cbRes = await fetch('community_blocked.json');
+        if (cbRes.ok) communityBlocked = await cbRes.json();
+      } catch {}
+
       parsedStations = parsedStations.filter((s: any) => {
+        if (communityBlocked.includes(String(s.id))) return false;
         if (!s.prices || s.prices.length === 0) return false;
         const lastUp = s.prices[0].lastUpdated;
         if (!lastUp) return false;
