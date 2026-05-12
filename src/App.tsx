@@ -38,7 +38,7 @@ const pageVariants = {
   animate: {
     x: 0,
     opacity: 1,
-    transition: { type: "spring", stiffness: 800, damping: 50 },
+    transition: { type: "spring" as any, stiffness: 800, damping: 50 },
   },
   exit: (direction: number) => ({
     x: direction > 0 ? -30 : 30,
