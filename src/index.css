@@ -7,66 +7,32 @@
   --radius-3xl: 1.5rem;
   --radius-4xl: 2rem;
   --radius-5xl: 2.5rem;
-  --color-glass-bg: rgba(255, 255, 255, 0.6);
-  --color-glass-border: rgba(255, 255, 255, 0.2);
-}
-
-@layer utilities {
-  .liquid-glass {
-    @apply bg-glass-bg backdrop-blur-2xl border border-glass-border shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] rounded-3xl;
-  }
-  
-  .dark .liquid-glass {
-    @apply bg-black/40 border-white/10 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.3)];
-  }
 }
 
 body {
   @apply antialiased text-[#f5f5f7] bg-black;
+  overflow-x: hidden;
 }
 
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-.line-clamp-1,
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-1 {
-  -webkit-line-clamp: 1;
-}
-
-.line-clamp-2 {
-  -webkit-line-clamp: 2;
-}
-
-/* Custom scrollbar for an Elegant Dark look */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #1c1c1e;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #2c2c2e;
 }
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* User Location Marker */
 .user-location-marker {
@@ -78,7 +44,6 @@ body {
   background: rgba(59, 130, 246, 0.18);
   box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.12), 0 10px 22px -12px rgba(59, 130, 246, 0.9);
 }
-
 .user-location-marker span {
   width: 14px;
   height: 14px;
@@ -89,6 +54,7 @@ body {
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
 }
 
+/* Trip Stop Marker */
 .trip-stop-marker {
   width: 34px;
   height: 34px;
@@ -103,55 +69,28 @@ body {
   font-size: 13px;
 }
 
-.leaflet-popup-content-wrapper,
+/* Leaflet popup overrides */
+.leaflet-popup-content-wrapper {
+  border-radius: 1.5rem !important;
+  background: white !important;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+}
 .leaflet-popup-tip {
-  background: #111827;
-  color: #f5f5f7;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: white !important;
 }
 
-html[data-drive="on"] body {
-  background: #020617;
+/* Custom div icon reset */
+.custom-div-icon {
+  background: none !important;
+  border: none !important;
+}
+.user-location-div-icon {
+  background: none !important;
+  border: none !important;
 }
 
-html[data-drive="on"] header {
-  padding-block: 1rem;
-}
-
-html[data-drive="on"] main {
-  max-width: 42rem;
-  padding-inline: 1rem;
-}
-
-html[data-drive="on"] button,
-html[data-drive="on"] input,
-html[data-drive="on"] select,
-html[data-drive="on"] textarea {
-  min-height: 52px;
-}
-
-html[data-drive="on"] nav {
-  left: 1rem;
-  right: 1rem;
-  bottom: 1rem;
-  height: 5.75rem;
-}
-
-html[data-drive="on"] nav button {
-  width: 4.25rem;
-  height: 4.25rem;
-}
-
-html[data-drive="on"] .leaflet-container {
-  font-size: 1rem;
-}
-
-@media (max-width: 520px) {
-  html[data-drive="on"] header h1 {
-    font-size: 1.15rem;
-  }
-
-  html[data-drive="on"] header .relative.z-10 {
-    gap: 0.5rem;
-  }
+/* Range input accent */
+input[type="range"] {
+  accent-color: #3b82f6;
 }

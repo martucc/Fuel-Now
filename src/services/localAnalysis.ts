@@ -16,7 +16,6 @@ const FALLBACK_AVERAGE: Record<FuelType, number> = {
   Diesel: 2.02,
   GPL: 0.82,
   Metano: 1.55,
-  'Super+': 2.05,
 };
 
 function round(value: number, decimals = 3) {
@@ -27,7 +26,9 @@ function round(value: number, decimals = 3) {
 function getFuelEntries(stations: FuelStation[], fuelType: FuelType) {
   return stations.flatMap((station) =>
     station.prices
-      .filter((price) => price.type === fuelType && Number.isFinite(price.price) && price.price > 0)
+      .filter(
+        (price) => price.type === fuelType && Number.isFinite(price.price) && price.price > 0
+      )
       .map((price) => ({ station, price }))
   );
 }
@@ -36,25 +37,19 @@ export function calculateMarketStats(stations: FuelStation[], fuelType: FuelType
   const entries = getFuelEntries(stations, fuelType);
   if (entries.length === 0) {
     const fallback = FALLBACK_AVERAGE[fuelType] || 1.8;
-    return {
-      average: fallback,
-      min: fallback,
-      max: fallback,
-      spread: 0,
-      sampleSize: 0,
-    };
+    return { average: fallback, min: fallback, max: fallback, spread: 0, sampleSize: 0 };
   }
 
-  const sorted = entries.map((entry) => entry.price.price).sort((a, b) => a - b);
+  const sorted = entries.map((e) => e.price.price).sort((a, b) => a - b);
   const trim = Math.floor(sorted.length * 0.05);
   const trimmed = sorted.slice(trim, sorted.length - trim || sorted.length);
   const values = trimmed.length > 0 ? trimmed : sorted;
-  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const cheapest = entries.reduce((best, current) =>
-    current.price.price < best.price.price ? current : best
+  const average = values.reduce((s, v) => s + v, 0) / values.length;
+  const cheapest = entries.reduce((best, cur) =>
+    cur.price.price < best.price.price ? cur : best
   );
   const latestUpdated = entries
-    .map((entry) => entry.price.lastUpdated)
+    .map((e) => e.price.lastUpdated)
     .filter(Boolean)
     .sort()
     .at(-1);
@@ -73,18 +68,18 @@ export function calculateMarketStats(stations: FuelStation[], fuelType: FuelType
 
 function buildSeries(basePrice: number, trend: MarketAnalysis['trend']) {
   const trendStep = trend === 'DOWN' ? -0.006 : trend === 'UP' ? 0.007 : 0.001;
-  const historicalData = Array.from({ length: 7 }, (_, index) => {
-    const dayOffset = 6 - index;
+  const historicalData = Array.from({ length: 7 }, (_, i) => {
+    const dayOffset = 6 - i;
     const drift = trendStep * -dayOffset;
-    const wave = Math.sin(index + basePrice) * 0.004;
+    const wave = Math.sin(i + basePrice) * 0.004;
     return {
-      date: `${dayOffset === 0 ? 'Oggi' : `-${dayOffset}g`}`,
+      date: dayOffset === 0 ? 'Oggi' : `-${dayOffset}g`,
       price: round(Math.max(0.1, basePrice + drift + wave)),
     };
   });
-  const forecast = Array.from({ length: 7 }, (_, index) => ({
-    date: `+${index + 1}g`,
-    price: round(Math.max(0.1, basePrice + trendStep * (index + 1))),
+  const forecast = Array.from({ length: 7 }, (_, i) => ({
+    date: `+${i + 1}g`,
+    price: round(Math.max(0.1, basePrice + trendStep * (i + 1))),
   }));
   return { historicalData, forecast };
 }
@@ -113,9 +108,9 @@ export function buildLocalMarketAnalysis(
   const trend = pickTrend(stats);
   const advice = pickAdvice(stats);
   const { historicalData, forecast } = buildSeries(stats.average, trend);
-  const bestStation = stats.cheapestStationName || 'la stazione più economica disponibile';
+  const bestStation = stats.cheapestStationName || 'la stazione più economica';
   const questionText = question?.trim()
-    ? `\n\nRisposta rapida alla tua domanda: "${question.trim()}". Con i dati locali disponibili, la scelta migliore e confrontare il prezzo medio con il minimo in zona: se trovi ${fuelType} vicino a €${stats.min.toFixed(3)}/L, conviene fermarsi; se sei sopra €${stats.average.toFixed(3)}/L, cerca alternative entro pochi chilometri.`
+    ? `\n\nRisposta: "${question.trim()}". Con i dati locali, la scelta migliore è confrontare il prezzo medio con il minimo in zona: se trovi ${fuelType} vicino a €${stats.min.toFixed(3)}/L, conviene fermarsi.`
     : '';
 
   return {
@@ -125,11 +120,11 @@ export function buildLocalMarketAnalysis(
     reasoning:
       stats.sampleSize > 0
         ? `Analisi locale su ${stats.sampleSize} prezzi ${fuelType}: media €${stats.average.toFixed(3)}/L, minimo €${stats.min.toFixed(3)}/L da ${bestStation}.`
-        : `Non ho ancora abbastanza prezzi ${fuelType} nella zona selezionata: mantengo una stima prudente e ti consiglio di allargare il raggio.`,
+        : `Dati ${fuelType} insufficienti nella zona: allarga il raggio di ricerca.`,
     detailedReport:
-      `FuelWise sta usando i prezzi reali caricati dal dataset MIMIT/Fuel Now e costruisce una lettura operativa della tua zona. Per ${fuelType}, la media locale e circa €${stats.average.toFixed(3)}/L, con un minimo a €${stats.min.toFixed(3)}/L e uno spread di €${stats.spread.toFixed(3)}/L. ` +
-      `Quando lo spread e alto conviene scegliere attivamente il distributore, perche il risparmio su un pieno puo diventare visibile subito. Quando lo spread e basso, invece, ha piu senso privilegiare distanza, affidabilita e comodita. ` +
-      `Questa modalita locale resta disponibile anche senza chiave Gemini: l'AI generativa serve per aggiungere lettura macroeconomica e risposte piu discorsive, ma la base decisionale rimane agganciata ai prezzi veri dell'app.${questionText}`,
+      `Analisi basata sui prezzi reali dal dataset MIMIT. Per ${fuelType}, la media locale è circa €${stats.average.toFixed(3)}/L, con un minimo a €${stats.min.toFixed(3)}/L e uno spread di €${stats.spread.toFixed(3)}/L. ` +
+      `Quando lo spread è alto conviene scegliere attivamente il distributore. Quando è basso, privilegia distanza e comodità. ` +
+      `Questa analisi locale resta disponibile senza chiave Gemini: l'AI aggiunge lettura macroeconomica, ma i dati di base sono sempre reali.${questionText}`,
     stats: {
       averagePrice: stats.average,
       minPrice: stats.min,
@@ -146,41 +141,41 @@ export function buildLocalMarketAnalysis(
         content:
           stats.sampleSize > 0
             ? `${stats.sampleSize} prezzi letti nella zona corrente. Miglior riferimento: ${bestStation}.`
-            : 'Allarga il raggio o sposta la mappa per caricare piu stazioni confrontabili.',
+            : 'Allarga il raggio o sposta la mappa per caricare più stazioni.',
       },
       {
         title: 'Convenienza',
         icon: 'Globe',
         content:
           stats.spread >= 0.12
-            ? 'Lo spread e ampio: scegliere bene la pompa conta piu della piccola deviazione.'
-            : 'Prezzi abbastanza compatti: valuta il distributore piu vicino o quello con servizi migliori.',
+            ? 'Lo spread è ampio: scegliere bene la pompa conta più della piccola deviazione.'
+            : 'Prezzi abbastanza compatti: valuta il distributore più vicino.',
       },
       {
         title: 'Prossimi giorni',
         icon: 'Calendar',
         content:
           trend === 'DOWN'
-            ? 'Stima locale leggermente favorevole: puoi evitare il pieno se non sei in riserva.'
+            ? 'Stima leggermente favorevole: puoi evitare il pieno se non sei in riserva.'
             : trend === 'UP'
-              ? 'Stima prudente: meglio non arrivare troppo basso di carburante.'
-              : 'Scenario stabile: rifornisci quando trovi un prezzo sotto la media locale.',
+              ? 'Stima prudente: meglio non arrivare troppo basso.'
+              : 'Scenario stabile: rifornisci quando trovi un prezzo sotto la media.',
       },
     ],
     tips: [
       {
         title: 'Usa il minimo come ancora',
-        text: `Sotto €${stats.average.toFixed(3)}/L sei gia meglio della media; vicino a €${stats.min.toFixed(3)}/L e un buon prezzo.`,
+        text: `Sotto €${stats.average.toFixed(3)}/L sei già meglio della media; vicino a €${stats.min.toFixed(3)}/L è un buon prezzo.`,
         impact: 'HIGH',
       },
       {
         title: 'Evita deviazioni inutili',
-        text: 'Se il risparmio stimato non supera il costo della deviazione, scegli la stazione piu comoda.',
+        text: 'Se il risparmio stimato non supera il costo della deviazione, scegli la stazione più comoda.',
         impact: 'MEDIUM',
       },
       {
         title: 'Confronta self e servito',
-        text: 'Quando disponibile, il self-service e spesso il valore piu utile per decidere rapidamente.',
+        text: 'Il self-service è spesso il valore più utile per decidere rapidamente.',
         impact: 'LOW',
       },
     ],

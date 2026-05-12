@@ -1,0 +1,73 @@
+# PROMPT PER REDESIGN AI - MARTUCC FUEL (APP DI MARKET INTELLIGENCE)
+
+Agisci come un Senior UI/UX Designer e un Esperto Sviluppatore Frontend specializzato in React, Tailwind CSS e Framer Motion. 
+Il tuo compito è sviluppare la nuova interfaccia utente di "Martucc Fuel", un'app PWA avanzata per il monitoraggio tattico dei prezzi del carburante.
+
+## 📌 COSA DEVI FARE: LA STRUTTURA DELLE PAGINE
+
+L'applicazione è composta da 5 schermate principali accessibili tramite una Bottom Navigation Bar, più componenti modali/globali. Devi progettare l'UI di ciascuno di questi elementi.
+
+### 1. HEADER / TOP BAR (Globale, sempre visibile in alto)
+- **Logo**: "MARTUCC FUEL" (stile bold/corsivo, tech, aggressivo ma pulito).
+- **Stato AI**: Un piccolissimo indicatore/pallino verde pulsante con la scritta "SIGNAL ACTIVE" (indica che l'AI di mercato è connessa).
+- **Pulsanti destra**:
+  - Icona "Auto" (per mostrare rapidamente l'auto selezionata).
+  - Icona "Impostazioni" (ingranaggio) che apre un modale (raggio di ricerca, dark mode, ecc.).
+
+### 2. TAB 1: HOME (Dashboard & Lista Stazioni)
+Questa è la pagina principale e deve avere un look da "Cruscotto di Analisi".
+- **Filtro Carburante (Segmented Control)**: In alto, una barra stile iOS per selezionare: Benzina, Diesel, GPL, Metano. Al cambio, i dati aggiornano l'intera app.
+- **Pulsante Filtri Avanzati**: Icona imbuto per i filtri (H24, Solo Autostrada, Distanza).
+- **Widget "Status Operativo" (Intelligence Locale)**: Un blocco ben evidente in cima che mostra un riassunto dei prezzi correnti (es. "Analisi locale su 800 stazioni: Media 1.88€, Minimo 1.75€").
+- **Lista delle "Station Card" (I Benzinai)**:
+  - Ogni card deve sembrare un widget premium iOS (bordi arrotondati, gradienti o trasparenze).
+  - Dati nella card: Nome/Brand, Indirizzo, Distanza, Prezzo in grande, e "Costo Pieno" calcolato (es. PIENO: €85,00).
+  - **STATO ALPHA**: Il benzinaio col prezzo migliore valido in assoluto. Deve avere uno stile "Glow" acceso (ombreggiatura blu o neon) e un badge speciale "ALPHA".
+  - **STATO ANOMALO/CHIUSO**: Il sistema nasconde i benzinai con prezzi fuori mercato (sotto il 91% della media). Queste card devono essere renderizzate come: Grigie (`grayscale`), semitrasparenti (`opacity-60`), col prezzo barrato e un banner o testo rosso evidente "⚠ POTREBBE ESSERE CHIUSO - PREZZO FUORI MERCATO".
+
+### 3. TAB 2: MAPPA (MapTab)
+- Mappa interattiva a tutto schermo (usa colori scuri, mapbox/leaflet dark theme).
+- **Pulsante "Centra Posizione"** flottante sulla destra.
+- **Marker dei Prezzi (Custom Bubble)**: I pin sulla mappa non sono icone, ma "pillole" con dentro il prezzo.
+  - Colori dinamici: **Blu Glow** (Migliore/Alpha), **Verde** (Sotto la media/Economico), **Arancio** (Media), **Rosso** (Caro).
+  - **Marker Anomali**: Devono essere di colore grigio scuro, opachi e col testo barrato.
+- **Popup Mappa**: Cliccando un pin, si apre un popup (minimal) con nome, indirizzo, prezzo grande, alert se anomalo, e un bel tasto rettangolare nero "NAVIGA".
+
+### 4. TAB 3: TRIP (Calcolatore Viaggio)
+- Pagina dedicata al calcolo dei costi di un viaggio.
+- **Campi Input**: Distanza da percorrere (KM).
+- **Riepilogo Veicolo**: Una piccola card che mostra il veicolo attualmente usato e il suo consumo (es. "Golf 8 - 18 KM/L").
+- **Risultato**: Numeri grandi e chiari che mostrano: "Costo Totale Stimato (€)" e "Carburante Necessario (Litri)".
+
+### 5. TAB 4: GARAGE (Gestione Veicoli)
+- Una schermata con la griglia/lista dei veicoli dell'utente.
+- **Card Veicolo**: Mostra Modello, Capacità Serbatoio (L), Consumo (KM/L o L/100KM).
+- **Stato**: Una label/badge "Veicolo Attivo" su quello in uso.
+- **Pulsante Flottante**: Un bel tastone circolare (FAB) per "Aggiungi nuovo veicolo".
+
+### 6. TAB 5: INTEL (Report Tattico AI)
+- Questa pagina mostra un report generato dall'Intelligenza Artificiale (Gemini) sul mercato del carburante scelto.
+- **Stile Layout**: Deve sembrare un dossier militare/tattico (font monospace per i sottotitoli, testo ben diviso in paragrafi, evidenziatori sui numeri importanti).
+- **Informazioni**: Data e ora dell'ultima analisi. Testo del report (dinamico).
+- **Pulsante d'Azione**: "RICHIEDI AGGIORNAMENTO TATTICO" posizionato in fondo, con animazione di stato (loading/pulsing) quando i dati vengono ricalcolati.
+
+---
+
+## 🎨 DIREZIONE ARTISTICA E DESIGN SYSTEM (STILE APPLE)
+Voglio un design premium, minimale e fluido, in puro **stile Apple (iOS/iPadOS)**.
+- **Glassmorphism**: Ampio uso di sfondi traslucidi (`backdrop-blur-md`), bordi sottili semitrasparenti (`border-white/10`) e materiali che si sovrappongono.
+- **Tipografia**: Gerarchia visiva impeccabile (usa `Inter` o `SF Pro`). Pesi black/extrabold per i prezzi, testo piccolo, uppercase e tracking largo per le etichette tecniche.
+- **Color Palette**: Tema Dark OLED (`bg-black` o `#000000`). Accenti vividi che "bucano" lo schermo scuro.
+- **Micro-interazioni**: Ogni pulsante premuto deve scalare leggermente (`active:scale-95`).
+
+## 🚀 REQUISITI TECNICI (BOTTOM BAR E ANIMAZIONI)
+La caratteristica più importante della nuova UI deve essere la **Fluidità della Navigazione**.
+1. **Bottom Navigation Bar "Flottante"**: 
+   - Non attaccata rigidamente in basso, ma leggermente sollevata (tipo "Dynamic Island" inferiore) o un dock trasparente.
+   - Deve contenere le 5 icone (Home, Mappa, Trip, Garage, Intel).
+   - Quando si seleziona una tab, l'indicatore (un punto luminoso o un background colorato) si deve spostare fluidamente sull'icona attiva (spring animation).
+2. **Scorrimento Orizzontale tra Tab (Framer Motion)**:
+   - Quando premo una tab, la pagina attuale scorre via verso sinistra (o destra), e la nuova entra dall'altro lato. NESSUN CAMBIO SCHERMATA "A SCATTO". 
+
+## 🛠️ TASK PER TE:
+Scrivi il codice per questa interfaccia! Parti definendo la struttura dei componenti, implementa la **BottomBar** animata, il sistema di routing con **AnimatePresence** (Framer Motion) in `App.tsx` e il layout di **una Station Card** in perfetto stile Apple iOS Glassmorphism. Fai tutto super dettagliato.

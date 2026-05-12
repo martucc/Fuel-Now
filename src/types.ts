@@ -1,4 +1,4 @@
-export type FuelType = 'Benzina' | 'Diesel' | 'GPL' | 'Metano' | 'Super+';
+export type FuelType = 'Benzina' | 'Diesel' | 'GPL' | 'Metano';
 
 export interface FuelPrice {
   type: FuelType;
@@ -19,10 +19,9 @@ export interface FuelStation {
     lng: number;
   };
   prices: FuelPrice[];
-  isHighway?: boolean;
 }
 
-export type AdviceType = 'FILL-FULL' | 'FAILL-FULL' | 'WAIT' | 'TEN-EURO' | 'URGENT';
+export type AdviceType = 'FILL-FULL' | 'WAIT' | 'TEN-EURO' | 'URGENT';
 
 export interface Alert {
   id: string;

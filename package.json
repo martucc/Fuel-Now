@@ -1,7 +1,7 @@
 {
   "name": "martucc-fuel",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,20 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^1.52.0",
     "@tailwindcss/vite": "^4.3.0",
-    "axios": "^1.16.0",
     "clsx": "^2.1.1",
-    "framer-motion": "^12.38.0",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-leaflet": "^5.0.0",
-    "react-markdown": "^10.1.0",
-    "recharts": "^3.8.1",
-    "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.0"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -36,6 +32,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",

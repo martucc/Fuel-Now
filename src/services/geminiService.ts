@@ -1,97 +1,85 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { MarketAnalysis } from '../types';
 
-function extractJson(text: string) {
-  const fenced = text.match(/```json\s*([\s\S]*?)```/i)?.[1];
-  const raw = fenced || text.match(/\{[\s\S]*\}/)?.[0] || text;
-  return JSON.parse(raw);
-}
-
-function withAnalysisDefaults(value: Partial<MarketAnalysis>, fuelType: string): MarketAnalysis {
-  const now = new Date().toISOString();
-  const average = value.stats?.averagePrice || 1.8;
-  return {
-    advice: value.advice || 'WAIT',
-    source: 'ai',
-    generatedAt: now,
-    reasoning: value.reasoning || `Analisi AI completata per ${fuelType}.`,
-    detailedReport: value.detailedReport || value.reasoning || `Lettura sintetica del mercato ${fuelType}.`,
-    stats: value.stats,
-    categories: value.categories?.length ? value.categories : [
-      { title: 'Prezzo locale', content: 'Confronta sempre il prezzo visto in mappa con la media locale.', icon: 'MapPin' },
-      { title: 'Scenario', content: 'Valuta trend, distanza e tipo di servizio prima di fare deviazioni.', icon: 'Globe' },
-      { title: 'Azione', content: 'Fai pieno solo quando trovi un valore chiaramente sotto media.', icon: 'Calendar' },
-    ],
-    tips: value.tips?.length ? value.tips : [
-      { title: 'Sotto media', text: 'Scegli prezzi sotto la media della zona.', impact: 'HIGH' },
-      { title: 'Deviazione breve', text: 'Il risparmio deve superare il costo del tragitto.', impact: 'MEDIUM' },
-      { title: 'Self-service', text: 'Preferisci self quando il differenziale e netto.', impact: 'LOW' },
-    ],
-    trend: value.trend || 'STABLE',
-    historicalData: value.historicalData?.length ? value.historicalData : [
-      { date: '-6g', price: average },
-      { date: '-3g', price: average },
-      { date: 'Oggi', price: average },
-    ],
-    forecast: value.forecast?.length ? value.forecast : [
-      { date: '+1g', price: average },
-      { date: '+3g', price: average },
-      { date: '+7g', price: average },
-    ],
-  };
-}
-
 export async function analyzeFuelMarket(
-  apiKey?: string,
-  model = 'gemini-1.5-flash',
-  fuelType = 'Benzina',
-  question?: string
+  apiKey: string,
+  model: string,
+  fuelType: string = 'Benzina',
+  question?: string,
+  localContext?: string
 ): Promise<MarketAnalysis> {
-  const today = new Date().toISOString().split('T')[0];
-  const cacheKey = `fuelwise_analysis_${fuelType}_${today}`;
-  
-  // Check Cache
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) {
-    try {
-      const parsedCache = JSON.parse(cached);
-      return parsedCache;
-    } catch (e) {
-      console.warn('Cache parsing failed', e);
-    }
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new Error('MISSING_KEY');
   }
 
-  if (!apiKey?.trim()) throw new Error('MISSING_KEY');
+  const { GoogleGenAI } = await import('@google/genai');
+  const ai = new GoogleGenAI({ apiKey });
 
-  const genAI = new GoogleGenerativeAI(apiKey.trim());
-  const gemini = genAI.getGenerativeModel({ model });
-  const prompt = `Sei Martucc Fuel, un assistente finanziario per l'analisi dei prezzi carburante.
-Carburante: ${fuelType}
-Domanda: ${question || 'Analizza la convenienza locale vs nazionale e dai un consiglio operativo.'}
+  const ctx = localContext ? `Contesto dati locali attuali: ${localContext}. ` : '';
 
-Rispondi solo con JSON valido:
+  const prompt = question
+    ? `Sei un analista senior del mercato energetico e carburanti in Italia (Signal AI). Rispondi alla domanda dell'utente: "${question}".
+Contesto carburante analizzato: ${fuelType}.
+${ctx}
+Fornisci una risposta analitica, tattica e altamente professionale. Non usare markdown fuori dal JSON.
+Rispondi in formato JSON valido con questa struttura esatta:
 {
-  "advice": "FILL-FULL | WAIT | TEN-EURO | URGENT",
-  "reasoning": "massimo 32 parole sui trend",
-  "detailedReport": "massimo 120 parole",
-  "categories": [{"title": "Prezzo locale", "content": "...", "icon": "MapPin"}],
-  "tips": [{"title": "...", "text": "...", "impact": "HIGH | MEDIUM | LOW"}],
-  "trend": "UP | DOWN | STABLE",
-  "historicalData": [{"date": "-6g", "price": 1.8}],
-  "forecast": [{"date": "+1g", "price": 1.8}]
-}`;
+  "advice": "FILL-FULL" | "WAIT" | "TEN-EURO" | "URGENT",
+  "reasoning": "Sintesi di 1-2 frasi della risposta alla domanda",
+  "detailedReport": "Risposta approfondita e dettagliata alla domanda, divisa in più frasi fluenti",
+  "categories": [{"title":"Analisi Domanda","content":"...","icon":"Globe"}],
+  "tips": [{"title":"...","text":"...","impact":"HIGH"}],
+  "trend": "UP" | "DOWN" | "STABLE",
+  "historicalData": [{"date":"-2g","price":1.800}],
+  "forecast": [{"date":"+1g","price":1.800}]
+}`
+    : `Sei l'Intelligenza Artificiale "Signal Core" integrata in "MartuccFuel", un'app premium e tattica per l'analisi dei carburanti in Italia.
+La tua missione è fornire il briefing operativo giornaliero per il carburante: ${fuelType}.
+Considera le macro-dinamiche globali (prezzo petrolio brent, tensioni geopolitiche, cambio EUR/USD, raffinazione europea) e la situazione locale in Italia.
+${ctx}
+Lo stile del report deve essere professionale, sintetico, "military/tactical" (usando termini come 'Briefing', 'Outlook', 'Target') ma estremamente chiaro.
+
+Rispondi in formato JSON valido con questa struttura esatta:
+{
+  "advice": "FILL-FULL" | "WAIT" | "TEN-EURO" | "URGENT",
+  "reasoning": "Spiegazione tattica immediata in 1-2 frasi sul perché agire o aspettare oggi",
+  "detailedReport": "Report di mercato esteso (3-4 paragrafi) che analizza i fattori globali, l'impatto sul mercato italiano e le prospettive a breve termine per il ${fuelType}.",
+  "categories": [
+    {"title":"Scenario Macro","content":"Contesto geopolitico e greggio","icon":"Globe"},
+    {"title":"Dinamica Nazionale","content":"Accise, logistica e media MIMIT","icon":"MapPin"},
+    {"title":"Outlook 7 Giorni","content":"Previsione a breve termine","icon":"Calendar"}
+  ],
+  "tips": [
+    {"title":"Consiglio 1","text":"...","impact":"HIGH"},
+    {"title":"Consiglio 2","text":"...","impact":"MEDIUM"},
+    {"title":"Consiglio 3","text":"...","impact":"LOW"}
+  ],
+  "trend": "UP" | "DOWN" | "STABLE",
+  "historicalData": [{"date":"-Xg","price":0.000} (esattamente 7 oggetti per gli ultimi 7 giorni)],
+  "forecast": [{"date":"+Xg","price":0.000} (esattamente 7 oggetti per i prossimi 7 giorni)]
+}
+NON aggiungere alcun testo, markdown o backtick prima o dopo il JSON. Assicurati che il JSON sia formattato correttamente.`;
 
   try {
-    const result = await gemini.generateContent(prompt);
-    const parsed = extractJson(result.response.text());
-    const finalAnalysis = withAnalysisDefaults(parsed, fuelType);
+    const response = await ai.models.generateContent({
+      model: model || 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    const text = response.text || '';
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
+    let jsonStr = (jsonMatch[1] || text).trim();
     
-    // Save to Cache
-    localStorage.setItem(cacheKey, JSON.stringify(finalAnalysis));
-    
-    return finalAnalysis;
-  } catch (error) {
-    console.error('Gemini client analysis failed:', error);
-    throw error;
+    // In case AI leaves text around JSON
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace >= 0) {
+      jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+    }
+
+    const parsed = JSON.parse(jsonStr);
+    return parsed as MarketAnalysis;
+  } catch (error: any) {
+    console.error('Gemini API error:', error);
+    throw new Error('Errore API Gemini: ' + (error.message || 'Sconosciuto'));
   }
 }
