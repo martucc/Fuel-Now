@@ -106,20 +106,20 @@ export function HomeTab(p: Props) {
       {/* HERO: Best Price Card */}
       {bestStation && (
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 25 }}>
-          <div className="relative bg-[#0a0f1d] rounded-[40px] p-8 overflow-hidden border border-blue-500/30 shadow-[0_0_60px_rgba(37,99,235,0.25)]">
+          <div className="relative bg-[#0a0f1d] rounded-[40px] p-6 overflow-hidden border border-blue-500/30 shadow-[0_0_60px_rgba(37,99,235,0.25)]">
             {/* Subtle inner gradient to simulate the glow from the image */}
             <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-transparent pointer-events-none" />
             
             <div className="relative z-10">
               <div className="flex items-start justify-between mb-10">
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 rounded-full bg-black flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.4)] overflow-hidden border border-white/10 z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-20 h-20 rounded-full bg-black flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.4)] overflow-hidden border border-white/10 z-10">
                     <img src={bestLogo} alt={bestStation.brand} className="w-full h-full object-contain scale-[0.9]" />
                   </div>
-                  <div>
-                    <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.2em] mb-1">Miglior Prezzo</p>
-                    <h2 className="text-2xl font-black text-white tracking-tighter leading-tight uppercase italic">{bestStation.city || bestStation.name}</h2>
-                    <p className="text-[13px] text-[#8e8e93] font-bold mt-0.5">{bestStation.brand} &bull; {bestStation.address} &bull; {bestStation.distance || '1.2'} km</p>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-0.5">Miglior Prezzo</p>
+                    <h2 className="text-xl font-black text-white tracking-tighter leading-tight uppercase italic truncate">{bestStation.city || bestStation.name}</h2>
+                    <p className="text-[11px] text-[#8e8e93] font-bold mt-0.5 truncate">{bestStation.brand} &bull; {bestStation.distance || '1.2'} km</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-blue-500 bg-blue-500/10">
@@ -128,19 +128,19 @@ export function HomeTab(p: Props) {
                 </div>
               </div>
               
-              <div className="flex items-end justify-between mb-10 px-1">
+              <div className="flex items-end justify-between mb-8 px-1">
                 <div>
-                  <p className="text-[11px] font-black text-[#8e8e93] uppercase tracking-widest mb-2">Prezzo/Litro</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[58px] font-black text-[#4ade80] tabular-nums tracking-tighter leading-none">
+                  <p className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest mb-1">Prezzo/Litro</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[48px] font-black text-[#4ade80] tabular-nums tracking-tighter leading-none">
                       {p.cheapestPrice.toFixed(3)}
                     </span>
-                    <span className="text-xl font-black text-white/40">EUR</span>
+                    <span className="text-lg font-black text-white/30">EUR</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-black text-[#8e8e93] uppercase tracking-widest mb-2">Costo Pieno<br/><span className="text-[9px] opacity-60">({p.tankLiters}L)</span></p>
-                  <p className="text-[36px] font-black text-white tabular-nums tracking-tighter">
+                  <p className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest mb-1">Costo Pieno<br/><span className="text-[9px] opacity-60">({p.tankLiters}L)</span></p>
+                  <p className="text-[32px] font-black text-white tabular-nums tracking-tighter">
                     {(p.cheapestPrice * p.tankLiters).toFixed(2)}
                   </p>
                 </div>
@@ -150,7 +150,7 @@ export function HomeTab(p: Props) {
                 href={`https://www.google.com/maps/dir/?api=1&destination=${bestStation.location.lat},${bestStation.location.lng}`} 
                 target="_blank" 
                 rel="noreferrer" 
-                className="w-full flex items-center justify-center gap-3 py-5 rounded-full bg-white text-black font-black text-[16px] uppercase tracking-widest hover:bg-gray-100 transition-all shadow-2xl active:scale-95"
+                className="w-full flex items-center justify-center gap-3 py-4 rounded-full bg-white text-black font-black text-[15px] uppercase tracking-widest hover:bg-gray-100 transition-all shadow-2xl active:scale-95"
               >
                 <Navigation className="w-5 h-5 fill-black" /> Naviga Ora
               </a>
