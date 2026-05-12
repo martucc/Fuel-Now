@@ -18,20 +18,13 @@ html, body {
   touch-action: pan-y;
 }
 
-/* Custom scrollbar */
+/* Hide scrollbar globally for a native app feel */
 ::-webkit-scrollbar {
-  width: 6px;
+  display: none;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #1c1c1e;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2c2c2e;
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Hide scrollbar utility */
