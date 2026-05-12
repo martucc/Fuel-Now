@@ -32,18 +32,18 @@ const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'aler
 
 const pageVariants = {
   initial: (direction: number) => ({
-    x: direction > 0 ? 50 : -50,
+    x: direction > 0 ? 30 : -30,
     opacity: 0,
   }),
   animate: {
     x: 0,
     opacity: 1,
-    transition: { type: "spring" as any, stiffness: 400, damping: 35 },
+    transition: { type: "spring", stiffness: 800, damping: 50 },
   },
   exit: (direction: number) => ({
-    x: direction > 0 ? -50 : 50,
+    x: direction > 0 ? -30 : 30,
     opacity: 0,
-    transition: { duration: 0.15 },
+    transition: { duration: 0.05 },
   }),
 };
 
@@ -120,7 +120,7 @@ export default function App() {
 
   useEffect(() => {
     if (!loading) {
-      const timer = setTimeout(() => setShowSplash(false), 500);
+      const timer = setTimeout(() => setShowSplash(false), 150);
       return () => clearTimeout(timer);
     }
   }, [loading]);

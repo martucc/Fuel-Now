@@ -22,7 +22,7 @@ export function StationCard({ station, fuelType, index, isAnomalous, tankLiters 
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
+      transition={{ delay: index * 0.01 }}
       onClick={() => {
         if (!isAnomalous) window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.location.lat},${station.location.lng}`, '_blank');
       }}
