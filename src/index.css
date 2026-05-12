@@ -9,9 +9,13 @@
   --radius-5xl: 2.5rem;
 }
 
-body {
+html, body {
   @apply antialiased text-[#f5f5f7] bg-black;
   overflow-x: hidden;
+  width: 100%;
+  position: relative;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 /* Custom scrollbar */
