@@ -78,6 +78,7 @@ export default function App() {
   const [fuel, setFuel] = useState<FuelType>('Benzina');
   const [loading, setLoading] = useState(true);
   const [favs, setFavs] = useState<string[]>([]);
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -187,14 +188,21 @@ export default function App() {
       navigator.geolocation.getCurrentPosition(p => { const l={lat:p.coords.latitude,lng:p.coords.longitude}; setUserLoc(l); load(l); }, () => { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }, {enableHighAccuracy:true,timeout:10000});
     } else { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }
     const sf = localStorage.getItem('mf_favs'); if (sf) setFavs(JSON.parse(sf));
+    const sb = localStorage.getItem('mf_blocked'); if (sb) setBlockedIds(JSON.parse(sb));
     const sa = localStorage.getItem('mf_alerts'); if (sa) setAlerts(JSON.parse(sa));
   }, []);
 
   useEffect(() => { localStorage.setItem('mf_favs', JSON.stringify(favs)); }, [favs]);
+  useEffect(() => { localStorage.setItem('mf_blocked', JSON.stringify(blockedIds)); }, [blockedIds]);
   useEffect(() => { localStorage.setItem('mf_alerts', JSON.stringify(alerts)); }, [alerts]);
 
   const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
   const toggleFav = (id:string) => setFavs(p => p.includes(id) ? p.filter(f=>f!==id) : [...p,id]);
+  const blockStation = (id:string) => {
+    if (confirm("Vuoi nascondere questa stazione per sempre? (Segnalata come chiusa/errata)")) {
+      setBlockedIds(prev => [...prev, id]);
+    }
+  };
   const handleSelectCar = (car:any) => { setSelCar(car); if(car.liters) setTankL(car.liters); if(car.kml) setTripKml(car.kml); localStorage.setItem('mf_car', car.model); };
 
   const geocode = async (q:string) => { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`); const d = await r.json(); if (!d.length) throw new Error(`Non trovato: ${q}`); return {lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon),label:d[0].display_name}; };
@@ -260,9 +268,9 @@ export default function App() {
     const distMatch = s.distance === undefined || s.distance <= radius;
     const h24Match = !h24 || s.services.includes('H24');
     const hwyMatch = !noHwy || !s.services.includes('Autostrada');
-    const anomMatch = !isPriceAnom(s, fuel);
+    const isBlocked = blockedIds.includes(s.id);
     
-    return cp > 0 && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch && anomMatch;
+    return cp > 0 && !isBlocked && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch && anomMatch;
   }).sort((a, b) => (a.prices.find(p => p.type === fuel)?.price || Infinity) - (b.prices.find(p => p.type === fuel)?.price || Infinity));
 
   const validPrices = filtered
@@ -394,6 +402,13 @@ export default function App() {
                         <a href={`https://www.google.com/maps/dir/?api=1&destination=${s.location.lat},${s.location.lng}`} target="_blank" rel="noreferrer" className="block w-full py-2.5 bg-black text-white rounded-xl text-center text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-lg mt-1">
                           Naviga Ora
                         </a>
+
+                        <button 
+                          onClick={() => blockStation(s.id)}
+                          className="block w-full py-2 bg-red-50 text-red-600 rounded-lg text-center text-[8px] font-black uppercase tracking-wider hover:bg-red-100 transition-all border border-red-100 mt-1"
+                        >
+                          Segnala Chiuso / Errato
+                        </button>
                       </div>
                     </Popup>
                   </Marker>
