@@ -12,6 +12,7 @@ export interface FuelStation {
   name: string;
   brand: string;
   address: string;
+  city: string;
   distance?: number;
   services: string[];
   location: {

@@ -51,11 +51,11 @@ export function StationCard({ station, fuelType, index, isAnomalous, tankLiters 
 
       {/* Info */}
       <div className="flex-1 min-w-0 py-1">
-        <h4 className={cn("text-[15px] font-bold truncate", isAnomalous ? "text-[#8e8e93]" : "text-white")}>
-          {station.brand || station.name}
+        <h4 className={cn("text-[15px] font-bold truncate uppercase italic", isAnomalous ? "text-[#8e8e93]" : "text-white")}>
+          {station.city || station.name}
         </h4>
         <p className="text-[11px] font-medium text-[#8e8e93] mt-0.5 truncate">
-          {station.distance || '0.5'} km &bull; {Math.floor(Math.random() * 10 + 2)} min fa
+          {station.brand} &bull; {station.distance || '0.5'} km &bull; {station.address}
         </p>
       </div>
 

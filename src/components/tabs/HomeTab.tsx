@@ -96,8 +96,8 @@ export function HomeTab(p: Props) {
                   </div>
                   <div>
                     <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.2em] mb-1">Miglior Prezzo</p>
-                    <h2 className="text-2xl font-black text-white tracking-tighter leading-tight">{bestStation.name}</h2>
-                    <p className="text-[13px] text-[#8e8e93] font-bold mt-0.5">{bestStation.brand} &bull; {bestStation.distance || '1.2'} km</p>
+                    <h2 className="text-2xl font-black text-white tracking-tighter leading-tight uppercase italic">{bestStation.city || bestStation.name}</h2>
+                    <p className="text-[13px] text-[#8e8e93] font-bold mt-0.5">{bestStation.brand} &bull; {bestStation.address} &bull; {bestStation.distance || '1.2'} km</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-blue-500 bg-blue-500/10">

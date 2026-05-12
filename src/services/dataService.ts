@@ -38,7 +38,8 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
           id: String(s.id),
           name: s.name,
           brand: s.brand || 'Indipendente',
-          address: s.address + (s.city ? `, ${s.city}` : ''),
+          address: s.address,
+          city: s.city || '',
           distance: userLocation
             ? calculateDistance(userLocation.lat, userLocation.lng, s.lat, s.lng)
             : undefined,
