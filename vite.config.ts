@@ -20,8 +20,8 @@ export default defineConfig({
         background_color: '#050607',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
+        start_url: '/Fuel-Now/',
+        scope: '/Fuel-Now/',
         lang: 'it',
         icons: [
           {
