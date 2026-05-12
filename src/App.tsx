@@ -243,8 +243,8 @@ export default function App() {
   const isPriceAnom = (s: FuelStation, f: FuelType) => {
     const p = s.prices.find(pp => pp.type === f)?.price || 0;
     const avg = allAverages[f];
-    // An anomaly is a price < 75% of average or < 0.5 EUR (obvious error)
-    return p > 0 && ((avg !== Infinity && p < avg * 0.75) || p < 0.5);
+    // An anomaly is a price < 88% of average or < 0.5 EUR (obvious error)
+    return p > 0 && ((avg !== Infinity && p < avg * 0.88) || p < 0.5);
   };
 
   const avgP = allAverages[fuel];

@@ -48,6 +48,21 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         };
       });
 
+      const now = new Date();
+      parsedStations = parsedStations.filter((s: any) => {
+        if (!s.prices || s.prices.length === 0) return false;
+        const lastUp = s.prices[0].lastUpdated;
+        if (!lastUp) return false;
+        
+        // Handle "YYYY-MM-DD HH:MM" format
+        const [datePart] = lastUp.split(' ');
+        const [y, m, d] = datePart.split('-').map(Number);
+        const upDate = new Date(y, m - 1, d);
+        const diffDays = (now.getTime() - upDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        return diffDays < 7; // Ignore if older than 7 days
+      });
+
       if (userLocation) {
         parsedStations = parsedStations.filter(
           (s: FuelStation) => s.distance !== undefined && s.distance < 50
