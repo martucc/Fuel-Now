@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Navigation, AlertTriangle, Fuel } from 'lucide-react';
+import { Navigation, AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { FuelStation, FuelType } from '../types';
 import { getBrandLogo } from '../lib/brandLogos';

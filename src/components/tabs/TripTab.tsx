@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Route, Zap, Fuel } from 'lucide-react';
+import { Route, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { FuelType } from '../../types';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';

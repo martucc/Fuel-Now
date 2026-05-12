@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, SlidersHorizontal, Crown, Navigation, TrendingDown, TrendingUp, RefreshCw, Fuel } from 'lucide-react';
+import { Search, SlidersHorizontal, Crown, Navigation, TrendingDown, TrendingUp, RefreshCw } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { FuelStation, FuelType, MarketAnalysis, Alert } from '../../types';
 import { FuelTypeSelector } from '../FuelTypeSelector';

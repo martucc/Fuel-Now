@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Fuel } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getBrandLogo } from '../../lib/brandLogos';
 
