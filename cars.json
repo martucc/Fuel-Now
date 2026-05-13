@@ -1,884 +1,311 @@
 [
-  {
-    "model": "Fiat Panda",
-    "liters": 38,
-    "tags": "fiat panda benzina",
-    "kml": 15
-  },
-  {
-    "model": "Fiat Panda (Metano)",
-    "liters": 15,
-    "tags": "fiat panda metano gas",
-    "kml": 22
-  },
-  {
-    "model": "Fiat 500",
-    "liters": 35,
-    "tags": "fiat 500 benzina hybrid",
-    "kml": 20
-  },
-  {
-    "model": "Fiat 500X",
-    "liters": 48,
-    "tags": "fiat 500x diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Fiat 500L",
-    "liters": 50,
-    "tags": "fiat 500l diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Fiat Tipo",
-    "liters": 50,
-    "tags": "fiat tipo diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Fiat Punto",
-    "liters": 45,
-    "tags": "fiat punto diesel benzina grande evo",
-    "kml": 15
-  },
-  {
-    "model": "Lancia Ypsilon",
-    "liters": 40,
-    "tags": "lancia y ypsilon benzina hybrid",
-    "kml": 20
-  },
-  {
-    "model": "Lancia Ypsilon (GPL)",
-    "liters": 38,
-    "tags": "lancia y ypsilon gpl",
-    "kml": 11
-  },
-  {
-    "model": "Alfa Romeo Giulietta",
-    "liters": 60,
-    "tags": "alfa romeo giulietta diesel jtdm benzina",
-    "kml": 15
-  },
-  {
-    "model": "Alfa Romeo Mito",
-    "liters": 45,
-    "tags": "alfa romeo mito diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Alfa Romeo Stelvio",
-    "liters": 64,
-    "tags": "alfa romeo stelvio suv q4 diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Alfa Romeo Giulia",
-    "liters": 58,
-    "tags": "alfa romeo giulia diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Alfa Romeo Tonale",
-    "liters": 55,
-    "tags": "alfa romeo tonale hybrid diesel suv",
-    "kml": 20
-  },
-  {
-    "model": "Jeep Renegade",
-    "liters": 48,
-    "tags": "jeep renegade diesel benzina multijet",
-    "kml": 15
-  },
-  {
-    "model": "Jeep Compass",
-    "liters": 55,
-    "tags": "jeep compass diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Jeep Avenger",
-    "liters": 44,
-    "tags": "jeep avenger benzina suv",
-    "kml": 12
-  },
-  {
-    "model": "Volkswagen Golf 7/8",
-    "liters": 50,
-    "tags": "vw volkswagen golf 7 8 tdi diesel",
-    "kml": 18
-  },
-  {
-    "model": "Volkswagen Golf 7/8",
-    "liters": 50,
-    "tags": "vw volkswagen golf 7 8 tsi benzina",
-    "kml": 15
-  },
-  {
-    "model": "Volkswagen Golf (Metano TGI)",
-    "liters": 15,
-    "tags": "vw volkswagen golf metano tgi",
-    "kml": 22
-  },
-  {
-    "model": "Volkswagen Polo",
-    "liters": 40,
-    "tags": "vw volkswagen polo tsi benzina",
-    "kml": 15
-  },
-  {
-    "model": "Volkswagen Polo",
-    "liters": 45,
-    "tags": "vw volkswagen polo tdi diesel",
-    "kml": 18
-  },
-  {
-    "model": "Volkswagen T-Roc",
-    "liters": 50,
-    "tags": "vw volkswagen t-roc troc diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Volkswagen T-Cross",
-    "liters": 40,
-    "tags": "vw volkswagen t-cross tcross benzina",
-    "kml": 12
-  },
-  {
-    "model": "Volkswagen Tiguan",
-    "liters": 58,
-    "tags": "vw volkswagen tiguan suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Volkswagen Passat",
-    "liters": 66,
-    "tags": "vw volkswagen passat tdi diesel",
-    "kml": 18
-  },
-  {
-    "model": "Volkswagen up!",
-    "liters": 35,
-    "tags": "vw volkswagen up benzina",
-    "kml": 15
-  },
-  {
-    "model": "Audi A1",
-    "liters": 40,
-    "tags": "audi a1 tfsi tdi benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Audi A3",
-    "liters": 50,
-    "tags": "audi a3 tdi diesel",
-    "kml": 18
-  },
-  {
-    "model": "Audi A3",
-    "liters": 50,
-    "tags": "audi a3 tfsi benzina",
-    "kml": 15
-  },
-  {
-    "model": "Audi A4",
-    "liters": 54,
-    "tags": "audi a4 tdi diesel avant",
-    "kml": 10
-  },
-  {
-    "model": "Audi A6",
-    "liters": 63,
-    "tags": "audi a6 tdi diesel avant",
-    "kml": 10
-  },
-  {
-    "model": "Audi Q2",
-    "liters": 50,
-    "tags": "audi q2 tdi tfsi suv",
-    "kml": 15
-  },
-  {
-    "model": "Audi Q3",
-    "liters": 58,
-    "tags": "audi q3 tdi tfsi suv",
-    "kml": 15
-  },
-  {
-    "model": "Audi Q5",
-    "liters": 70,
-    "tags": "audi q5 tdi suv diesel",
-    "kml": 15
-  },
-  {
-    "model": "BMW Serie 1",
-    "liters": 50,
-    "tags": "bmw serie 1 118d 120d f20 f40 diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "BMW Serie 3",
-    "liters": 59,
-    "tags": "bmw serie 3 320d touring diesel",
-    "kml": 18
-  },
-  {
-    "model": "BMW Serie 5",
-    "liters": 66,
-    "tags": "bmw serie 5 520d 530d diesel",
-    "kml": 18
-  },
-  {
-    "model": "BMW X1",
-    "liters": 51,
-    "tags": "bmw x1 suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "BMW X3",
-    "liters": 65,
-    "tags": "bmw x3 suv diesel",
-    "kml": 15
-  },
-  {
-    "model": "BMW X5",
-    "liters": 80,
-    "tags": "bmw x5 suv diesel",
-    "kml": 15
-  },
-  {
-    "model": "Mercedes Classe A",
-    "liters": 43,
-    "tags": "mercedes classe a 180d 200d diesel benzina w176 w177",
-    "kml": 15
-  },
-  {
-    "model": "Mercedes Classe C",
-    "liters": 66,
-    "tags": "mercedes classe c 220d diesel sw",
-    "kml": 18
-  },
-  {
-    "model": "Mercedes Classe E",
-    "liters": 66,
-    "tags": "mercedes classe e diesel",
-    "kml": 18
-  },
-  {
-    "model": "Mercedes GLA",
-    "liters": 43,
-    "tags": "mercedes gla suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Mercedes GLC",
-    "liters": 66,
-    "tags": "mercedes glc suv diesel",
-    "kml": 15
-  },
-  {
-    "model": "Ford Fiesta",
-    "liters": 42,
-    "tags": "ford fiesta ecoboost benzina",
-    "kml": 15
-  },
-  {
-    "model": "Ford Fiesta",
-    "liters": 40,
-    "tags": "ford fiesta tdci diesel",
-    "kml": 18
-  },
-  {
-    "model": "Ford Focus",
-    "liters": 52,
-    "tags": "ford focus tdci ecoboost diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Ford Puma",
-    "liters": 42,
-    "tags": "ford puma hybrid mhev benzina",
-    "kml": 20
-  },
-  {
-    "model": "Ford Kuga",
-    "liters": 54,
-    "tags": "ford kuga suv diesel phev hybrid",
-    "kml": 20
-  },
-  {
-    "model": "Ford Ecosport",
-    "liters": 52,
-    "tags": "ford ecosport suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Toyota Yaris (2020+)",
-    "liters": 36,
-    "tags": "toyota yaris hybrid ibrida benzina",
-    "kml": 20
-  },
-  {
-    "model": "Toyota Yaris (pre-2020)",
-    "liters": 42,
-    "tags": "toyota yaris benzina vecchia",
-    "kml": 15
-  },
-  {
-    "model": "Toyota Yaris Cross",
-    "liters": 36,
-    "tags": "toyota yaris cross hybrid suv",
-    "kml": 17
-  },
-  {
-    "model": "Toyota Aygo",
-    "liters": 35,
-    "tags": "toyota aygo benzina",
-    "kml": 15
-  },
-  {
-    "model": "Toyota Aygo X",
-    "liters": 35,
-    "tags": "toyota aygo x cross benzina",
-    "kml": 12
-  },
-  {
-    "model": "Toyota Corolla",
-    "liters": 43,
-    "tags": "toyota corolla hybrid sw ibrida",
-    "kml": 20
-  },
-  {
-    "model": "Toyota C-HR",
-    "liters": 43,
-    "tags": "toyota chr c-hr hybrid ibrida",
-    "kml": 20
-  },
-  {
-    "model": "Toyota RAV4",
-    "liters": 55,
-    "tags": "toyota rav4 suv hybrid diesel",
-    "kml": 20
-  },
-  {
-    "model": "Renault Clio",
-    "liters": 42,
-    "tags": "renault clio dci tce benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Renault Clio (GPL)",
-    "liters": 39,
-    "tags": "renault clio gpl gas",
-    "kml": 11
-  },
-  {
-    "model": "Renault Captur",
-    "liters": 48,
-    "tags": "renault captur suv dci tce hybrid",
-    "kml": 17
-  },
-  {
-    "model": "Renault Twingo",
-    "liters": 35,
-    "tags": "renault twingo benzina",
-    "kml": 15
-  },
-  {
-    "model": "Renault Megane",
-    "liters": 50,
-    "tags": "renault megane dci tce diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Renault Kadjar",
-    "liters": 55,
-    "tags": "renault kadjar suv diesel dci",
-    "kml": 15
-  },
-  {
-    "model": "Peugeot 208",
-    "liters": 44,
-    "tags": "peugeot 208 puretech bluehdi benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Peugeot 2008",
-    "liters": 44,
-    "tags": "peugeot 2008 suv puretech bluehdi",
-    "kml": 12
-  },
-  {
-    "model": "Peugeot 308",
-    "liters": 52,
-    "tags": "peugeot 308 sw diesel benzina bluehdi",
-    "kml": 15
-  },
-  {
-    "model": "Peugeot 3008",
-    "liters": 53,
-    "tags": "peugeot 3008 suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Peugeot 5008",
-    "liters": 56,
-    "tags": "peugeot 5008 suv diesel",
-    "kml": 15
-  },
-  {
-    "model": "Citroen C3",
-    "liters": 45,
-    "tags": "citroen c3 puretech bluehdi benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Citroen C3 Aircross",
-    "liters": 45,
-    "tags": "citroen c3 aircross suv benzina diesel",
-    "kml": 12
-  },
-  {
-    "model": "Citroen C4",
-    "liters": 50,
-    "tags": "citroen c4 cactus diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Dacia Sandero",
-    "liters": 50,
-    "tags": "dacia sandero tce dci benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Dacia Sandero (GPL)",
-    "liters": 40,
-    "tags": "dacia sandero gpl eco g gas",
-    "kml": 11
-  },
-  {
-    "model": "Dacia Duster",
-    "liters": 50,
-    "tags": "dacia duster dci tce suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Opel Corsa",
-    "liters": 44,
-    "tags": "opel corsa nuova benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Opel Astra",
-    "liters": 52,
-    "tags": "opel astra cdti diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Opel Mokka",
-    "liters": 44,
-    "tags": "opel mokka suv benzina diesel",
-    "kml": 12
-  },
-  {
-    "model": "Opel Crossland",
-    "liters": 45,
-    "tags": "opel crossland x suv benzina diesel",
-    "kml": 12
-  },
-  {
-    "model": "Nissan Qashqai",
-    "liters": 55,
-    "tags": "nissan qashqai mhev suv hybrid",
-    "kml": 17
-  },
-  {
-    "model": "Nissan Qashqai (vecchia)",
-    "liters": 65,
-    "tags": "nissan qashqai dci diesel vecchia",
-    "kml": 15
-  },
-  {
-    "model": "Nissan Micra",
-    "liters": 41,
-    "tags": "nissan micra benzina",
-    "kml": 15
-  },
-  {
-    "model": "Nissan Juke",
-    "liters": 46,
-    "tags": "nissan juke suv benzina diesel",
-    "kml": 12
-  },
-  {
-    "model": "Hyundai Tucson",
-    "liters": 54,
-    "tags": "hyundai tucson suv hybrid crdi diesel",
-    "kml": 20
-  },
-  {
-    "model": "Hyundai i10",
-    "liters": 36,
-    "tags": "hyundai i10 benzina",
-    "kml": 15
-  },
-  {
-    "model": "Hyundai i20",
-    "liters": 40,
-    "tags": "hyundai i20 benzina hybrid",
-    "kml": 20
-  },
-  {
-    "model": "Hyundai Kona",
-    "liters": 50,
-    "tags": "hyundai kona suv benzina hybrid",
-    "kml": 17
-  },
-  {
-    "model": "Kia Sportage",
-    "liters": 54,
-    "tags": "kia sportage suv crdi diesel hybrid",
-    "kml": 20
-  },
-  {
-    "model": "Kia Picanto",
-    "liters": 35,
-    "tags": "kia picanto benzina",
-    "kml": 15
-  },
-  {
-    "model": "Kia Rio",
-    "liters": 45,
-    "tags": "kia rio benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Kia Ceed",
-    "liters": 50,
-    "tags": "kia ceed diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Mazda 2",
-    "liters": 44,
-    "tags": "mazda 2 skyactiv benzina hybrid",
-    "kml": 20
-  },
-  {
-    "model": "Mazda 3",
-    "liters": 51,
-    "tags": "mazda 3 skyactiv g x benzina hybrid",
-    "kml": 17
-  },
-  {
-    "model": "Mazda CX-3",
-    "liters": 48,
-    "tags": "mazda cx-3 cx3 skyactiv d diesel",
-    "kml": 15
-  },
-  {
-    "model": "Mazda CX-3",
-    "liters": 48,
-    "tags": "mazda cx-3 cx3 skyactiv g benzina",
-    "kml": 12
-  },
-  {
-    "model": "Mazda CX-30",
-    "liters": 51,
-    "tags": "mazda cx-30 cx30 suv benzina diesel mhev",
-    "kml": 17
-  },
-  {
-    "model": "Mazda CX-5",
-    "liters": 56,
-    "tags": "mazda cx-5 cx5 suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Volvo XC40",
-    "liters": 54,
-    "tags": "volvo xc40 suv d3 d4 t3 t4 diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Volvo XC60",
-    "liters": 71,
-    "tags": "volvo xc60 suv diesel hybrid phev",
-    "kml": 20
-  },
-  {
-    "model": "Suzuki Swift",
-    "liters": 37,
-    "tags": "suzuki swift hybrid ibrida benzina",
-    "kml": 20
-  },
-  {
-    "model": "Suzuki Ignis",
-    "liters": 32,
-    "tags": "suzuki ignis hybrid suv",
-    "kml": 17
-  },
-  {
-    "model": "Suzuki Vitara",
-    "liters": 47,
-    "tags": "suzuki vitara suv hybrid diesel",
-    "kml": 20
-  },
-  {
-    "model": "Mini Cooper",
-    "liters": 40,
-    "tags": "mini cooper benzina diesel hatch 3 5 porte",
-    "kml": 15
-  },
-  {
-    "model": "Mini Countryman",
-    "liters": 51,
-    "tags": "mini countryman suv diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Seat Ibiza",
-    "liters": 40,
-    "tags": "seat ibiza tsi tdi benzina diesel",
-    "kml": 15
-  },
-  {
-    "model": "Seat Leon",
-    "liters": 50,
-    "tags": "seat leon tdi tsi diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Seat Arona",
-    "liters": 40,
-    "tags": "seat arona suv tgi tsi benzina metano",
-    "kml": 19
-  },
-  {
-    "model": "Seat Ateca",
-    "liters": 50,
-    "tags": "seat ateca suv tdi tsi diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Skoda Fabia",
-    "liters": 40,
-    "tags": "skoda fabia tsi benzina",
-    "kml": 15
-  },
-  {
-    "model": "Skoda Octavia",
-    "liters": 45,
-    "tags": "skoda octavia tdi tsi diesel benzina wagon",
-    "kml": 15
-  },
-  {
-    "model": "Skoda Kamiq",
-    "liters": 50,
-    "tags": "skoda kamiq suv tsi tgi benzina metano",
-    "kml": 19
-  },
-  {
-    "model": "Skoda Karoq",
-    "liters": 50,
-    "tags": "skoda karoq suv tdi tsi diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Honda Civic",
-    "liters": 46,
-    "tags": "honda civic benzina hybrid ehev",
-    "kml": 20
-  },
-  {
-    "model": "Honda CR-V",
-    "liters": 57,
-    "tags": "honda crv cr-v suv hybrid",
-    "kml": 17
-  },
-  {
-    "model": "Ford B-Max",
-    "liters": 48,
-    "tags": "ford bmax b-max benzina diesel",
-    "kml": 12
-  },
-  {
-    "model": "Ford B-Max (GPL)",
-    "liters": 33,
-    "tags": "ford bmax b-max gpl gas",
-    "kml": 8
-  },
-  {
-    "model": "Ford C-Max",
-    "liters": 53,
-    "tags": "ford cmax c-max diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Fiat Qubo",
-    "liters": 45,
-    "tags": "fiat qubo fiorino diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Fiat Qubo (Metano)",
-    "liters": 14,
-    "tags": "fiat qubo metano gas",
-    "kml": 22
-  },
-  {
-    "model": "Fiat Doblò",
-    "liters": 60,
-    "tags": "fiat doblo diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Fiat Doblò (Metano)",
-    "liters": 22,
-    "tags": "fiat doblo metano gas",
-    "kml": 22
-  },
-  {
-    "model": "Fiat Bravo",
-    "liters": 58,
-    "tags": "fiat bravo diesel jtd benzina",
-    "kml": 15
-  },
-  {
-    "model": "Lancia Delta",
-    "liters": 58,
-    "tags": "lancia delta diesel jtd benzina",
-    "kml": 15
-  },
-  {
-    "model": "Lancia Musa",
-    "liters": 47,
-    "tags": "lancia musa diesel benzina gpl",
-    "kml": 11
-  },
-  {
-    "model": "Alfa Romeo 159",
-    "liters": 70,
-    "tags": "alfa romeo 159 jtdm diesel",
-    "kml": 18
-  },
-  {
-    "model": "Renault Scenic",
-    "liters": 60,
-    "tags": "renault scenic xmod diesel benzina",
-    "kml": 12
-  },
-  {
-    "model": "Peugeot 207",
-    "liters": 50,
-    "tags": "peugeot 207 hdi diesel benzina",
-    "kml": 15
-  },
-  {
-    "model": "Dacia Logan",
-    "liters": 50,
-    "tags": "dacia logan dci tce diesel benzina mcv",
-    "kml": 15
-  },
-  {
-    "model": "Dacia Logan (GPL)",
-    "liters": 40,
-    "tags": "dacia logan gpl gas",
-    "kml": 11
-  },
-  {
-    "model": "Moto 125cc",
-    "liters": 12,
-    "tags": "moto 125 125cc scooter sh liberty vespa",
-    "kml": 25
-  },
-  {
-    "model": "Moto Media/Grossa",
-    "liters": 18,
-    "tags": "moto grossa 600cc 1000cc naked sport bmw honda yamaha ducati",
-    "kml": 25
-  },
-  {
-    "model": "Furgone Medio",
-    "liters": 90,
-    "tags": "furgone van ducato transit daily transporter diesel",
-    "kml": 10
-  },
-  {
-    "model": "Dacia Sandero (GPL)",
-    "liters": 40,
-    "tags": "dacia sandero gpl gas eco-g",
-    "kml": 12
-  },
-  {
-    "model": "Dacia Duster Diesel",
-    "liters": 50,
-    "tags": "dacia duster diesel dci suv",
-    "kml": 18
-  },
-  {
-    "model": "Toyota Yaris Hybrid",
-    "liters": 36,
-    "tags": "toyota yaris hybrid ibrida benzina",
-    "kml": 24
-  },
-  {
-    "model": "Volkswagen Golf Diesel",
-    "liters": 50,
-    "tags": "volkswagen vw golf diesel tdi",
-    "kml": 20
-  },
-  {
-    "model": "Renault Clio (GPL)",
-    "liters": 39,
-    "tags": "renault clio gpl tce gas",
-    "kml": 12
-  },
-  {
-    "model": "Peugeot 208 Benzina",
-    "liters": 44,
-    "tags": "peugeot 208 benzina puretech",
-    "kml": 18
-  },
-  {
-    "model": "Ford Puma Hybrid",
-    "liters": 42,
-    "tags": "ford puma hybrid mhev benzina",
-    "kml": 17
-  },
-  {
-    "model": "Nissan Qashqai Benzina",
-    "liters": 55,
-    "tags": "nissan qashqai benzina mild hybrid suv",
-    "kml": 15
-  },
-  {
-    "model": "Jeep Renegade Diesel",
-    "liters": 48,
-    "tags": "jeep renegade diesel multijet suv",
-    "kml": 17
-  },
-  {
-    "model": "Citroen C3 Benzina",
-    "liters": 45,
-    "tags": "citroen c3 benzina puretech",
-    "kml": 17
-  },
-  {
-    "model": "BMW Serie 1 Diesel",
-    "liters": 42,
-    "tags": "bmw serie 1 diesel 118d 120d",
-    "kml": 20
-  },
-  {
-    "model": "Mercedes Classe A Diesel",
-    "liters": 43,
-    "tags": "mercedes classe a diesel a180d a200d",
-    "kml": 20
-  },
-  {
-    "model": "Audi A3 Diesel",
-    "liters": 45,
-    "tags": "audi a3 diesel tdi",
-    "kml": 20
-  }
+  { "model": "Fiat Panda 1.0 Hybrid (Benzina)", "liters": 38, "tags": "fiat panda hybrid mild firefly 70cv benzina ibrida", "kml": 19 },
+  { "model": "Fiat Panda 1.2 (Benzina)", "liters": 37, "tags": "fiat panda benzina 1.2 69cv", "kml": 14 },
+  { "model": "Fiat Panda 0.9 TwinAir (Benzina)", "liters": 35, "tags": "fiat panda benzina 0.9 twinair turbo 85cv", "kml": 16 },
+  { "model": "Fiat Panda 1.3 MultiJet (Diesel)", "liters": 37, "tags": "fiat panda diesel 1.3 multijet 75 80 95cv", "kml": 22 },
+  { "model": "Fiat Panda 0.9 TwinAir Metano", "liters": 12, "tags": "fiat panda metano natural power twinair gnc", "kml": 22 },
+  { "model": "Fiat Panda 1.2 GPL", "liters": 35, "tags": "fiat panda gpl gas easypower", "kml": 11 },
+  { "model": "Fiat Panda 4x4", "liters": 35, "tags": "fiat panda 4x4 cross 4wd benzina diesel", "kml": 13 },
+  { "model": "Fiat 500 1.0 Hybrid (Benzina)", "liters": 35, "tags": "fiat 500 hybrid mild firefly 70cv benzina ibrida", "kml": 19 },
+  { "model": "Fiat 500 1.2 (Benzina)", "liters": 35, "tags": "fiat 500 benzina 1.2 69cv vecchia", "kml": 16 },
+  { "model": "Fiat 500 0.9 TwinAir (Benzina)", "liters": 35, "tags": "fiat 500 benzina 0.9 twinair turbo 85 105cv", "kml": 17 },
+  { "model": "Fiat 500X 1.0 FireFly (Benzina)", "liters": 48, "tags": "fiat 500x benzina 1.0 firefly turbo 120cv suv", "kml": 14 },
+  { "model": "Fiat 500X 1.3 FireFly (Benzina)", "liters": 48, "tags": "fiat 500x benzina 1.3 firefly turbo 150cv suv", "kml": 13 },
+  { "model": "Fiat 500X 1.6 MultiJet (Diesel)", "liters": 48, "tags": "fiat 500x diesel 1.6 multijet 120cv suv", "kml": 18 },
+  { "model": "Fiat 500X 2.0 MultiJet 4x4 (Diesel)", "liters": 48, "tags": "fiat 500x diesel 2.0 multijet 4x4 140 170cv suv", "kml": 15 },
+  { "model": "Fiat 500L 1.4 (Benzina)", "liters": 50, "tags": "fiat 500l benzina 1.4 95cv", "kml": 14 },
+  { "model": "Fiat 500L 1.6 MultiJet (Diesel)", "liters": 50, "tags": "fiat 500l diesel 1.6 multijet 120cv", "kml": 18 },
+  { "model": "Fiat 500L Metano", "liters": 14, "tags": "fiat 500l metano natural power gnc", "kml": 20 },
+  { "model": "Fiat Tipo 1.0 FireFly (Benzina)", "liters": 50, "tags": "fiat tipo benzina 1.0 firefly 100cv 5porte sw", "kml": 15 },
+  { "model": "Fiat Tipo 1.4 (Benzina)", "liters": 50, "tags": "fiat tipo benzina 1.4 95cv", "kml": 14 },
+  { "model": "Fiat Tipo 1.3 MultiJet (Diesel)", "liters": 50, "tags": "fiat tipo diesel 1.3 multijet 95cv", "kml": 22 },
+  { "model": "Fiat Tipo 1.6 MultiJet (Diesel)", "liters": 50, "tags": "fiat tipo diesel 1.6 multijet 120cv sw", "kml": 20 },
+  { "model": "Fiat Punto 1.2 (Benzina)", "liters": 45, "tags": "fiat punto grande punto evo benzina 1.2 65 69cv", "kml": 15 },
+  { "model": "Fiat Punto 1.4 (Benzina)", "liters": 45, "tags": "fiat punto evo benzina 1.4 77 105cv", "kml": 14 },
+  { "model": "Fiat Punto 1.3 MultiJet (Diesel)", "liters": 45, "tags": "fiat punto evo diesel 1.3 multijet 75 95cv", "kml": 22 },
+  { "model": "Fiat Punto 1.4 GPL", "liters": 45, "tags": "fiat punto evo gpl natural power gas", "kml": 12 },
+  { "model": "Fiat Qubo 1.4 (Benzina)", "liters": 45, "tags": "fiat qubo benzina 1.4 8v 73cv", "kml": 14 },
+  { "model": "Fiat Qubo 1.3 MultiJet (Diesel)", "liters": 45, "tags": "fiat qubo diesel 1.3 multijet 80 95cv", "kml": 18 },
+  { "model": "Fiat Qubo Metano", "liters": 13, "tags": "fiat qubo metano natural power gnc", "kml": 22 },
+  { "model": "Fiat Doblo 1.4 (Benzina)", "liters": 60, "tags": "fiat doblo benzina 1.4 95cv", "kml": 12 },
+  { "model": "Fiat Doblo 1.6 MultiJet (Diesel)", "liters": 60, "tags": "fiat doblo diesel 1.6 multijet 105 120cv", "kml": 18 },
+  { "model": "Fiat Doblo Metano", "liters": 22, "tags": "fiat doblo metano natural power gnc", "kml": 22 },
+  { "model": "Fiat Bravo 1.4 T-Jet (Benzina)", "liters": 58, "tags": "fiat bravo benzina 1.4 turbo t-jet 120 150cv", "kml": 14 },
+  { "model": "Fiat Bravo 1.6 MultiJet (Diesel)", "liters": 58, "tags": "fiat bravo diesel 1.6 multijet 105 120cv", "kml": 18 },
+  { "model": "Lancia Ypsilon 1.0 Hybrid (Benzina)", "liters": 40, "tags": "lancia ypsilon y benzina hybrid firefly mild 70cv ibrida", "kml": 19 },
+  { "model": "Lancia Ypsilon 1.2 (Benzina)", "liters": 40, "tags": "lancia ypsilon y benzina 1.2 69cv", "kml": 14 },
+  { "model": "Lancia Ypsilon 1.2 GPL", "liters": 38, "tags": "lancia ypsilon y gpl ecochic gas", "kml": 12 },
+  { "model": "Lancia Delta 1.4 T-Jet (Benzina)", "liters": 58, "tags": "lancia delta benzina 1.4 turbo t-jet 120 150cv", "kml": 13 },
+  { "model": "Lancia Delta 1.6 MultiJet (Diesel)", "liters": 58, "tags": "lancia delta diesel 1.6 multijet 120cv", "kml": 18 },
+  { "model": "Lancia Delta 2.0 MultiJet (Diesel)", "liters": 58, "tags": "lancia delta diesel 2.0 multijet 165cv", "kml": 16 },
+  { "model": "Lancia Musa 1.4 (Benzina)", "liters": 47, "tags": "lancia musa benzina 1.4 95cv", "kml": 13 },
+  { "model": "Lancia Musa 1.3 MultiJet (Diesel)", "liters": 47, "tags": "lancia musa diesel 1.3 multijet 90cv", "kml": 19 },
+  { "model": "Alfa Romeo MiTo 1.4 T-Jet (Benzina)", "liters": 45, "tags": "alfa romeo mito benzina 1.4 turbo t-jet 120 170cv", "kml": 14 },
+  { "model": "Alfa Romeo MiTo 1.3 JTDm (Diesel)", "liters": 45, "tags": "alfa romeo mito diesel 1.3 jtdm 85 95cv", "kml": 20 },
+  { "model": "Alfa Romeo MiTo 1.6 JTDm (Diesel)", "liters": 45, "tags": "alfa romeo mito diesel 1.6 jtdm 120cv", "kml": 19 },
+  { "model": "Alfa Romeo Giulietta 1.4 T-Jet (Benzina)", "liters": 60, "tags": "alfa romeo giulietta benzina 1.4 turbo t-jet 120 170cv", "kml": 13 },
+  { "model": "Alfa Romeo Giulietta 1.6 JTDm (Diesel)", "liters": 60, "tags": "alfa romeo giulietta diesel 1.6 jtdm 105 120cv", "kml": 19 },
+  { "model": "Alfa Romeo Giulietta 2.0 JTDm (Diesel)", "liters": 60, "tags": "alfa romeo giulietta diesel 2.0 jtdm 150 170 175cv", "kml": 18 },
+  { "model": "Alfa Romeo 159 1.9 JTDm (Diesel)", "liters": 70, "tags": "alfa romeo 159 diesel 1.9 jtdm 120 150cv", "kml": 16 },
+  { "model": "Alfa Romeo 159 2.0 JTDm (Diesel)", "liters": 70, "tags": "alfa romeo 159 diesel 2.0 jtdm 170cv", "kml": 15 },
+  { "model": "Alfa Romeo 159 2.4 JTDm (Diesel)", "liters": 70, "tags": "alfa romeo 159 diesel 2.4 jtdm 200 210cv", "kml": 14 },
+  { "model": "Alfa Romeo Giulia 2.2 Diesel", "liters": 58, "tags": "alfa romeo giulia diesel 2.2 jtdm 160 180 210cv", "kml": 19 },
+  { "model": "Alfa Romeo Giulia 2.0 Turbo (Benzina)", "liters": 58, "tags": "alfa romeo giulia benzina 2.0 turbo 200 280cv", "kml": 13 },
+  { "model": "Alfa Romeo Stelvio 2.2 Diesel", "liters": 64, "tags": "alfa romeo stelvio suv diesel 2.2 jtdm 160 190 210cv q4", "kml": 17 },
+  { "model": "Alfa Romeo Stelvio 2.0 Turbo (Benzina)", "liters": 64, "tags": "alfa romeo stelvio suv benzina 2.0 turbo 200 280cv q4", "kml": 11 },
+  { "model": "Alfa Romeo Tonale 1.5 Hybrid (Benzina)", "liters": 55, "tags": "alfa romeo tonale hybrid suv vgt mhev 130 160cv benzina ibrida", "kml": 17 },
+  { "model": "Alfa Romeo Tonale 1.6 Diesel", "liters": 55, "tags": "alfa romeo tonale diesel 1.6 130cv suv", "kml": 20 },
+  { "model": "Alfa Romeo Tonale PHEV (Benzina)", "liters": 42, "tags": "alfa romeo tonale phev plug-in q4 280cv suv hybrid", "kml": 22 },
+  { "model": "Jeep Renegade 1.0 (Benzina)", "liters": 48, "tags": "jeep renegade benzina 1.0 turbo 120cv suv", "kml": 14 },
+  { "model": "Jeep Renegade 1.3 (Benzina)", "liters": 48, "tags": "jeep renegade benzina 1.3 turbo 150 180cv suv", "kml": 13 },
+  { "model": "Jeep Renegade 1.6 MultiJet (Diesel)", "liters": 48, "tags": "jeep renegade diesel 1.6 multijet 120cv suv", "kml": 17 },
+  { "model": "Jeep Renegade 2.0 MultiJet 4x4 (Diesel)", "liters": 48, "tags": "jeep renegade diesel 2.0 multijet 140 170cv 4x4 suv", "kml": 15 },
+  { "model": "Jeep Renegade e-Hybrid (Benzina)", "liters": 48, "tags": "jeep renegade hybrid mild ibrida 130cv suv", "kml": 18 },
+  { "model": "Jeep Compass 1.3 Turbo (Benzina)", "liters": 55, "tags": "jeep compass benzina 1.3 turbo 130 150cv suv", "kml": 13 },
+  { "model": "Jeep Compass 1.6 MultiJet (Diesel)", "liters": 55, "tags": "jeep compass diesel 1.6 multijet 120cv suv", "kml": 18 },
+  { "model": "Jeep Compass 2.0 MultiJet 4x4 (Diesel)", "liters": 55, "tags": "jeep compass diesel 2.0 multijet 140 170cv 4x4 suv", "kml": 16 },
+  { "model": "Jeep Compass e-Hybrid (Benzina)", "liters": 55, "tags": "jeep compass hybrid mild 4xe 130 160cv suv", "kml": 17 },
+  { "model": "Jeep Avenger 1.2 Turbo (Benzina)", "liters": 44, "tags": "jeep avenger benzina 1.2 turbo 100cv suv", "kml": 16 },
+  { "model": "Jeep Avenger e-Hybrid (Benzina)", "liters": 44, "tags": "jeep avenger hybrid mild benzina 100 136cv suv", "kml": 18 },
+  { "model": "VW up! 1.0 (Benzina)", "liters": 35, "tags": "vw volkswagen up benzina 1.0 60 75cv", "kml": 18 },
+  { "model": "VW up! Metano", "liters": 11, "tags": "vw volkswagen up metano eco gnc", "kml": 22 },
+  { "model": "VW Polo 1.0 TSI (Benzina)", "liters": 40, "tags": "vw volkswagen polo benzina 1.0 tsi 80 95 110cv", "kml": 16 },
+  { "model": "VW Polo 1.6 TDI (Diesel)", "liters": 40, "tags": "vw volkswagen polo diesel 1.6 tdi 95 110cv", "kml": 22 },
+  { "model": "VW Golf 7/8 1.0 TSI (Benzina)", "liters": 50, "tags": "vw volkswagen golf benzina 1.0 tsi 110cv mk7 mk8", "kml": 16 },
+  { "model": "VW Golf 7/8 1.5 TSI (Benzina)", "liters": 50, "tags": "vw volkswagen golf benzina 1.5 tsi 130 150cv mk7 mk8", "kml": 15 },
+  { "model": "VW Golf 7/8 1.6 TDI (Diesel)", "liters": 50, "tags": "vw volkswagen golf diesel 1.6 tdi 115cv mk7 mk8", "kml": 22 },
+  { "model": "VW Golf 7/8 2.0 TDI (Diesel)", "liters": 50, "tags": "vw volkswagen golf diesel 2.0 tdi 115 150cv mk7 mk8", "kml": 21 },
+  { "model": "VW Golf TGI Metano", "liters": 14, "tags": "vw volkswagen golf metano tgi 1.5 gnc", "kml": 24 },
+  { "model": "VW T-Cross 1.0 TSI (Benzina)", "liters": 40, "tags": "vw volkswagen t-cross tcross benzina 1.0 tsi 95 110cv suv", "kml": 15 },
+  { "model": "VW T-Roc 1.0 TSI (Benzina)", "liters": 50, "tags": "vw volkswagen t-roc troc benzina 1.0 tsi 110cv suv", "kml": 15 },
+  { "model": "VW T-Roc 1.5 TSI (Benzina)", "liters": 50, "tags": "vw volkswagen t-roc troc benzina 1.5 tsi 150cv suv", "kml": 14 },
+  { "model": "VW T-Roc 2.0 TDI (Diesel)", "liters": 50, "tags": "vw volkswagen t-roc troc diesel 2.0 tdi 116 150cv suv 4motion", "kml": 19 },
+  { "model": "VW Tiguan 1.5 TSI (Benzina)", "liters": 58, "tags": "vw volkswagen tiguan benzina 1.5 tsi 150cv suv", "kml": 13 },
+  { "model": "VW Tiguan 2.0 TDI (Diesel)", "liters": 58, "tags": "vw volkswagen tiguan diesel 2.0 tdi 150 200cv suv 4motion", "kml": 17 },
+  { "model": "VW Passat 1.5 TSI (Benzina)", "liters": 66, "tags": "vw volkswagen passat benzina 1.5 tsi sw", "kml": 14 },
+  { "model": "VW Passat 2.0 TDI (Diesel)", "liters": 66, "tags": "vw volkswagen passat diesel 2.0 tdi sw 150 200cv 4motion", "kml": 19 },
+  { "model": "Audi A1 25 TFSI (Benzina)", "liters": 40, "tags": "audi a1 benzina 1.0 tfsi 95cv sportback", "kml": 15 },
+  { "model": "Audi A1 30 TFSI (Benzina)", "liters": 40, "tags": "audi a1 benzina 1.0 tfsi 110cv sportback", "kml": 14 },
+  { "model": "Audi A1 35 TFSI (Benzina)", "liters": 40, "tags": "audi a1 benzina 1.5 tfsi 150cv sportback", "kml": 13 },
+  { "model": "Audi A3 30 TFSI (Benzina)", "liters": 50, "tags": "audi a3 benzina 1.0 tfsi 110cv sportback", "kml": 16 },
+  { "model": "Audi A3 35 TFSI (Benzina)", "liters": 50, "tags": "audi a3 benzina 1.5 tfsi mhev 150cv sportback", "kml": 14 },
+  { "model": "Audi A3 30 TDI (Diesel)", "liters": 50, "tags": "audi a3 diesel 2.0 tdi 116cv sportback", "kml": 21 },
+  { "model": "Audi A3 35 TDI (Diesel)", "liters": 50, "tags": "audi a3 diesel 2.0 tdi 150cv sportback", "kml": 20 },
+  { "model": "Audi A4 35 TFSI (Benzina)", "liters": 54, "tags": "audi a4 benzina 2.0 tfsi 150cv avant b9 b10", "kml": 13 },
+  { "model": "Audi A4 35 TDI (Diesel)", "liters": 54, "tags": "audi a4 diesel 2.0 tdi 163cv avant b9 b10", "kml": 19 },
+  { "model": "Audi A4 40 TDI (Diesel)", "liters": 54, "tags": "audi a4 diesel 2.0 tdi 204cv avant quattro b9 b10", "kml": 18 },
+  { "model": "Audi A6 40 TDI (Diesel)", "liters": 63, "tags": "audi a6 diesel 2.0 tdi 204cv avant c8 c9", "kml": 18 },
+  { "model": "Audi A6 45 TDI (Diesel)", "liters": 63, "tags": "audi a6 diesel 3.0 tdi 245cv quattro avant c8 c9", "kml": 16 },
+  { "model": "Audi Q2 30 TFSI (Benzina)", "liters": 50, "tags": "audi q2 benzina 1.0 tfsi 110cv suv", "kml": 15 },
+  { "model": "Audi Q2 35 TFSI (Benzina)", "liters": 50, "tags": "audi q2 benzina 1.5 tfsi 150cv suv", "kml": 14 },
+  { "model": "Audi Q2 35 TDI (Diesel)", "liters": 50, "tags": "audi q2 diesel 2.0 tdi 150cv suv", "kml": 19 },
+  { "model": "Audi Q3 35 TFSI (Benzina)", "liters": 58, "tags": "audi q3 benzina 1.5 tfsi 150cv suv mhev", "kml": 14 },
+  { "model": "Audi Q3 35 TDI (Diesel)", "liters": 58, "tags": "audi q3 diesel 2.0 tdi 150cv suv quattro", "kml": 18 },
+  { "model": "Audi Q5 40 TDI (Diesel)", "liters": 70, "tags": "audi q5 diesel 2.0 tdi 204cv quattro suv", "kml": 17 },
+  { "model": "Audi Q5 45 TFSI (Benzina)", "liters": 70, "tags": "audi q5 benzina 2.0 tfsi 245cv quattro suv mhev", "kml": 12 },
+  { "model": "BMW Serie 1 118i (Benzina)", "liters": 50, "tags": "bmw serie 1 benzina 118i 1.5 turbo 140cv f20 f40", "kml": 15 },
+  { "model": "BMW Serie 1 118d (Diesel)", "liters": 50, "tags": "bmw serie 1 diesel 118d 2.0 150cv f20 f40", "kml": 20 },
+  { "model": "BMW Serie 1 120d (Diesel)", "liters": 50, "tags": "bmw serie 1 diesel 120d 2.0 190cv xdrive f40", "kml": 19 },
+  { "model": "BMW Serie 3 320i (Benzina)", "liters": 59, "tags": "bmw serie 3 benzina 320i 2.0 turbo 184cv g20 g80 touring", "kml": 14 },
+  { "model": "BMW Serie 3 320d (Diesel)", "liters": 59, "tags": "bmw serie 3 diesel 320d 2.0 150 190cv g20 g80 touring", "kml": 20 },
+  { "model": "BMW Serie 3 330d (Diesel)", "liters": 59, "tags": "bmw serie 3 diesel 330d 3.0 286cv g20 g80 touring xdrive", "kml": 18 },
+  { "model": "BMW Serie 5 520d (Diesel)", "liters": 66, "tags": "bmw serie 5 diesel 520d 2.0 190cv g30 g60 g31", "kml": 19 },
+  { "model": "BMW Serie 5 530d (Diesel)", "liters": 66, "tags": "bmw serie 5 diesel 530d 3.0 286cv g30 g60 xdrive", "kml": 18 },
+  { "model": "BMW X1 sDrive18i (Benzina)", "liters": 51, "tags": "bmw x1 benzina 1.5 turbo 140cv u11 suv", "kml": 14 },
+  { "model": "BMW X1 xDrive18d (Diesel)", "liters": 51, "tags": "bmw x1 diesel 2.0 150cv xdrive u11 suv", "kml": 19 },
+  { "model": "BMW X1 xDrive20d (Diesel)", "liters": 51, "tags": "bmw x1 diesel 2.0 190cv xdrive u11 suv", "kml": 18 },
+  { "model": "BMW X3 xDrive20d (Diesel)", "liters": 65, "tags": "bmw x3 diesel 2.0 190cv xdrive g01 g45 suv", "kml": 17 },
+  { "model": "BMW X3 xDrive30d (Diesel)", "liters": 65, "tags": "bmw x3 diesel 3.0 286cv xdrive g01 g45 suv", "kml": 16 },
+  { "model": "BMW X5 xDrive30d (Diesel)", "liters": 80, "tags": "bmw x5 diesel 3.0 286cv xdrive g05 suv", "kml": 14 },
+  { "model": "BMW X5 xDrive40d (Diesel)", "liters": 80, "tags": "bmw x5 diesel 3.0 340cv xdrive g05 suv", "kml": 13 },
+  { "model": "Mini Cooper 1.5 (Benzina)", "liters": 40, "tags": "mini cooper benzina 1.5 turbo 136cv f56 f66 3 5 porte", "kml": 16 },
+  { "model": "Mini Cooper S 2.0 (Benzina)", "liters": 40, "tags": "mini cooper s benzina 2.0 turbo 192cv f56 f66", "kml": 14 },
+  { "model": "Mini Cooper D 1.5 (Diesel)", "liters": 40, "tags": "mini cooper d diesel 1.5 116cv f56", "kml": 22 },
+  { "model": "Mini Countryman 2.0 D (Diesel)", "liters": 51, "tags": "mini countryman diesel 2.0 150cv suv f60", "kml": 18 },
+  { "model": "Mini Countryman 1.5 (Benzina)", "liters": 51, "tags": "mini countryman benzina 1.5 turbo 136cv suv f60", "kml": 14 },
+  { "model": "Mini Countryman Cooper SE PHEV", "liters": 36, "tags": "mini countryman hybrid phev plug-in 224cv suv", "kml": 24 },
+  { "model": "Mercedes Classe A 180 (Benzina)", "liters": 43, "tags": "mercedes classe a benzina 180 1.3 turbo 136cv w177", "kml": 15 },
+  { "model": "Mercedes Classe A 200 (Benzina)", "liters": 43, "tags": "mercedes classe a benzina 200 1.3 turbo 163cv w177", "kml": 14 },
+  { "model": "Mercedes Classe A 180d (Diesel)", "liters": 43, "tags": "mercedes classe a diesel 180d 1.5 116cv w177", "kml": 21 },
+  { "model": "Mercedes Classe A 200d (Diesel)", "liters": 43, "tags": "mercedes classe a diesel 200d 2.0 150cv w177", "kml": 20 },
+  { "model": "Mercedes Classe C 200 (Benzina)", "liters": 66, "tags": "mercedes classe c benzina 200 1.5 turbo mhev 204cv w206 sw", "kml": 13 },
+  { "model": "Mercedes Classe C 200d (Diesel)", "liters": 66, "tags": "mercedes classe c diesel 200d 2.0 163cv w206 sw", "kml": 19 },
+  { "model": "Mercedes Classe C 220d (Diesel)", "liters": 66, "tags": "mercedes classe c diesel 220d 2.0 200cv w206 sw", "kml": 18 },
+  { "model": "Mercedes Classe C 300d (Diesel)", "liters": 66, "tags": "mercedes classe c diesel 300d 2.0 265cv w206 sw 4matic", "kml": 17 },
+  { "model": "Mercedes Classe E 220d (Diesel)", "liters": 66, "tags": "mercedes classe e diesel 220d 2.0 194cv w213 w214 sw", "kml": 18 },
+  { "model": "Mercedes Classe E 300d (Diesel)", "liters": 66, "tags": "mercedes classe e diesel 300d 2.0 265cv w213 w214 4matic", "kml": 17 },
+  { "model": "Mercedes GLA 200 (Benzina)", "liters": 43, "tags": "mercedes gla benzina 200 1.3 turbo 163cv suv h247", "kml": 14 },
+  { "model": "Mercedes GLA 200d (Diesel)", "liters": 43, "tags": "mercedes gla diesel 200d 2.0 150cv suv h247", "kml": 19 },
+  { "model": "Mercedes GLA 220d (Diesel)", "liters": 43, "tags": "mercedes gla diesel 220d 2.0 190cv suv 4matic h247", "kml": 18 },
+  { "model": "Mercedes GLC 220d (Diesel)", "liters": 66, "tags": "mercedes glc diesel 220d 2.0 197cv suv 4matic x254", "kml": 17 },
+  { "model": "Mercedes GLC 300d (Diesel)", "liters": 66, "tags": "mercedes glc diesel 300d 2.0 265cv suv 4matic x254", "kml": 16 },
+  { "model": "Ford Fiesta 1.0 EcoBoost (Benzina)", "liters": 42, "tags": "ford fiesta benzina 1.0 ecoboost 100 125 155cv", "kml": 16 },
+  { "model": "Ford Fiesta 1.5 TDCi (Diesel)", "liters": 40, "tags": "ford fiesta diesel 1.5 tdci ecoblue 85 120cv", "kml": 22 },
+  { "model": "Ford Focus 1.0 EcoBoost (Benzina)", "liters": 52, "tags": "ford focus benzina 1.0 ecoboost mhev 125 155cv sw", "kml": 15 },
+  { "model": "Ford Focus 1.5 EcoBoost (Benzina)", "liters": 52, "tags": "ford focus benzina 1.5 ecoboost 150 182cv sw", "kml": 14 },
+  { "model": "Ford Focus 1.5 TDCi (Diesel)", "liters": 52, "tags": "ford focus diesel 1.5 tdci ecoblue 95 120cv sw", "kml": 22 },
+  { "model": "Ford Focus 2.0 TDCi (Diesel)", "liters": 52, "tags": "ford focus diesel 2.0 tdci ecoblue 150 190cv sw st", "kml": 19 },
+  { "model": "Ford Puma 1.0 EcoBoost Hybrid (Benzina)", "liters": 42, "tags": "ford puma benzina hybrid mhev 125 155cv suv ibrida", "kml": 17 },
+  { "model": "Ford Puma 1.5 EcoBoost ST (Benzina)", "liters": 42, "tags": "ford puma benzina 1.5 ecoboost st 200cv suv sport", "kml": 13 },
+  { "model": "Ford Kuga 1.5 EcoBoost (Benzina)", "liters": 54, "tags": "ford kuga benzina 1.5 ecoboost 150cv suv", "kml": 13 },
+  { "model": "Ford Kuga 2.0 EcoBlue (Diesel)", "liters": 54, "tags": "ford kuga diesel 2.0 ecoblue mhev 150 190cv suv", "kml": 18 },
+  { "model": "Ford Kuga 2.5 PHEV (Benzina)", "liters": 45, "tags": "ford kuga phev plug-in 225cv suv hybrid ibrida", "kml": 22 },
+  { "model": "Ford Kuga 2.5 FHEV (Benzina)", "liters": 54, "tags": "ford kuga hybrid fhev full 190cv suv ibrida", "kml": 19 },
+  { "model": "Ford Ecosport 1.0 EcoBoost (Benzina)", "liters": 52, "tags": "ford ecosport benzina 1.0 ecoboost 100 125cv suv", "kml": 13 },
+  { "model": "Ford Ecosport 1.5 TDCi (Diesel)", "liters": 52, "tags": "ford ecosport diesel 1.5 tdci 100cv suv", "kml": 19 },
+  { "model": "Ford B-Max 1.0 EcoBoost (Benzina)", "liters": 48, "tags": "ford bmax b-max benzina 1.0 ecoboost 100 125cv", "kml": 14 },
+  { "model": "Ford B-Max 1.5 TDCi (Diesel)", "liters": 48, "tags": "ford bmax b-max diesel 1.5 tdci 95cv", "kml": 19 },
+  { "model": "Ford B-Max 1.4 GPL", "liters": 33, "tags": "ford bmax b-max gpl ecochic gas", "kml": 11 },
+  { "model": "Ford C-Max 1.0 EcoBoost (Benzina)", "liters": 53, "tags": "ford cmax c-max benzina 1.0 ecoboost 100 125cv", "kml": 14 },
+  { "model": "Ford C-Max 1.5/2.0 TDCi (Diesel)", "liters": 53, "tags": "ford cmax c-max diesel 1.5 2.0 tdci 95 150cv", "kml": 19 },
+  { "model": "Toyota Aygo 1.0 (Benzina)", "liters": 35, "tags": "toyota aygo benzina 1.0 vvt-i 72cv", "kml": 18 },
+  { "model": "Toyota Aygo X 1.0 (Benzina)", "liters": 35, "tags": "toyota aygo x cross benzina 1.0 72cv suv", "kml": 18 },
+  { "model": "Toyota Yaris 1.5 Hybrid (Benzina)", "liters": 36, "tags": "toyota yaris hybrid ibrida benzina 1.5 116cv 2020 2024", "kml": 24 },
+  { "model": "Toyota Yaris 1.0 (pre-2020)", "liters": 42, "tags": "toyota yaris benzina 1.0 vvt-i 69cv vecchia xp130", "kml": 15 },
+  { "model": "Toyota Yaris 1.3 (pre-2020)", "liters": 42, "tags": "toyota yaris benzina 1.3 vvt-i 100cv vecchia xp130", "kml": 14 },
+  { "model": "Toyota Yaris Cross 1.5 Hybrid", "liters": 36, "tags": "toyota yaris cross hybrid suv ibrida 116cv awd-i", "kml": 21 },
+  { "model": "Toyota Corolla 1.8 Hybrid (Benzina)", "liters": 43, "tags": "toyota corolla hybrid ibrida 1.8 122cv sw touring sports", "kml": 22 },
+  { "model": "Toyota Corolla 2.0 Hybrid (Benzina)", "liters": 43, "tags": "toyota corolla hybrid ibrida 2.0 184 196cv sw touring", "kml": 21 },
+  { "model": "Toyota C-HR 1.8 Hybrid (Benzina)", "liters": 43, "tags": "toyota chr c-hr hybrid ibrida 1.8 122cv suv", "kml": 21 },
+  { "model": "Toyota C-HR 2.0 Hybrid (Benzina)", "liters": 43, "tags": "toyota chr c-hr hybrid ibrida 2.0 184 196cv suv awd-i", "kml": 20 },
+  { "model": "Toyota RAV4 2.5 Hybrid (Benzina)", "liters": 55, "tags": "toyota rav4 suv hybrid ibrida 2.5 218 222cv awd-i", "kml": 18 },
+  { "model": "Toyota RAV4 2.5 PHEV (Benzina)", "liters": 55, "tags": "toyota rav4 phev plug-in 306cv suv hybrid awd-i", "kml": 22 },
+  { "model": "Honda Civic 1.5 Turbo (Benzina)", "liters": 47, "tags": "honda civic benzina 1.5 turbo 182cv", "kml": 15 },
+  { "model": "Honda Civic 2.0 e:HEV", "liters": 40, "tags": "honda civic hybrid ehev ibrida 2.0 184cv benzina", "kml": 22 },
+  { "model": "Honda CR-V 2.0 e:HEV", "liters": 57, "tags": "honda crv cr-v hybrid ehev suv 184cv benzina", "kml": 18 },
+  { "model": "Honda HR-V 1.5 e:HEV", "liters": 40, "tags": "honda hr-v hybrid ehev suv 131cv benzina", "kml": 20 },
+  { "model": "Honda Jazz 1.5 e:HEV", "liters": 40, "tags": "honda jazz hybrid ehev ibrida 109cv benzina", "kml": 22 },
+  { "model": "Mazda 2 1.5 Hybrid (Benzina)", "liters": 36, "tags": "mazda 2 hybrid ibrida 1.5 116cv skyactiv 2023", "kml": 23 },
+  { "model": "Mazda 2 1.5 SkyActiv-G (Benzina)", "liters": 44, "tags": "mazda 2 benzina 1.5 skyactiv-g 75 90cv", "kml": 17 },
+  { "model": "Mazda 3 2.0 SkyActiv-G (Benzina)", "liters": 51, "tags": "mazda 3 benzina 2.0 skyactiv-g 122cv mhev", "kml": 16 },
+  { "model": "Mazda 3 2.0 SkyActiv-X (Benzina)", "liters": 51, "tags": "mazda 3 benzina 2.0 skyactiv-x mhev 186cv", "kml": 17 },
+  { "model": "Mazda CX-3 2.0 SkyActiv-G (Benzina)", "liters": 48, "tags": "mazda cx-3 cx3 benzina 2.0 skyactiv-g 121cv suv", "kml": 14 },
+  { "model": "Mazda CX-3 1.5 SkyActiv-D (Diesel)", "liters": 48, "tags": "mazda cx-3 cx3 diesel 1.5 skyactiv-d 105cv suv", "kml": 19 },
+  { "model": "Mazda CX-3 1.8 SkyActiv-D (Diesel)", "liters": 48, "tags": "mazda cx-3 cx3 diesel 1.8 skyactiv-d 115cv suv", "kml": 18 },
+  { "model": "Mazda CX-30 2.0 SkyActiv-G (Benzina)", "liters": 51, "tags": "mazda cx-30 cx30 benzina 2.0 skyactiv-g mhev 122 150cv suv", "kml": 16 },
+  { "model": "Mazda CX-30 2.0 SkyActiv-X (Benzina)", "liters": 51, "tags": "mazda cx-30 cx30 benzina 2.0 skyactiv-x mhev 186cv suv", "kml": 17 },
+  { "model": "Mazda CX-5 2.0 SkyActiv-G (Benzina)", "liters": 56, "tags": "mazda cx-5 cx5 benzina 2.0 skyactiv-g 165cv suv", "kml": 13 },
+  { "model": "Mazda CX-5 2.2 SkyActiv-D (Diesel)", "liters": 56, "tags": "mazda cx-5 cx5 diesel 2.2 skyactiv-d 150 184cv suv awd", "kml": 17 },
+  { "model": "Hyundai i10 1.0 (Benzina)", "liters": 36, "tags": "hyundai i10 benzina 1.0 67cv", "kml": 17 },
+  { "model": "Hyundai i10 1.2 (Benzina)", "liters": 36, "tags": "hyundai i10 benzina 1.2 84cv", "kml": 16 },
+  { "model": "Hyundai i20 1.2 (Benzina)", "liters": 40, "tags": "hyundai i20 benzina 1.2 75 84cv", "kml": 16 },
+  { "model": "Hyundai i20 1.0 T-GDi MHEV (Benzina)", "liters": 40, "tags": "hyundai i20 benzina hybrid mhev t-gdi 100 120cv", "kml": 18 },
+  { "model": "Hyundai Kona 1.0 T-GDi (Benzina)", "liters": 50, "tags": "hyundai kona benzina 1.0 turbo 120cv suv mhev", "kml": 15 },
+  { "model": "Hyundai Kona 1.6 Hybrid (Benzina)", "liters": 38, "tags": "hyundai kona hybrid suv 141cv ibrida ehev", "kml": 22 },
+  { "model": "Hyundai Tucson 1.6 T-GDi (Benzina)", "liters": 54, "tags": "hyundai tucson benzina 1.6 t-gdi mhev 150 180cv suv", "kml": 14 },
+  { "model": "Hyundai Tucson 1.6 CRDi (Diesel)", "liters": 54, "tags": "hyundai tucson diesel 1.6 crdi mhev 136cv suv", "kml": 18 },
+  { "model": "Hyundai Tucson 1.6 Hybrid (Benzina)", "liters": 52, "tags": "hyundai tucson hybrid suv 230cv ibrida ehev", "kml": 19 },
+  { "model": "Kia Picanto 1.0 (Benzina)", "liters": 35, "tags": "kia picanto benzina 1.0 67cv", "kml": 17 },
+  { "model": "Kia Picanto 1.0 GPL", "liters": 27, "tags": "kia picanto gpl bi-fuel gas", "kml": 12 },
+  { "model": "Kia Rio 1.0 T-GDi (Benzina)", "liters": 45, "tags": "kia rio benzina 1.0 turbo mhev 100 120cv", "kml": 16 },
+  { "model": "Kia Ceed 1.0 T-GDi (Benzina)", "liters": 50, "tags": "kia ceed benzina 1.0 turbo 100 120cv sw", "kml": 15 },
+  { "model": "Kia Ceed 1.5 T-GDi (Benzina)", "liters": 50, "tags": "kia ceed benzina 1.5 turbo 160cv sw", "kml": 14 },
+  { "model": "Kia Ceed 1.6 CRDi (Diesel)", "liters": 50, "tags": "kia ceed diesel 1.6 crdi mhev 115 136cv sw", "kml": 20 },
+  { "model": "Kia Sportage 1.6 T-GDi (Benzina)", "liters": 54, "tags": "kia sportage benzina 1.6 turbo mhev 150 180cv suv", "kml": 14 },
+  { "model": "Kia Sportage 1.6 CRDi (Diesel)", "liters": 54, "tags": "kia sportage diesel 1.6 crdi mhev 136cv suv", "kml": 18 },
+  { "model": "Kia Sportage 1.6 Hybrid (Benzina)", "liters": 52, "tags": "kia sportage hybrid suv 230cv ibrida ehev", "kml": 19 },
+  { "model": "Renault Twingo 1.0 SCe (Benzina)", "liters": 35, "tags": "renault twingo benzina 1.0 sce 65 75cv", "kml": 16 },
+  { "model": "Renault Clio 1.0 TCe (Benzina)", "liters": 42, "tags": "renault clio benzina 1.0 tce 90 100cv", "kml": 16 },
+  { "model": "Renault Clio 1.3 TCe (Benzina)", "liters": 42, "tags": "renault clio benzina 1.3 tce 130 160cv rs line", "kml": 15 },
+  { "model": "Renault Clio 1.5 dCi (Diesel)", "liters": 42, "tags": "renault clio diesel 1.5 dci blue 85 100 115cv", "kml": 24 },
+  { "model": "Renault Clio E-Tech Hybrid", "liters": 39, "tags": "renault clio hybrid e-tech ibrida 145cv full benzina", "kml": 21 },
+  { "model": "Renault Clio 1.0 TCe GPL", "liters": 39, "tags": "renault clio gpl tce 100cv eco-g gas", "kml": 12 },
+  { "model": "Renault Captur 1.0 TCe (Benzina)", "liters": 48, "tags": "renault captur benzina 1.0 tce 90 100cv suv", "kml": 15 },
+  { "model": "Renault Captur 1.3 TCe (Benzina)", "liters": 48, "tags": "renault captur benzina 1.3 tce 130 160cv suv", "kml": 14 },
+  { "model": "Renault Captur 1.5 dCi (Diesel)", "liters": 48, "tags": "renault captur diesel 1.5 dci blue 95 115cv suv", "kml": 22 },
+  { "model": "Renault Captur E-Tech Hybrid", "liters": 39, "tags": "renault captur hybrid e-tech 145 160cv suv ibrida full", "kml": 21 },
+  { "model": "Renault Megane 1.3 TCe (Benzina)", "liters": 50, "tags": "renault megane benzina 1.3 tce 140 160cv mhev", "kml": 15 },
+  { "model": "Renault Megane 1.5 dCi (Diesel)", "liters": 50, "tags": "renault megane diesel 1.5 dci blue 95 115cv", "kml": 22 },
+  { "model": "Renault Megane 1.6 dCi (Diesel)", "liters": 50, "tags": "renault megane diesel 1.6 dci 130 160cv gt", "kml": 20 },
+  { "model": "Renault Megane E-Tech Hybrid", "liters": 50, "tags": "renault megane hybrid e-tech 145 160cv ibrida full", "kml": 21 },
+  { "model": "Renault Kadjar 1.3 TCe (Benzina)", "liters": 55, "tags": "renault kadjar benzina 1.3 tce 140 160cv suv", "kml": 14 },
+  { "model": "Renault Kadjar 1.5 dCi (Diesel)", "liters": 55, "tags": "renault kadjar diesel 1.5 dci blue 115cv suv", "kml": 21 },
+  { "model": "Renault Kadjar 1.7 dCi 4x4 (Diesel)", "liters": 55, "tags": "renault kadjar diesel 1.7 dci 4x4 150cv suv", "kml": 18 },
+  { "model": "Renault Scenic 1.3 TCe (Benzina)", "liters": 60, "tags": "renault scenic benzina 1.3 tce xmod", "kml": 14 },
+  { "model": "Renault Scenic 1.5 dCi (Diesel)", "liters": 60, "tags": "renault scenic diesel 1.5 dci blue xmod", "kml": 21 },
+  { "model": "Dacia Sandero 1.0 TCe (Benzina)", "liters": 50, "tags": "dacia sandero benzina 1.0 tce 90 100cv streetway stepway", "kml": 16 },
+  { "model": "Dacia Sandero 1.5 dCi (Diesel)", "liters": 50, "tags": "dacia sandero diesel 1.5 dci blue 90 95cv stepway", "kml": 22 },
+  { "model": "Dacia Sandero 1.0 GPL Eco-G", "liters": 50, "tags": "dacia sandero gpl eco-g gas 100cv stepway streetway", "kml": 12 },
+  { "model": "Dacia Duster 1.0 TCe (Benzina)", "liters": 50, "tags": "dacia duster benzina 1.0 tce 90 100cv suv", "kml": 14 },
+  { "model": "Dacia Duster 1.3 TCe (Benzina)", "liters": 50, "tags": "dacia duster benzina 1.3 tce 130 150cv suv 4x4", "kml": 13 },
+  { "model": "Dacia Duster 1.5 dCi (Diesel)", "liters": 50, "tags": "dacia duster diesel 1.5 dci blue 115cv suv 4x4", "kml": 20 },
+  { "model": "Dacia Duster 1.0 GPL Eco-G", "liters": 50, "tags": "dacia duster gpl eco-g gas 100cv suv", "kml": 12 },
+  { "model": "Dacia Logan 1.0 TCe (Benzina)", "liters": 50, "tags": "dacia logan benzina 1.0 tce mcv", "kml": 17 },
+  { "model": "Dacia Logan 1.5 dCi (Diesel)", "liters": 50, "tags": "dacia logan diesel 1.5 dci mcv", "kml": 23 },
+  { "model": "Dacia Logan 1.0 GPL", "liters": 50, "tags": "dacia logan gpl eco-g gas mcv", "kml": 12 },
+  { "model": "Peugeot 207 1.4 (Benzina)", "liters": 50, "tags": "peugeot 207 benzina 1.4 vti 95cv", "kml": 14 },
+  { "model": "Peugeot 207 1.6 HDi (Diesel)", "liters": 50, "tags": "peugeot 207 diesel 1.6 hdi 90 110cv", "kml": 19 },
+  { "model": "Peugeot 208 1.2 PureTech (Benzina)", "liters": 44, "tags": "peugeot 208 benzina 1.2 puretech 75 100 130cv mhev", "kml": 16 },
+  { "model": "Peugeot 208 1.5 BlueHDi (Diesel)", "liters": 44, "tags": "peugeot 208 diesel 1.5 bluehdi 100cv", "kml": 22 },
+  { "model": "Peugeot 2008 1.2 PureTech (Benzina)", "liters": 44, "tags": "peugeot 2008 benzina 1.2 puretech mhev 100 130 155cv suv", "kml": 14 },
+  { "model": "Peugeot 2008 1.5 BlueHDi (Diesel)", "liters": 44, "tags": "peugeot 2008 diesel 1.5 bluehdi 100 130cv suv", "kml": 20 },
+  { "model": "Peugeot 308 1.2 PureTech (Benzina)", "liters": 52, "tags": "peugeot 308 benzina 1.2 puretech mhev 110 130cv sw", "kml": 15 },
+  { "model": "Peugeot 308 1.5 BlueHDi (Diesel)", "liters": 52, "tags": "peugeot 308 diesel 1.5 bluehdi 130cv sw", "kml": 21 },
+  { "model": "Peugeot 308 PHEV (Benzina)", "liters": 40, "tags": "peugeot 308 phev plug-in 180 225cv hybrid ibrida sw", "kml": 22 },
+  { "model": "Peugeot 3008 1.2 PureTech (Benzina)", "liters": 53, "tags": "peugeot 3008 benzina 1.2 puretech 130cv suv mhev", "kml": 13 },
+  { "model": "Peugeot 3008 1.6 PureTech (Benzina)", "liters": 53, "tags": "peugeot 3008 benzina 1.6 puretech 180cv suv", "kml": 13 },
+  { "model": "Peugeot 3008 1.5 BlueHDi (Diesel)", "liters": 53, "tags": "peugeot 3008 diesel 1.5 bluehdi 130cv suv", "kml": 19 },
+  { "model": "Peugeot 3008 2.0 BlueHDi (Diesel)", "liters": 53, "tags": "peugeot 3008 diesel 2.0 bluehdi 180cv suv 4x4", "kml": 17 },
+  { "model": "Peugeot 5008 1.5 BlueHDi (Diesel)", "liters": 56, "tags": "peugeot 5008 diesel 1.5 bluehdi 130cv suv 7posti", "kml": 18 },
+  { "model": "Peugeot 5008 2.0 BlueHDi (Diesel)", "liters": 56, "tags": "peugeot 5008 diesel 2.0 bluehdi 180cv suv 7posti", "kml": 17 },
+  { "model": "Citroen C3 1.2 PureTech (Benzina)", "liters": 45, "tags": "citroen c3 benzina 1.2 puretech 83 110cv", "kml": 16 },
+  { "model": "Citroen C3 1.5 BlueHDi (Diesel)", "liters": 45, "tags": "citroen c3 diesel 1.5 bluehdi 100cv", "kml": 22 },
+  { "model": "Citroen C3 Aircross 1.2 PureTech (Benzina)", "liters": 45, "tags": "citroen c3 aircross benzina 1.2 puretech 110 130cv suv", "kml": 14 },
+  { "model": "Citroen C3 Aircross 1.5 BlueHDi (Diesel)", "liters": 45, "tags": "citroen c3 aircross diesel 1.5 bluehdi 100 120cv suv", "kml": 20 },
+  { "model": "Citroen C4 1.2 PureTech (Benzina)", "liters": 50, "tags": "citroen c4 benzina 1.2 puretech mhev 130 156cv cactus", "kml": 15 },
+  { "model": "Citroen C4 1.5 BlueHDi (Diesel)", "liters": 50, "tags": "citroen c4 diesel 1.5 bluehdi 130cv cactus", "kml": 22 },
+  { "model": "Opel Corsa 1.2 (Benzina)", "liters": 44, "tags": "opel corsa benzina 1.2 turbo 75 100 130 145cv mhev nuova", "kml": 16 },
+  { "model": "Opel Corsa 1.5 (Diesel)", "liters": 44, "tags": "opel corsa diesel 1.5 100cv nuova", "kml": 22 },
+  { "model": "Opel Astra 1.2 (Benzina)", "liters": 52, "tags": "opel astra benzina 1.2 turbo mhev 110 130 145cv sw", "kml": 15 },
+  { "model": "Opel Astra 1.5 (Diesel)", "liters": 52, "tags": "opel astra diesel 1.5 cdti 105 130cv sw", "kml": 21 },
+  { "model": "Opel Astra PHEV (Benzina)", "liters": 40, "tags": "opel astra phev plug-in 180 225cv hybrid sw", "kml": 22 },
+  { "model": "Opel Mokka 1.2 (Benzina)", "liters": 44, "tags": "opel mokka benzina 1.2 turbo mhev 100 130 156cv suv", "kml": 14 },
+  { "model": "Opel Mokka 1.5 (Diesel)", "liters": 44, "tags": "opel mokka diesel 1.5 110cv suv", "kml": 20 },
+  { "model": "Opel Crossland 1.2 (Benzina)", "liters": 45, "tags": "opel crossland x benzina 1.2 puretech 110 130cv suv", "kml": 14 },
+  { "model": "Opel Crossland 1.5 (Diesel)", "liters": 45, "tags": "opel crossland x diesel 1.5 bluehdi 100 120cv suv", "kml": 20 },
+  { "model": "Nissan Micra 1.0 (Benzina)", "liters": 41, "tags": "nissan micra benzina 1.0 ig-t 92 100cv", "kml": 16 },
+  { "model": "Nissan Juke 1.0 DIG-T (Benzina)", "liters": 46, "tags": "nissan juke benzina 1.0 dig-t 114cv suv", "kml": 14 },
+  { "model": "Nissan Juke 1.6 Hybrid (Benzina)", "liters": 41, "tags": "nissan juke hybrid ibrida 1.6 143cv suv ehev", "kml": 20 },
+  { "model": "Nissan Qashqai 1.3 DIG-T MHEV (Benzina)", "liters": 55, "tags": "nissan qashqai benzina hybrid mhev 1.3 140 158cv suv", "kml": 15 },
+  { "model": "Nissan Qashqai e-POWER Hybrid", "liters": 55, "tags": "nissan qashqai hybrid e-power 190cv suv benzina", "kml": 19 },
+  { "model": "Nissan Qashqai 1.5 dCi (vecchia)", "liters": 65, "tags": "nissan qashqai diesel 1.5 dci 110cv vecchia j11", "kml": 22 },
+  { "model": "Nissan Qashqai 1.6 dCi (vecchia)", "liters": 65, "tags": "nissan qashqai diesel 1.6 dci 130cv vecchia j11", "kml": 20 },
+  { "model": "Suzuki Swift 1.2 Hybrid (Benzina)", "liters": 37, "tags": "suzuki swift hybrid ibrida benzina 1.2 83cv mhev", "kml": 21 },
+  { "model": "Suzuki Ignis 1.2 Hybrid (Benzina)", "liters": 32, "tags": "suzuki ignis hybrid mhev suv 1.2 83cv", "kml": 19 },
+  { "model": "Suzuki Vitara 1.4 BoosterJet Hybrid", "liters": 47, "tags": "suzuki vitara hybrid suv 1.4 boosterjet mhev 129cv benzina", "kml": 17 },
+  { "model": "Suzuki Vitara 1.6 DDiS (Diesel)", "liters": 47, "tags": "suzuki vitara diesel 1.6 ddis 120cv suv vecchia", "kml": 23 },
+  { "model": "Volvo XC40 T2/T3 (Benzina)", "liters": 54, "tags": "volvo xc40 benzina t2 t3 1.5 129 163cv suv", "kml": 14 },
+  { "model": "Volvo XC40 B3/B4 Mild Hybrid (Benzina)", "liters": 54, "tags": "volvo xc40 hybrid mhev mild b3 b4 suv 163 197cv benzina", "kml": 15 },
+  { "model": "Volvo XC40 D3/D4 (Diesel)", "liters": 54, "tags": "volvo xc40 diesel d3 d4 suv 150 190cv awd", "kml": 18 },
+  { "model": "Volvo XC60 B5 Mild Hybrid (Diesel)", "liters": 71, "tags": "volvo xc60 hybrid mild diesel b5 197 235cv suv awd", "kml": 17 },
+  { "model": "Volvo XC60 T6/T8 PHEV (Benzina)", "liters": 45, "tags": "volvo xc60 phev plug-in t6 t8 350 455cv suv hybrid", "kml": 22 },
+  { "model": "Seat Ibiza 1.0 TSI (Benzina)", "liters": 40, "tags": "seat ibiza benzina 1.0 tsi 95 110cv", "kml": 16 },
+  { "model": "Seat Ibiza 1.6 TDI (Diesel)", "liters": 40, "tags": "seat ibiza diesel 1.6 tdi 95cv", "kml": 22 },
+  { "model": "Seat Leon 1.0 TSI (Benzina)", "liters": 50, "tags": "seat leon benzina 1.0 tsi 110cv mhev", "kml": 16 },
+  { "model": "Seat Leon 1.5 TSI (Benzina)", "liters": 50, "tags": "seat leon benzina 1.5 tsi 130 150cv mhev sw", "kml": 15 },
+  { "model": "Seat Leon 2.0 TDI (Diesel)", "liters": 50, "tags": "seat leon diesel 2.0 tdi 115 150cv sw", "kml": 21 },
+  { "model": "Seat Arona 1.0 TSI (Benzina)", "liters": 40, "tags": "seat arona benzina 1.0 tsi 95 110cv suv", "kml": 15 },
+  { "model": "Seat Arona 1.6 TDI (Diesel)", "liters": 40, "tags": "seat arona diesel 1.6 tdi 95cv suv", "kml": 21 },
+  { "model": "Seat Arona TGI Metano", "liters": 14, "tags": "seat arona metano tgi gnc suv", "kml": 20 },
+  { "model": "Seat Ateca 1.5 TSI (Benzina)", "liters": 50, "tags": "seat ateca benzina 1.5 tsi 150cv suv", "kml": 13 },
+  { "model": "Seat Ateca 2.0 TDI (Diesel)", "liters": 50, "tags": "seat ateca diesel 2.0 tdi 150cv suv 4drive", "kml": 19 },
+  { "model": "Skoda Fabia 1.0 TSI (Benzina)", "liters": 40, "tags": "skoda fabia benzina 1.0 tsi 95 110cv", "kml": 16 },
+  { "model": "Skoda Octavia 1.0 TSI (Benzina)", "liters": 45, "tags": "skoda octavia benzina 1.0 tsi 110cv mhev wagon", "kml": 16 },
+  { "model": "Skoda Octavia 1.5 TSI (Benzina)", "liters": 45, "tags": "skoda octavia benzina 1.5 tsi 150cv mhev wagon", "kml": 15 },
+  { "model": "Skoda Octavia 2.0 TDI (Diesel)", "liters": 50, "tags": "skoda octavia diesel 2.0 tdi 116 150cv wagon", "kml": 22 },
+  { "model": "Skoda Octavia G-Tec Metano", "liters": 15, "tags": "skoda octavia metano g-tec gnc 1.5", "kml": 22 },
+  { "model": "Skoda Kamiq 1.0 TSI (Benzina)", "liters": 50, "tags": "skoda kamiq benzina 1.0 tsi 95 110cv suv", "kml": 15 },
+  { "model": "Skoda Kamiq 1.5 TSI (Benzina)", "liters": 50, "tags": "skoda kamiq benzina 1.5 tsi 150cv suv", "kml": 14 },
+  { "model": "Skoda Kamiq G-Tec Metano", "liters": 14, "tags": "skoda kamiq metano g-tec gnc suv 1.0", "kml": 22 },
+  { "model": "Skoda Karoq 1.5 TSI (Benzina)", "liters": 50, "tags": "skoda karoq benzina 1.5 tsi 150cv suv", "kml": 14 },
+  { "model": "Skoda Karoq 2.0 TDI (Diesel)", "liters": 50, "tags": "skoda karoq diesel 2.0 tdi 116 150cv suv 4x4", "kml": 19 },
+  { "model": "Scooter 50cc", "liters": 7, "tags": "moto scooter 50cc vespa sh liberty primavera 4t 2t", "kml": 28 },
+  { "model": "Moto 125cc", "liters": 12, "tags": "moto scooter 125 125cc sh liberty vespa beverly xmax forza", "kml": 25 },
+  { "model": "Moto 300-500cc Scooter", "liters": 14, "tags": "moto 300 350 400 500cc scooter sym kymco xmax burgman tmax", "kml": 22 },
+  { "model": "Moto Naked 600-800cc", "liters": 17, "tags": "moto naked 600cc 750cc 800cc honda yamaha kawasaki suzuki", "kml": 18 },
+  { "model": "Moto Sport 1000cc", "liters": 17, "tags": "moto sport 1000cc panigale gsxr cbr rsv r1 zx10r", "kml": 15 },
+  { "model": "Moto Adventure/GT 1000cc+", "liters": 22, "tags": "moto adventure gt 1200cc gs multistrada africa twin tracer", "kml": 18 },
+  { "model": "Furgone Piccolo (Doblò/Caddy)", "liters": 60, "tags": "furgone piccolo doblo caddy berlingo partner combo diesel", "kml": 14 },
+  { "model": "Furgone Medio (Ducato/Transit)", "liters": 90, "tags": "furgone van ducato transit daily transporter sprinter diesel", "kml": 10 },
+  { "model": "Furgone Grande (Ducato Maxi)", "liters": 90, "tags": "furgone ducato maxi transit jumbo daily 35 sprinter long diesel", "kml": 9 }
 ]
