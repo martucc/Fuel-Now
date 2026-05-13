@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Car, Search, ChevronRight, Zap } from 'lucide-react';
+import { FillupTracker } from '../FillupTracker';
 
 interface Props {
   cars: any[];
@@ -22,6 +23,7 @@ export function VehicleTab(p: Props) {
       </header>
 
       {p.selectedCar ? (
+        <>
         <div className="bg-[#0a0f1d] p-6 sm:p-9 rounded-[36px] sm:rounded-[48px] border border-blue-500/30 space-y-8 sm:space-y-10 relative overflow-hidden shadow-2xl">
           <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 blur-[100px] pointer-events-none rounded-full" />
           <div className="flex justify-between items-start gap-3 relative z-10">
@@ -65,6 +67,13 @@ export function VehicleTab(p: Props) {
             </div>
           </div>
         </div>
+        <FillupTracker
+          carModel={p.selectedCar.model}
+          carTags={p.selectedCar.tags}
+          wltpKml={p.selectedCar.kml}
+          tankLiters={p.selectedCar.liters}
+        />
+        </>
       ) : (
         <div className="space-y-6">
           <div className="bg-black/40 backdrop-blur-2xl rounded-full p-2.5 flex items-center gap-5 shadow-2xl border border-white/10 focus-within:border-blue-500/50 transition-all">

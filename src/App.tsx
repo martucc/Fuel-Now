@@ -91,10 +91,14 @@ export default function App() {
   const [marketAnalyses, setMarketAnalyses] = useState<Record<string, MarketAnalysis>>({});
   const [fuel, setFuel] = useState<FuelType>(() => {
     const p = new URLSearchParams(window.location.search);
-    const f = p.get('fuel');
     const valid: FuelType[] = ['Benzina','Diesel','GPL','Metano'];
-    return f && (valid as string[]).includes(f) ? (f as FuelType) : 'Benzina';
+    const fromUrl = p.get('fuel');
+    if (fromUrl && (valid as string[]).includes(fromUrl)) return fromUrl as FuelType;
+    const stored = localStorage.getItem('mf_fuel');
+    if (stored && (valid as string[]).includes(stored)) return stored as FuelType;
+    return 'Benzina';
   });
+  useEffect(() => { localStorage.setItem('mf_fuel', fuel); }, [fuel]);
   const [loading, setLoading] = useState(true);
   const [favs, setFavs] = useState<string[]>([]);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);

@@ -32,6 +32,20 @@ export interface Alert {
   active: boolean;
 }
 
+export interface Fillup {
+  id: string;
+  date: string;
+  carModel: string;
+  fuelType: FuelType;
+  liters: number;
+  pricePerLiter: number;
+  total: number;
+  odometer: number;
+  full: boolean;
+  stationName?: string;
+  notes?: string;
+}
+
 export interface MarketAnalysis {
   advice: AdviceType;
   source?: 'ai' | 'local';
