@@ -16,6 +16,7 @@ export function loadFillups(): Fillup[] {
 
 export function saveFillups(list: Fillup[]) {
   localStorage.setItem(KEY, JSON.stringify(list));
+  try { window.dispatchEvent(new CustomEvent('mf-fillup-changed')); } catch {}
 }
 
 export function addFillup(f: Omit<Fillup, 'id'>): Fillup[] {
@@ -102,6 +103,43 @@ export function computeStats(fills: Fillup[], wltpKml?: number): FillupStats {
     consumptionSeries: series,
     vsWltpPct,
   };
+}
+
+export interface MonthBucket {
+  key: string;
+  label: string;
+  year: number;
+  month: number;
+  total: number;
+  liters: number;
+  count: number;
+}
+
+export function computeMonthlySpend(fills: Fillup[], monthsBack = 12): MonthBucket[] {
+  const now = new Date();
+  const buckets: MonthBucket[] = [];
+  const MONTHS_IT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear(), m = d.getMonth();
+    buckets.push({
+      key: `${y}-${String(m + 1).padStart(2, '0')}`,
+      label: MONTHS_IT[m],
+      year: y, month: m,
+      total: 0, liters: 0, count: 0,
+    });
+  }
+  const byKey = new Map(buckets.map(b => [b.key, b]));
+  for (const f of fills) {
+    const d = new Date(f.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const b = byKey.get(key);
+    if (!b) continue;
+    b.total += f.total;
+    b.liters += f.liters;
+    b.count += 1;
+  }
+  return buckets;
 }
 
 export function defaultFuelType(carTags?: string): FuelType {

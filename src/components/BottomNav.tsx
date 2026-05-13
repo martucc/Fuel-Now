@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
-import { Home, Map as MapIcon, Route, Car, Brain, Bell } from "lucide-react";
+import { Home, Map as MapIcon, Route, Car, Brain, Fuel } from "lucide-react";
 
-type Tab = "home" | "map" | "trip" | "veicolo" | "analysis" | "alerts";
+type Tab = "home" | "map" | "trip" | "veicolo" | "analysis" | "alerts" | "pieno";
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -14,7 +14,7 @@ const tabs = [
   { id: "trip" as const, icon: Route, label: "TRIP" },
   { id: "veicolo" as const, icon: Car, label: "GARAGE" },
   { id: "analysis" as const, icon: Brain, label: "INTEL" },
-  { id: "alerts" as const, icon: Bell, label: "ALERT" },
+  { id: "pieno" as const, icon: Fuel, label: "PIENO" },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {

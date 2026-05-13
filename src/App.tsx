@@ -17,6 +17,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
+import { PienoTab } from './components/tabs/PienoTab';
 import { AnalysisTab } from './components/tabs/AnalysisTab';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { FiltersModal } from './components/modals/FiltersModal';
@@ -28,8 +29,8 @@ import { getBrandLogo } from './lib/brandLogos';
 const DefaultIcon = L.icon({ iconUrl: markerIcon, shadowUrl: markerShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-type TabType = 'home'|'map'|'veicolo'|'analysis'|'alerts'|'trip';
-const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'alerts'];
+type TabType = 'home'|'map'|'veicolo'|'analysis'|'alerts'|'trip'|'pieno';
+const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'pieno'];
 
 const pageVariants = {
   initial: (direction: number) => ({
@@ -67,6 +68,7 @@ function normalizeFuelNews(raw: any): any[] {
   return [];
 }
 
+// @ts-ignore - utility per nome breve veicolo, riservata per usi futuri
 // Estrae nome breve veicolo (es. "BMW Serie 3 320d (Diesel)" -> "BMW Serie 3")
 function shortCarName(m: string): string {
   if (!m) return '';
@@ -82,7 +84,7 @@ export default function App() {
   const [tab, setTab] = useState<TabType>(() => {
     const p = new URLSearchParams(window.location.search);
     const t = p.get('tab') as TabType | null;
-    const valid: TabType[] = ['home','map','veicolo','analysis','alerts','trip'];
+    const valid: TabType[] = ['home','map','veicolo','analysis','alerts','trip','pieno'];
     return t && valid.includes(t) ? t : 'home';
   });
   const [userLoc, setUserLoc] = useState<{lat:number;lng:number}|null>(null);
@@ -423,7 +425,7 @@ export default function App() {
   const mapSt = filtered.slice(0, zoomLimit);
 
   // @ts-ignore - tabs is intended for future menu expansions or logging
-  const tabs: {id:TabType;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'alerts',icon:Bell,label:'Alert'}];
+  const tabs: {id:TabType;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'pieno',icon:Target,label:'Pieno'}];
 
   return (
     <div className="min-h-screen bg-black text-[#f5f5f7] font-sans">
@@ -442,17 +444,20 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-3">
-          {selCar && (
-            <button 
-              onClick={() => setTab('veicolo')}
-              className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all active:scale-95"
-            >
-              <Car size={14} className="text-[#8e8e93]" />
-              <span className="text-[11px] font-bold text-white uppercase tracking-wider">{shortCarName(selCar.model)}</span>
-            </button>
-          )}
-          <button 
-            onClick={() => setShowSettings(true)} 
+          <button
+            onClick={() => setTab('alerts')}
+            className="relative w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
+            aria-label="Allerte"
+          >
+            <Bell size={18} className={alerts.filter(a => a.active).length > 0 ? "text-blue-400" : "text-[#8e8e93]"} />
+            {alerts.filter(a => a.active).length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500 text-white text-[9px] font-black flex items-center justify-center shadow-[0_0_8px_rgba(59,130,246,0.6)] border border-black">
+                {alerts.filter(a => a.active).length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setShowSettings(true)}
             className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
           >
             <Settings size={20} className="text-[#8e8e93]" />
@@ -566,6 +571,7 @@ export default function App() {
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
+                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab}/>}
               </motion.div>
             </AnimatePresence>
           </main>
