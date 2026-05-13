@@ -191,11 +191,15 @@ export default function App() {
     } catch (e: any) {
       console.error('Analysis error:', e);
       if (q) {
-        setAiAnswer({ question: q, answer: `Errore: ${e.message || 'AI non disponibile'}. Prova con il motore locale o riprova piu tardi.`, ts: Date.now(), source: 'local' });
+        setAiAnswer({ question: q, answer: `Errore: ${e.message || 'AI non disponibile'}. Riprova tra qualche secondo.`, ts: Date.now(), source: hasKey ? 'ai' : 'local' });
+      } else if (hasKey) {
+        // API key configurata: NON fare fallback locale. Mostra errore e lascia che l'utente ritenti.
+        setAiErr(e.message === 'MISSING_KEY' ? null : 'Gemini non disponibile. Riprova oppure controlla la API key.');
       } else {
+        // No API key: usa l'analisi locale come prima
         const fallback = buildLocalMarketAnalysis(f, src, q);
         setMarketAnalyses(pr => ({ ...pr, [f]: { ...fallback, source: 'local' } }));
-        setAiErr(hasKey && e.message !== 'MISSING_KEY' ? 'Gemini non disponibile: analisi locale attiva.' : null);
+        setAiErr(null);
       }
     } finally {
       setAnalysisLoading(false);
