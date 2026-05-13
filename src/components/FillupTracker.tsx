@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Fuel, Plus, X, Trash2, TrendingUp, TrendingDown, Calendar, Gauge, Euro, Droplet, Award } from 'lucide-react';
 import type { Fillup, FuelType } from '../types';
-import { addFillup, computeStats, fillupsForCar, removeFillup, defaultFuelType } from '../services/fillupService';
+import { addFillup, computeStats, fillupsForCar, removeFillup, updateFillup, defaultFuelType } from '../services/fillupService';
 
 interface Props {
   carModel: string;
@@ -33,26 +33,45 @@ const fmtDate = (iso: string) => {
 export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props) {
   const [fills, setFills] = useState<Fillup[]>(() => fillupsForCar(carModel));
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Fillup | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
   useEffect(() => {
     setFills(fillupsForCar(carModel));
     setConfirmDel(null);
+    setEditing(null);
   }, [carModel]);
 
   const stats = useMemo(() => computeStats(fills, wltpKml), [fills, wltpKml]);
   const sorted = useMemo(() => [...fills].sort((a, b) => b.odometer - a.odometer), [fills]);
 
-  const handleAdd = (f: Omit<Fillup, 'id'>) => {
-    const updated = addFillup(f);
+  const refresh = (updated: Fillup[]) => {
     setFills(updated.filter(x => x.carModel === carModel).sort((a, b) => a.odometer - b.odometer));
+  };
+
+  const handleAdd = (f: Omit<Fillup, 'id'>) => {
+    if (editing) {
+      refresh(updateFillup(editing.id, f));
+      setEditing(null);
+    } else {
+      refresh(addFillup(f));
+    }
     setOpen(false);
   };
 
   const handleDel = (id: string) => {
-    const updated = removeFillup(id);
-    setFills(updated.filter(x => x.carModel === carModel).sort((a, b) => a.odometer - b.odometer));
+    refresh(removeFillup(id));
     setConfirmDel(null);
+  };
+
+  const closeSheet = () => {
+    setOpen(false);
+    setEditing(null);
+  };
+
+  const openEdit = (f: Fillup) => {
+    setEditing(f);
+    setOpen(true);
   };
 
   return (
@@ -151,7 +170,8 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(idx, 6) * 0.03 }}
-                  className="bg-black/40 backdrop-blur-xl p-4 rounded-[24px] border border-white/5 shadow-inner flex items-center gap-3 group"
+                  onClick={() => confirmDel === null && openEdit(f)}
+                  className="bg-black/40 backdrop-blur-xl p-4 rounded-[24px] border border-white/5 hover:border-blue-500/30 shadow-inner flex items-center gap-3 group cursor-pointer active:scale-[0.99] transition-all"
                 >
                   <div className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border ${f.full ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-[#8e8e93]'}`}>
                     {f.full ? <Fuel size={18} /> : <Droplet size={18} />}
@@ -176,17 +196,17 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
                     {confirmDel === f.id ? (
                       <div className="flex items-center gap-1 mt-1 justify-end">
                         <button
-                          onClick={() => handleDel(f.id)}
+                          onClick={e => { e.stopPropagation(); handleDel(f.id); }}
                           className="px-2 py-0.5 bg-red-500/20 hover:bg-red-500/30 rounded-full text-[9px] font-black uppercase tracking-widest text-red-400 border border-red-500/30"
                         >Sì</button>
                         <button
-                          onClick={() => setConfirmDel(null)}
+                          onClick={e => { e.stopPropagation(); setConfirmDel(null); }}
                           className="px-2 py-0.5 bg-white/5 hover:bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-[#8e8e93] border border-white/10"
                         >No</button>
                       </div>
                     ) : (
                       <button
-                        onClick={() => setConfirmDel(f.id)}
+                        onClick={e => { e.stopPropagation(); setConfirmDel(f.id); }}
                         className="mt-1 w-7 h-7 rounded-full bg-white/5 hover:bg-red-500/15 active:scale-90 flex items-center justify-center text-[#8e8e93] hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-all ml-auto"
                         aria-label="Elimina"
                       >
@@ -204,11 +224,18 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
       <AnimatePresence>
         {open && (
           <AddFillupSheet
+            key={editing?.id || 'new'}
             carModel={carModel}
             defaultFuel={defaultFuelType(carTags)}
             tankLiters={tankLiters}
-            lastOdo={fills.length ? fills[fills.length - 1].odometer : null}
-            onClose={() => setOpen(false)}
+            lastOdo={editing
+              ? (() => {
+                  const others = fills.filter(f => f.id !== editing.id);
+                  return others.length ? others[others.length - 1].odometer : null;
+                })()
+              : (fills.length ? fills[fills.length - 1].odometer : null)}
+            existing={editing}
+            onClose={closeSheet}
             onSave={handleAdd}
           />
         )}
@@ -265,25 +292,27 @@ function ConsumptionSpark({ data, wltp }: { data: { date: string; kml: number; o
   );
 }
 
-function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, onSave }: {
+function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, existing, onClose, onSave }: {
   carModel: string;
   defaultFuel: FuelType;
   tankLiters?: number;
   lastOdo: number | null;
+  existing?: Fillup | null;
   onClose: () => void;
   onSave: (f: Omit<Fillup, 'id'>) => void;
 }) {
+  const isEdit = !!existing;
   const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate] = useState(today);
-  const [fuelType, setFuelType] = useState<FuelType>(defaultFuel);
-  const [liters, setLiters] = useState<string>('');
-  const [total, setTotal] = useState<string>('');
-  const [pricePerLiter, setPricePerLiter] = useState<string>('');
-  const [odometer, setOdometer] = useState<string>(lastOdo ? String(lastOdo) : '');
-  const [full, setFull] = useState(true);
-  const [stationName, setStationName] = useState('');
+  const [date, setDate] = useState(existing?.date || today);
+  const [fuelType, setFuelType] = useState<FuelType>(existing?.fuelType || defaultFuel);
+  const [liters, setLiters] = useState<string>(existing ? String(existing.liters) : '');
+  const [total, setTotal] = useState<string>(existing ? existing.total.toFixed(2) : '');
+  const [pricePerLiter, setPricePerLiter] = useState<string>(existing ? existing.pricePerLiter.toFixed(3) : '');
+  const [odometer, setOdometer] = useState<string>(existing ? String(existing.odometer) : (lastOdo ? String(lastOdo) : ''));
+  const [full, setFull] = useState(existing ? existing.full : true);
+  const [stationName, setStationName] = useState(existing?.stationName || '');
   type Field = 'l' | 't' | 'p';
-  const [edits, setEdits] = useState<Field[]>(['t', 'l']);
+  const [edits, setEdits] = useState<Field[]>(existing ? ['p', 'l'] : ['t', 'l']);
   const onEdit = (f: Field) => setEdits(prev => [f, ...prev.filter(x => x !== f)].slice(0, 2));
 
   const litersN = parseFloat(liters.replace(',', '.')) || 0;
@@ -343,7 +372,7 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
         <div className="absolute -top-20 -left-20 w-80 h-80 bg-blue-600/10 blur-[100px] pointer-events-none rounded-full" />
         <div className="sticky top-0 z-10 bg-[#0a0f1d]/95 backdrop-blur-xl border-b border-white/5 px-6 py-5 flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Nuovo Rifornimento</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">{isEdit ? 'Modifica' : 'Nuovo Rifornimento'}</div>
             <div className="text-xl font-black italic uppercase tracking-tighter text-white mt-0.5">Pieno</div>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#8e8e93] border border-white/10">
@@ -462,7 +491,7 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
                 : 'bg-white/5 text-[#48484a] border-white/5 cursor-not-allowed'
             }`}
           >
-            {canSave ? 'Salva Pieno' : 'Compila i campi'}
+            {canSave ? (isEdit ? 'Salva Modifiche' : 'Salva Pieno') : 'Compila i campi'}
           </button>
         </div>
       </motion.div>

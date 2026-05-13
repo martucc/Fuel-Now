@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, TrendingUp, TrendingDown, MapPin, Navigation, Clock } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, MapPin, Navigation, Clock, AlertTriangle } from 'lucide-react';
 import type { FuelStation, FuelType } from '../types';
 import { getStationHistory } from '../services/stationHistoryService';
 
@@ -8,6 +8,7 @@ interface Props {
   station: FuelStation | null;
   fuel: FuelType;
   onClose: () => void;
+  onBlock?: (s: FuelStation) => void;
 }
 
 const FUELS: FuelType[] = ['Benzina', 'Diesel', 'GPL', 'Metano'];
@@ -17,7 +18,7 @@ const fmtDate = (iso: string) => {
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
 };
 
-export function StationHistoryModal({ station, fuel, onClose }: Props) {
+export function StationHistoryModal({ station, fuel, onClose, onBlock }: Props) {
   const [activeFuel, setActiveFuel] = useState<FuelType>(fuel);
 
   useEffect(() => { setActiveFuel(fuel); }, [fuel, station]);
@@ -143,6 +144,15 @@ export function StationHistoryModal({ station, fuel, onClose }: Props) {
               >
                 <Navigation size={14} /> Naviga
               </a>
+
+              {onBlock && (
+                <button
+                  onClick={() => { onBlock(station); onClose(); }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-red-500/10 active:scale-[0.98] rounded-full text-[10px] font-black uppercase tracking-widest text-[#8e8e93] hover:text-red-400 border border-white/10 hover:border-red-500/20 transition-all"
+                >
+                  <AlertTriangle size={12} /> Segnala chiuso / errato
+                </button>
+              )}
             </div>
           </motion.div>
         </motion.div>

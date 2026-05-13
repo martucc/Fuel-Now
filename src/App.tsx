@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, AlertTriangle, Calculator } from 'lucide-react';
+import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
@@ -555,39 +555,12 @@ export default function App() {
                 const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2.5 py-1.5 rounded-[12px] border-2 ${bc} text-xs font-black tracking-tight ${gl} ${tc} ${bg} backdrop-blur-md whitespace-nowrap shadow-xl">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent ${arrowBorder} drop-shadow-md -mt-[2px]"></div></div>`;
                 
                 return (
-                  <Marker key={s.id} position={[s.location.lat, s.location.lng]} icon={L.divIcon({ className: 'custom-div-icon', html: htmlStr, iconSize: [60, 40], iconAnchor: [30, 40] })}>
-                    <Popup>
-                      <div className="p-3 min-w-[200px] flex flex-col gap-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-black border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0 grayscale-0 shadow-sm">
-                            <img src={logo} alt={s.brand} className="w-full h-full object-contain scale-[0.9]" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-black text-[13px] text-black uppercase italic truncate leading-tight">{s.brand || s.name}</div>
-                            <div className="text-[9px] text-gray-400 flex items-center gap-1 truncate"><MapPin size={9}/>{s.address}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-between mt-1 bg-blue-50 p-2 rounded-xl">
-                          <div className="text-[10px] font-bold text-blue-900/50 uppercase tracking-widest">Prezzo</div>
-                          <div className="text-xl font-black text-blue-600 tabular-nums">€{cp.toFixed(3)}</div>
-                        </div>
-
-                        {anom && <div className="text-[9px] text-red-600 font-black mt-0.5 uppercase tracking-widest flex items-center gap-1 bg-red-50 p-1.5 rounded-lg border border-red-100"><AlertTriangle size={10}/> Anomalia Rilevata</div>}
-                        
-                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${s.location.lat},${s.location.lng}`} target="_blank" rel="noreferrer" className="block w-full py-2.5 bg-black text-white rounded-xl text-center text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-lg mt-1">
-                          Naviga Ora
-                        </a>
-
-                        <button 
-                          onClick={() => blockStation(s)}
-                          className="block w-full py-2 bg-red-50 text-red-600 rounded-lg text-center text-[8px] font-black uppercase tracking-wider hover:bg-red-100 transition-all border border-red-100 mt-1"
-                        >
-                          Segnala Chiuso / Errato
-                        </button>
-                      </div>
-                    </Popup>
-                  </Marker>
+                  <Marker
+                    key={s.id}
+                    position={[s.location.lat, s.location.lng]}
+                    icon={L.divIcon({ className: 'custom-div-icon', html: htmlStr, iconSize: [60, 40], iconAnchor: [30, 40] })}
+                    eventHandlers={{ click: () => setStationDetail(s) }}
+                  />
                 );
               })}
             </MapContainer>
@@ -624,7 +597,7 @@ export default function App() {
       <FiltersModal show={showFilters} setShow={setShowFilters} selectedBrands={brands} setSelectedBrands={setBrands} selectedServices={services} setSelectedServices={setServices} h24={h24} setH24={setH24} noHighway={noHwy} setNoHighway={setNoHwy} hideAnomalies={hideAnom} setHideAnomalies={setHideAnom} radius={radius} setRadius={setRadius} brands={allBrands}/>
       <SettingsModal show={showSettings} setShow={setShowSettings} apiKey={apiKey} setApiKey={setApiKey} apiModel={apiModel} setApiModel={setApiModel}/>
       <BudgetCalcModal show={showBudget} onClose={() => setShowBudget(false)} fuel={fuel} defaultPrice={avgP === Infinity ? 0 : avgP} carKml={selCar?.kml} tankL={selCar?.liters || tankL}/>
-      <StationHistoryModal station={stationDetail} fuel={fuel} onClose={() => setStationDetail(null)}/>
+      <StationHistoryModal station={stationDetail} fuel={fuel} onClose={() => setStationDetail(null)} onBlock={blockStation}/>
     </div>
   );
 }

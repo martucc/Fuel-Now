@@ -34,6 +34,14 @@ export function removeFillup(id: string): Fillup[] {
   return next;
 }
 
+export function updateFillup(id: string, patch: Omit<Fillup, 'id'>): Fillup[] {
+  const list = loadFillups();
+  const next = list.map(f => f.id === id ? { ...patch, id } : f);
+  next.sort((a, b) => a.odometer - b.odometer);
+  saveFillups(next);
+  return next;
+}
+
 export function fillupsForCar(carModel: string): Fillup[] {
   return loadFillups()
     .filter(f => f.carModel === carModel)
