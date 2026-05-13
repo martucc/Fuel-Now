@@ -179,10 +179,10 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
                     ) : (
                       <button
                         onClick={() => setConfirmDel(f.id)}
-                        className="mt-1 text-[#48484a] hover:text-red-400 opacity-0 group-hover:opacity-100 sm:opacity-50 sm:hover:opacity-100 transition-opacity"
+                        className="mt-1 w-7 h-7 rounded-full bg-white/5 hover:bg-red-500/15 active:scale-90 flex items-center justify-center text-[#8e8e93] hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-all ml-auto"
                         aria-label="Elimina"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     )}
                   </div>
@@ -274,24 +274,28 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
   const [odometer, setOdometer] = useState<string>(lastOdo ? String(lastOdo) : '');
   const [full, setFull] = useState(true);
   const [stationName, setStationName] = useState('');
-  const [lastEdited, setLastEdited] = useState<'price' | 'total'>('total');
+  type Field = 'l' | 't' | 'p';
+  const [edits, setEdits] = useState<Field[]>(['t', 'l']);
+  const onEdit = (f: Field) => setEdits(prev => [f, ...prev.filter(x => x !== f)].slice(0, 2));
 
   const litersN = parseFloat(liters.replace(',', '.')) || 0;
   const totalN = parseFloat(total.replace(',', '.')) || 0;
   const priceN = parseFloat(pricePerLiter.replace(',', '.')) || 0;
 
   useEffect(() => {
-    if (!litersN) return;
-    if (lastEdited === 'total' && totalN > 0) {
-      const p = totalN / litersN;
-      const formatted = p.toFixed(3);
-      if (formatted !== pricePerLiter) setPricePerLiter(formatted);
-    } else if (lastEdited === 'price' && priceN > 0) {
-      const t = priceN * litersN;
-      const formatted = t.toFixed(2);
-      if (formatted !== total) setTotal(formatted);
+    const has = new Set(edits);
+    const computed: Field = !has.has('l') ? 'l' : !has.has('t') ? 't' : 'p';
+    if (computed === 'l' && totalN > 0 && priceN > 0) {
+      const v = (totalN / priceN).toFixed(2);
+      if (v !== liters) setLiters(v);
+    } else if (computed === 't' && litersN > 0 && priceN > 0) {
+      const v = (litersN * priceN).toFixed(2);
+      if (v !== total) setTotal(v);
+    } else if (computed === 'p' && litersN > 0 && totalN > 0) {
+      const v = (totalN / litersN).toFixed(3);
+      if (v !== pricePerLiter) setPricePerLiter(v);
     }
-  }, [litersN, totalN, priceN, lastEdited]);
+  }, [litersN, totalN, priceN, edits]);
 
   const odoN = parseFloat(odometer.replace(',', '.')) || 0;
   const odoError = lastOdo != null && odoN > 0 && odoN < lastOdo;
@@ -376,7 +380,7 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
               inputMode="decimal"
               placeholder="0.00"
               value={liters}
-              onChange={e => setLiters(e.target.value)}
+              onChange={e => { setLiters(e.target.value); onEdit('l'); }}
               className="w-full bg-transparent text-white text-[15px] font-bold tracking-tight outline-none tabular-nums placeholder:text-[#48484a]"
             />
           </FieldRow>
@@ -387,7 +391,7 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
                 inputMode="decimal"
                 placeholder="0.00"
                 value={total}
-                onChange={e => { setTotal(e.target.value); setLastEdited('total'); }}
+                onChange={e => { setTotal(e.target.value); onEdit('t'); }}
                 className="w-full bg-transparent text-white text-[15px] font-bold tracking-tight outline-none tabular-nums placeholder:text-[#48484a]"
               />
             </FieldRow>
@@ -396,7 +400,7 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
                 inputMode="decimal"
                 placeholder="0.000"
                 value={pricePerLiter}
-                onChange={e => { setPricePerLiter(e.target.value); setLastEdited('price'); }}
+                onChange={e => { setPricePerLiter(e.target.value); onEdit('p'); }}
                 className="w-full bg-transparent text-white text-[15px] font-bold tracking-tight outline-none tabular-nums placeholder:text-[#48484a]"
               />
             </FieldRow>
