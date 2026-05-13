@@ -11,9 +11,10 @@ interface Props {
   isAnomalous: boolean;
   tankLiters: number;
   isBest?: boolean;
+  onClick?: (s: FuelStation) => void;
 }
 
-export function StationCard({ station, fuelType, index, isAnomalous, tankLiters, isBest = false }: Props) {
+export function StationCard({ station, fuelType, index, isAnomalous, tankLiters, isBest = false, onClick }: Props) {
   const priceObj = station.prices.find(p => p.type === fuelType);
   const price = priceObj?.price || 0;
   const fullTankCost = price > 0 ? (price * tankLiters).toFixed(0) : '-';
@@ -25,7 +26,9 @@ export function StationCard({ station, fuelType, index, isAnomalous, tankLiters,
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.01 }}
       onClick={() => {
-        if (!isAnomalous) window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.location.lat},${station.location.lng}`, '_blank');
+        if (isAnomalous) return;
+        if (onClick) onClick(station);
+        else window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.location.lat},${station.location.lng}`, '_blank');
       }}
       className={cn(
         'relative flex items-center gap-4 p-4 rounded-[32px] border transition-all cursor-pointer overflow-hidden',

@@ -36,6 +36,7 @@ interface Props {
   radius: number;
   setRadius: (v: number) => void;
   hasApiKey: boolean;
+  onStationClick?: (s: any) => void;
 }
 
 export function HomeTab(p: Props) {
@@ -370,6 +371,7 @@ export function HomeTab(p: Props) {
                 isAnomalous={p.isPriceAnom(s, p.selectedFuel)}
                 tankLiters={p.tankLiters}
                 isBest={s.id === bestStation?.id}
+                onClick={p.onStationClick}
               />
             ))
           ) : (

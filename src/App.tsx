@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, AlertTriangle } from 'lucide-react';
+import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, AlertTriangle, Calculator } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
@@ -19,6 +19,10 @@ import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
 import { PienoTab } from './components/tabs/PienoTab';
 import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder } from './services/notificationService';
+import { BudgetCalcModal } from './components/BudgetCalcModal';
+import { InstallPwaButton } from './components/InstallPwaButton';
+import { StationHistoryModal } from './components/StationHistoryModal';
+import { recordObservation } from './services/stationHistoryService';
 import { AnalysisTab } from './components/tabs/AnalysisTab';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { FiltersModal } from './components/modals/FiltersModal';
@@ -108,6 +112,8 @@ export default function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBudget, setShowBudget] = useState(false);
+  const [stationDetail, setStationDetail] = useState<FuelStation | null>(null);
   const [brands, setBrands] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
   const [radius, setRadius] = useState(20);
@@ -262,6 +268,7 @@ export default function App() {
 
   useEffect(() => {
     if (!stations.length) return;
+    recordObservation(stations);
     checkPriceThresholds(alerts, stations);
   }, [stations, alerts]);
 
@@ -468,7 +475,15 @@ export default function App() {
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <InstallPwaButton />
+          <button
+            onClick={() => setShowBudget(true)}
+            className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
+            aria-label="Calcolatore budget"
+          >
+            <Calculator size={18} className="text-[#8e8e93]" />
+          </button>
           <button
             onClick={() => setTab('alerts')}
             className="relative w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
@@ -591,12 +606,12 @@ export default function App() {
                 animate="animate"
                 exit="exit"
               >
-                {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0}/>}
+                {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0} onStationClick={setStationDetail}/>}
                 {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={stations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll}/>}
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
-                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab}/>}
+                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab} stations={stations} selectedFuel={fuel}/>}
               </motion.div>
             </AnimatePresence>
           </main>
@@ -608,6 +623,8 @@ export default function App() {
 
       <FiltersModal show={showFilters} setShow={setShowFilters} selectedBrands={brands} setSelectedBrands={setBrands} selectedServices={services} setSelectedServices={setServices} h24={h24} setH24={setH24} noHighway={noHwy} setNoHighway={setNoHwy} hideAnomalies={hideAnom} setHideAnomalies={setHideAnom} radius={radius} setRadius={setRadius} brands={allBrands}/>
       <SettingsModal show={showSettings} setShow={setShowSettings} apiKey={apiKey} setApiKey={setApiKey} apiModel={apiModel} setApiModel={setApiModel}/>
+      <BudgetCalcModal show={showBudget} onClose={() => setShowBudget(false)} fuel={fuel} defaultPrice={avgP === Infinity ? 0 : avgP} carKml={selCar?.kml} tankL={selCar?.liters || tankL}/>
+      <StationHistoryModal station={stationDetail} fuel={fuel} onClose={() => setStationDetail(null)}/>
     </div>
   );
 }

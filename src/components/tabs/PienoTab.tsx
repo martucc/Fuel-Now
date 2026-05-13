@@ -1,24 +1,32 @@
 import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Car, TrendingUp, TrendingDown } from 'lucide-react';
+import { Car, TrendingUp, TrendingDown, Fuel, Gauge, Clock } from 'lucide-react';
 import { FillupTracker } from '../FillupTracker';
-import { fillupsForCar, computeMonthlySpend, type MonthBucket } from '../../services/fillupService';
+import { FuelCostCompare } from '../FuelCostCompare';
+import { fillupsForCar, computeMonthlySpend, predictNextFillup, type MonthBucket } from '../../services/fillupService';
+import type { FuelStation, FuelType } from '../../types';
 
 interface Props {
   selectedCar: any;
   setTab: (t: any) => void;
+  stations: FuelStation[];
+  selectedFuel: FuelType;
 }
 
 const fmtEUR = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmtEURFine = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function PienoTab({ selectedCar, setTab }: Props) {
+export function PienoTab({ selectedCar, setTab, stations, selectedFuel }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const fills = useMemo(
     () => selectedCar ? fillupsForCar(selectedCar.model) : [],
     [selectedCar, refreshKey]
   );
   const months = useMemo(() => computeMonthlySpend(fills, 12), [fills]);
+  const prediction = useMemo(
+    () => selectedCar ? predictNextFillup(fills, selectedCar.kml, selectedCar.liters) : null,
+    [fills, selectedCar]
+  );
 
   useEffect(() => {
     const handler = () => setRefreshKey(k => k + 1);
@@ -70,7 +78,11 @@ export function PienoTab({ selectedCar, setTab }: Props) {
         <h3 className="text-4xl font-black tracking-tighter text-white uppercase italic leading-none">Storico <span className="text-blue-500">Pieni</span></h3>
       </header>
 
+      {prediction && <NextFillupCard p={prediction} tankL={selectedCar.liters} />}
+
       <MonthlyChart months={months} />
+
+      <FuelCostCompare stations={stations} carKml={selectedCar.kml} selectedFuel={selectedFuel} />
 
       <FillupTracker
         carModel={selectedCar.model}
@@ -79,6 +91,80 @@ export function PienoTab({ selectedCar, setTab }: Props) {
         tankLiters={selectedCar.liters}
       />
     </motion.div>
+  );
+}
+
+function NextFillupCard({ p, tankL }: { p: NonNullable<ReturnType<typeof predictNextFillup>>; tankL: number }) {
+  const pct = Math.round(p.tankPct * 100);
+  const days = p.daysUntilEmpty != null ? Math.max(0, Math.round(p.daysUntilEmpty)) : null;
+  const dateStr = p.predictedDate ? new Date(p.predictedDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : null;
+  const litersLeft = Math.round(p.litersLeftEst);
+  const rangeLeft = p.rangeLeftKm ? Math.round(p.rangeLeftKm) : 0;
+  const urgent = pct >= 75;
+  const warning = pct >= 50 && pct < 75;
+  const accent = urgent ? 'red' : warning ? 'amber' : 'blue';
+  const accentMap = {
+    red: { text: 'text-red-400', bg: 'bg-red-500/15', border: 'border-red-500/30', glow: 'shadow-[0_0_24px_rgba(239,68,68,0.25)]', bar: 'bg-red-500' },
+    amber: { text: 'text-amber-400', bg: 'bg-amber-500/15', border: 'border-amber-500/30', glow: 'shadow-[0_0_24px_rgba(245,158,11,0.25)]', bar: 'bg-amber-500' },
+    blue: { text: 'text-blue-400', bg: 'bg-blue-500/15', border: 'border-blue-500/30', glow: 'shadow-[0_0_24px_rgba(37,99,235,0.2)]', bar: 'bg-blue-500' },
+  };
+  const a = accentMap[accent];
+
+  return (
+    <div className={`bg-[#0a0f1d] p-6 sm:p-8 rounded-[36px] sm:rounded-[48px] border ${a.border} space-y-5 relative overflow-hidden ${a.glow}`}>
+      <div className="absolute -top-20 -right-20 w-80 h-80 bg-blue-600/10 blur-[100px] pointer-events-none rounded-full" />
+
+      <div className="flex items-start justify-between gap-3 relative z-10">
+        <div className="min-w-0 flex-1">
+          <div className={`flex items-center gap-2 ${a.text} mb-2`}>
+            <Fuel size={14} />
+            <div className="text-[10px] font-black uppercase tracking-[0.3em]">Prossimo Pieno</div>
+          </div>
+          <div className="text-3xl sm:text-4xl font-black italic tracking-tighter text-white tabular-nums">
+            {days != null ? <>~{days}<span className="text-sm ml-1 text-[#8e8e93]">{days === 1 ? 'giorno' : 'giorni'}</span></> : '—'}
+          </div>
+          <div className="text-[11px] font-bold text-[#8e8e93] uppercase tracking-widest mt-1">
+            {dateStr ? `Stima: ${dateStr}` : 'Inserisci più pieni per stima'}
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8e8e93]">Stimato usato</div>
+          <div className={`text-3xl sm:text-4xl font-black italic tracking-tighter tabular-nums ${a.text}`}>
+            {pct}<span className="text-sm text-[#8e8e93]">%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 space-y-2">
+        <div className="h-2.5 bg-black/50 rounded-full overflow-hidden border border-white/5">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+            className={`h-full ${a.bar} shadow-[0_0_12px_rgba(96,165,250,0.6)]`}
+          />
+        </div>
+        <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-[#8e8e93]">
+          <span className="tabular-nums">{tankL - litersLeft}L usati</span>
+          <span className="tabular-nums">{litersLeft}L rimasti</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 relative z-10">
+        <div className="bg-black/40 p-3.5 rounded-[18px] border border-white/5 min-w-0">
+          <div className="flex items-center gap-1 mb-1"><Gauge size={11} className="text-[#8e8e93]" /><span className="text-[9px] font-black text-[#8e8e93] uppercase tracking-[0.2em] truncate">Autonomia</span></div>
+          <div className="text-[14px] font-black italic text-white tracking-tighter tabular-nums truncate">~{rangeLeft} km</div>
+        </div>
+        <div className="bg-black/40 p-3.5 rounded-[18px] border border-white/5 min-w-0">
+          <div className="flex items-center gap-1 mb-1"><Clock size={11} className="text-[#8e8e93]" /><span className="text-[9px] font-black text-[#8e8e93] uppercase tracking-[0.2em] truncate">Km/giorno</span></div>
+          <div className="text-[14px] font-black italic text-white tracking-tighter tabular-nums truncate">{Math.round(p.kmPerDay)}</div>
+        </div>
+        <div className="bg-black/40 p-3.5 rounded-[18px] border border-white/5 min-w-0">
+          <div className="flex items-center gap-1 mb-1"><Fuel size={11} className="text-[#8e8e93]" /><span className="text-[9px] font-black text-[#8e8e93] uppercase tracking-[0.2em] truncate">Da</span></div>
+          <div className="text-[14px] font-black italic text-white tracking-tighter tabular-nums truncate">{Math.round(p.daysSinceLast)}gg</div>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -142,6 +142,44 @@ export function computeMonthlySpend(fills: Fillup[], monthsBack = 12): MonthBuck
   return buckets;
 }
 
+export interface PienoPrediction {
+  kmSinceLast: number;
+  litersUsedEst: number;
+  litersLeftEst: number;
+  tankPct: number;
+  daysSinceLast: number;
+  kmPerDay: number;
+  daysUntilEmpty: number | null;
+  predictedDate: string | null;
+  rangeLeftKm: number | null;
+}
+
+export function predictNextFillup(fills: Fillup[], kml: number | undefined, tankL: number | undefined): PienoPrediction | null {
+  if (!kml || !tankL) return null;
+  const fulls = fills.filter(f => f.full);
+  if (fulls.length < 2) return null;
+  const first = fulls[0];
+  const last = fulls[fulls.length - 1];
+  const daysSpan = Math.max(1, (new Date(last.date).getTime() - new Date(first.date).getTime()) / 86400_000);
+  const kmSpan = last.odometer - first.odometer;
+  const kmPerDay = kmSpan / daysSpan;
+  if (kmPerDay <= 0) return null;
+  const daysSinceLast = (Date.now() - new Date(last.date).getTime()) / 86400_000;
+  const kmSinceLast = kmPerDay * daysSinceLast;
+  const litersUsedEst = kmSinceLast / kml;
+  const litersLeftEst = Math.max(0, tankL - litersUsedEst);
+  const tankPct = Math.min(1, litersUsedEst / tankL);
+  const rangeLeftKm = litersLeftEst * kml;
+  const daysUntilEmpty = kmPerDay > 0 ? rangeLeftKm / kmPerDay : null;
+  const predictedDate = daysUntilEmpty != null
+    ? new Date(Date.now() + daysUntilEmpty * 86400_000).toISOString().slice(0, 10)
+    : null;
+  return {
+    kmSinceLast, litersUsedEst, litersLeftEst, tankPct,
+    daysSinceLast, kmPerDay, daysUntilEmpty, predictedDate, rangeLeftKm,
+  };
+}
+
 export function defaultFuelType(carTags?: string): FuelType {
   const t = (carTags || '').toLowerCase();
   if (t.includes('diesel')) return 'Diesel';
