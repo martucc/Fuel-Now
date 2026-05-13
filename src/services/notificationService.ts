@@ -1,6 +1,6 @@
 import type { Alert, FuelStation, FuelType, MarketAnalysis } from '../types';
 
-export type NotifCategory = 'priceThresholds' | 'dailyTrend' | 'bestDealZone' | 'pienoReminder' | 'deadlineReminder';
+export type NotifCategory = 'priceThresholds' | 'dailyTrend' | 'bestDealZone' | 'pienoReminder' | 'deadlineReminder' | 'budgetAlert';
 
 export interface NotifPrefs {
   enabled: boolean;
@@ -20,6 +20,7 @@ const DEFAULTS: NotifPrefs = {
     bestDealZone: false,
     pienoReminder: false,
     deadlineReminder: true,
+    budgetAlert: true,
   },
   lastNotified: {},
   lastTrendDay: {},
@@ -173,6 +174,42 @@ export async function checkBestDeal(fuel: FuelType, stations: FuelStation[], avg
     `🔥 Offerta ${fuel} in zona`,
     `${best.s.brand || best.s.name} · €${best.price.toFixed(3)} (-${savingPct.toFixed(1)}% vs media)`,
   );
+}
+
+export async function checkBudget(carModel: string | undefined) {
+  const prefs = loadPrefs();
+  if (!prefs.enabled || !prefs.categories.budgetAlert) return;
+  if (!carModel) return;
+  try {
+    const raw = localStorage.getItem('mf_budget_v1');
+    if (!raw) return;
+    const cfg = JSON.parse(raw);
+    if (!cfg.monthly || cfg.monthly <= 0) return;
+    const fillsRaw = localStorage.getItem('mf_fillups_v1');
+    if (!fillsRaw) return;
+    const fills = (JSON.parse(fillsRaw) as any[]).filter(f => f.carModel === carModel);
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let spent = 0;
+    for (const f of fills) if (f.date.startsWith(monthKey)) spent += f.total;
+    if (cfg.includeOther) {
+      const expRaw = localStorage.getItem('mf_expenses_v1');
+      if (expRaw) {
+        const exps = (JSON.parse(expRaw) as any[]).filter(e => e.carModel === carModel);
+        for (const e of exps) if (e.date.startsWith(monthKey)) spent += e.amount;
+      }
+    }
+    const pct = (spent / cfg.monthly) * 100;
+    if (pct < 75) return;
+    const bucket = pct >= 100 ? 'over' : pct >= 90 ? '90' : '75';
+    await fire(
+      'budgetAlert',
+      `${monthKey}:${bucket}`,
+      bucket === 'over' ? '🚨 Budget superato' : `⚠️ Budget al ${Math.round(pct)}%`,
+      `Hai speso €${spent.toFixed(0)} di €${cfg.monthly} questo mese`,
+      { force: true },
+    );
+  } catch { /* ignore */ }
 }
 
 export async function checkDeadlines(carModel: string | undefined) {

@@ -4,11 +4,19 @@ import { Fuel, Plus, X, Trash2, TrendingUp, TrendingDown, Calendar, Gauge, Euro,
 import type { Fillup, FuelType } from '../types';
 import { addFillup, computeStats, fillupsForCar, removeFillup, updateFillup, defaultFuelType } from '../services/fillupService';
 
+interface PrefillData {
+  stationName?: string;
+  pricePerLiter?: number;
+  fuelType?: FuelType;
+}
+
 interface Props {
   carModel: string;
   carTags?: string;
   wltpKml?: number;
   tankLiters?: number;
+  prefillNew?: PrefillData | null;
+  onPrefillConsumed?: () => void;
 }
 
 const FUELS: FuelType[] = ['Benzina', 'Diesel', 'GPL', 'Metano'];
@@ -30,11 +38,21 @@ const fmtDate = (iso: string) => {
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
 };
 
-export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props) {
+export function FillupTracker({ carModel, carTags, wltpKml, tankLiters, prefillNew, onPrefillConsumed }: Props) {
   const [fills, setFills] = useState<Fillup[]>(() => fillupsForCar(carModel));
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Fillup | null>(null);
+  const [activePrefill, setActivePrefill] = useState<PrefillData | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (prefillNew) {
+      setEditing(null);
+      setActivePrefill(prefillNew);
+      setOpen(true);
+      onPrefillConsumed?.();
+    }
+  }, [prefillNew]);
 
   useEffect(() => {
     setFills(fillupsForCar(carModel));
@@ -67,6 +85,7 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
   const closeSheet = () => {
     setOpen(false);
     setEditing(null);
+    setActivePrefill(null);
   };
 
   const openEdit = (f: Fillup) => {
@@ -224,9 +243,9 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
       <AnimatePresence>
         {open && (
           <AddFillupSheet
-            key={editing?.id || 'new'}
+            key={editing?.id || (activePrefill ? 'prefill' : 'new')}
             carModel={carModel}
-            defaultFuel={defaultFuelType(carTags)}
+            defaultFuel={activePrefill?.fuelType || defaultFuelType(carTags)}
             tankLiters={tankLiters}
             lastOdo={editing
               ? (() => {
@@ -235,6 +254,7 @@ export function FillupTracker({ carModel, carTags, wltpKml, tankLiters }: Props)
                 })()
               : (fills.length ? fills[fills.length - 1].odometer : null)}
             existing={editing}
+            prefill={activePrefill}
             onClose={closeSheet}
             onSave={handleAdd}
           />
@@ -292,27 +312,30 @@ function ConsumptionSpark({ data, wltp }: { data: { date: string; kml: number; o
   );
 }
 
-function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, existing, onClose, onSave }: {
+function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, existing, prefill, onClose, onSave }: {
   carModel: string;
   defaultFuel: FuelType;
   tankLiters?: number;
   lastOdo: number | null;
   existing?: Fillup | null;
+  prefill?: PrefillData | null;
   onClose: () => void;
   onSave: (f: Omit<Fillup, 'id'>) => void;
 }) {
   const isEdit = !!existing;
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(existing?.date || today);
-  const [fuelType, setFuelType] = useState<FuelType>(existing?.fuelType || defaultFuel);
+  const [fuelType, setFuelType] = useState<FuelType>(existing?.fuelType || prefill?.fuelType || defaultFuel);
   const [liters, setLiters] = useState<string>(existing ? String(existing.liters) : '');
   const [total, setTotal] = useState<string>(existing ? existing.total.toFixed(2) : '');
-  const [pricePerLiter, setPricePerLiter] = useState<string>(existing ? existing.pricePerLiter.toFixed(3) : '');
+  const [pricePerLiter, setPricePerLiter] = useState<string>(
+    existing ? existing.pricePerLiter.toFixed(3) : (prefill?.pricePerLiter ? prefill.pricePerLiter.toFixed(3) : '')
+  );
   const [odometer, setOdometer] = useState<string>(existing ? String(existing.odometer) : (lastOdo ? String(lastOdo) : ''));
   const [full, setFull] = useState(existing ? existing.full : true);
-  const [stationName, setStationName] = useState(existing?.stationName || '');
+  const [stationName, setStationName] = useState(existing?.stationName || prefill?.stationName || '');
   type Field = 'l' | 't' | 'p';
-  const [edits, setEdits] = useState<Field[]>(existing ? ['p', 'l'] : ['t', 'l']);
+  const [edits, setEdits] = useState<Field[]>(existing ? ['p', 'l'] : (prefill?.pricePerLiter ? ['p', 'l'] : ['t', 'l']));
   const onEdit = (f: Field) => setEdits(prev => [f, ...prev.filter(x => x !== f)].slice(0, 2));
 
   const litersN = parseFloat(liters.replace(',', '.')) || 0;

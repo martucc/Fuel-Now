@@ -1,9 +1,10 @@
 import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Car, TrendingUp, TrendingDown, Fuel, Gauge, Clock } from 'lucide-react';
+import { Car, TrendingUp, TrendingDown, Fuel, Gauge, Clock, MapPin } from 'lucide-react';
 import { FillupTracker } from '../FillupTracker';
 import { FuelCostCompare } from '../FuelCostCompare';
-import { fillupsForCar, computeMonthlySpend, predictNextFillup, type MonthBucket } from '../../services/fillupService';
+import { BudgetCard } from '../BudgetCard';
+import { fillupsForCar, computeMonthlySpend, predictNextFillup, defaultFuelType, type MonthBucket } from '../../services/fillupService';
 import type { FuelStation, FuelType } from '../../types';
 
 interface Props {
@@ -11,13 +12,23 @@ interface Props {
   setTab: (t: any) => void;
   stations: FuelStation[];
   selectedFuel: FuelType;
+  userLoc: { lat: number; lng: number } | null;
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const fmtEUR = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmtEURFine = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function PienoTab({ selectedCar, setTab, stations, selectedFuel }: Props) {
+export function PienoTab({ selectedCar, setTab, stations, selectedFuel, userLoc }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [prefill, setPrefill] = useState<{ stationName?: string; pricePerLiter?: number; fuelType?: FuelType } | null>(null);
   const fills = useMemo(
     () => selectedCar ? fillupsForCar(selectedCar.model) : [],
     [selectedCar, refreshKey]
@@ -27,6 +38,30 @@ export function PienoTab({ selectedCar, setTab, stations, selectedFuel }: Props)
     () => selectedCar ? predictNextFillup(fills, selectedCar.kml, selectedCar.liters) : null,
     [fills, selectedCar]
   );
+
+  const nearestStation = useMemo(() => {
+    if (!userLoc || !stations.length) return null;
+    const fuel: FuelType = defaultFuelType(selectedCar?.tags);
+    let best: { st: FuelStation; dist: number; price: number } | null = null;
+    for (const s of stations) {
+      const pp = s.prices.find(p => p.type === fuel);
+      if (!pp || !pp.price) continue;
+      const d = haversineKm(userLoc.lat, userLoc.lng, s.location.lat, s.location.lng);
+      if (d > 2) continue;
+      if (!best || d < best.dist) best = { st: s, dist: d, price: pp.price };
+    }
+    return best;
+  }, [userLoc, stations, selectedCar]);
+
+  const handleQuickFillup = () => {
+    if (!nearestStation) return;
+    const fuel: FuelType = defaultFuelType(selectedCar?.tags);
+    setPrefill({
+      stationName: nearestStation.st.brand || nearestStation.st.name,
+      pricePerLiter: nearestStation.price,
+      fuelType: fuel,
+    });
+  };
 
   useEffect(() => {
     const handler = () => setRefreshKey(k => k + 1);
@@ -78,13 +113,39 @@ export function PienoTab({ selectedCar, setTab, stations, selectedFuel }: Props)
         <h3 className="text-4xl font-black tracking-tighter text-white uppercase italic leading-none">Storico <span className="text-blue-500">Pieni</span></h3>
       </header>
 
+      {nearestStation && (
+        <button
+          onClick={handleQuickFillup}
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 active:scale-[0.99] rounded-[28px] p-5 flex items-center gap-4 border border-blue-400/40 shadow-[0_0_40px_rgba(37,99,235,0.4)] transition-all text-left"
+        >
+          <div className="w-12 h-12 rounded-full bg-white/15 border border-white/20 flex items-center justify-center flex-shrink-0">
+            <MapPin size={20} className="text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-100/90">Sei qui</div>
+            <div className="text-[15px] font-black italic uppercase tracking-tighter text-white truncate">{nearestStation.st.brand || nearestStation.st.name}</div>
+            <div className="text-[11px] font-bold text-blue-100/70 uppercase tracking-widest mt-0.5 tabular-nums">
+              €{nearestStation.price.toFixed(3)}/L · {(nearestStation.dist * 1000).toFixed(0)} m
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-100/90">Pieno</div>
+            <div className="text-[13px] font-black italic text-white">adesso →</div>
+          </div>
+        </button>
+      )}
+
       {prediction && <NextFillupCard p={prediction} tankL={selectedCar.liters} />}
+
+      <BudgetCard carModel={selectedCar.model} />
 
       <MonthlyChart months={months} />
 
       <FuelCostCompare stations={stations} carKml={selectedCar.kml} selectedFuel={selectedFuel} />
 
       <FillupTracker
+        prefillNew={prefill}
+        onPrefillConsumed={() => setPrefill(null)}
         carModel={selectedCar.model}
         carTags={selectedCar.tags}
         wltpKml={selectedCar.kml}

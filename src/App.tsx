@@ -18,7 +18,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
 import { PienoTab } from './components/tabs/PienoTab';
-import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines } from './services/notificationService';
+import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines, checkBudget } from './services/notificationService';
 import { BudgetCalcModal } from './components/BudgetCalcModal';
 import { InstallPwaButton } from './components/InstallPwaButton';
 import { StationHistoryModal } from './components/StationHistoryModal';
@@ -318,6 +318,7 @@ export default function App() {
     if (!selCar) return;
     checkPienoReminder(selCar.model, selCar.kml, selCar.liters);
     checkDeadlines(selCar.model);
+    checkBudget(selCar.model);
   }, [selCar]);
 
   const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
@@ -637,7 +638,7 @@ export default function App() {
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
-                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab} stations={stations} selectedFuel={fuel}/>}
+                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab} stations={stations} selectedFuel={fuel} userLoc={userLoc}/>}
               </motion.div>
             </AnimatePresence>
           </main>

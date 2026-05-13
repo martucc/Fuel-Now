@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, BellOff, X, TrendingUp, Flame, Fuel, AlertCircle, Send, Plus, Target, CalendarClock } from 'lucide-react';
+import { Bell, BellOff, X, TrendingUp, Flame, Fuel, AlertCircle, Send, Plus, Target, CalendarClock, Wallet } from 'lucide-react';
 import type { FuelType, Alert } from '../../types';
 import {
   loadPrefs, savePrefs, requestPermission, permissionState, fireTest,
@@ -29,6 +29,7 @@ const CATEGORIES: { id: NotifCategory; icon: any; label: string; desc: string }[
   { id: 'bestDealZone', icon: Flame, label: 'Offerte in zona', desc: 'Quando una stazione è almeno -4% sotto la media nazionale' },
   { id: 'pienoReminder', icon: Fuel, label: 'Promemoria pieno', desc: 'Stima quando il serbatoio è probabilmente in riserva (richiede storico pieni)' },
   { id: 'deadlineReminder', icon: CalendarClock, label: 'Scadenze veicolo', desc: 'Revisione, bollo, assicurazione: avviso a 30, 7 e 1 giorno dalla scadenza' },
+  { id: 'budgetAlert', icon: Wallet, label: 'Budget mensile', desc: 'Avviso al 75%, 90% e superamento del budget carburante del mese' },
 ];
 
 export function AlertsTab({ selectedFuel, alerts, setAlerts }: Props) {
