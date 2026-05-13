@@ -32,6 +32,30 @@ export interface Alert {
   active: boolean;
 }
 
+export type DeadlineType = 'revisione' | 'bollo' | 'assicurazione' | 'tagliando' | 'altro';
+
+export interface Deadline {
+  id: string;
+  carModel: string;
+  type: DeadlineType;
+  label?: string;
+  date: string;
+  recurrence: 'none' | 'yearly' | '2years';
+  notes?: string;
+}
+
+export type ExpenseType = 'manutenzione' | 'bollo' | 'assicurazione' | 'multa' | 'pedaggio' | 'altro';
+
+export interface Expense {
+  id: string;
+  carModel: string;
+  type: ExpenseType;
+  date: string;
+  amount: number;
+  label?: string;
+  notes?: string;
+}
+
 export interface Fillup {
   id: string;
   date: string;

@@ -1,6 +1,6 @@
 import type { Alert, FuelStation, FuelType, MarketAnalysis } from '../types';
 
-export type NotifCategory = 'priceThresholds' | 'dailyTrend' | 'bestDealZone' | 'pienoReminder';
+export type NotifCategory = 'priceThresholds' | 'dailyTrend' | 'bestDealZone' | 'pienoReminder' | 'deadlineReminder';
 
 export interface NotifPrefs {
   enabled: boolean;
@@ -19,6 +19,7 @@ const DEFAULTS: NotifPrefs = {
     dailyTrend: true,
     bestDealZone: false,
     pienoReminder: false,
+    deadlineReminder: true,
   },
   lastNotified: {},
   lastTrendDay: {},
@@ -172,6 +173,37 @@ export async function checkBestDeal(fuel: FuelType, stations: FuelStation[], avg
     `🔥 Offerta ${fuel} in zona`,
     `${best.s.brand || best.s.name} · €${best.price.toFixed(3)} (-${savingPct.toFixed(1)}% vs media)`,
   );
+}
+
+export async function checkDeadlines(carModel: string | undefined) {
+  const prefs = loadPrefs();
+  if (!prefs.enabled || !prefs.categories.deadlineReminder) return;
+  if (!carModel) return;
+  try {
+    const raw = localStorage.getItem('mf_deadlines_v1');
+    if (!raw) return;
+    const all = JSON.parse(raw);
+    const list = (all as any[]).filter(d => d.carModel === carModel);
+    const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00').getTime();
+    const LABELS: Record<string, string> = {
+      revisione: 'Revisione', bollo: 'Bollo', assicurazione: 'Assicurazione',
+      tagliando: 'Tagliando', altro: 'Scadenza',
+    };
+    for (const d of list) {
+      const due = new Date(d.date + 'T00:00:00').getTime();
+      const days = Math.round((due - today) / 86400_000);
+      if (days < 0 || days > 30) continue;
+      const bucket = days === 0 ? 'oggi' : days <= 1 ? '1g' : days <= 7 ? '7g' : '30g';
+      const key = `${d.id}:${bucket}`;
+      const label = d.label || LABELS[d.type] || 'Scadenza';
+      const msg = days === 0
+        ? `${label} scade oggi`
+        : days === 1
+          ? `${label} scade domani`
+          : `${label} fra ${days} giorni`;
+      await fire('deadlineReminder', key, `⏰ ${label}`, msg, { force: true });
+    }
+  } catch { /* ignore */ }
 }
 
 export async function checkPienoReminder(carModel: string | undefined, kml: number | undefined, tankL: number | undefined) {

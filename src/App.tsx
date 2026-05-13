@@ -18,7 +18,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
 import { PienoTab } from './components/tabs/PienoTab';
-import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder } from './services/notificationService';
+import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines } from './services/notificationService';
 import { BudgetCalcModal } from './components/BudgetCalcModal';
 import { InstallPwaButton } from './components/InstallPwaButton';
 import { StationHistoryModal } from './components/StationHistoryModal';
@@ -289,6 +289,7 @@ export default function App() {
   useEffect(() => {
     if (!selCar) return;
     checkPienoReminder(selCar.model, selCar.kml, selCar.liters);
+    checkDeadlines(selCar.model);
   }, [selCar]);
 
   const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
