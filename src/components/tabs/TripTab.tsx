@@ -29,6 +29,14 @@ const stopIcon = (n: number) =>
     iconAnchor: [15, 15],
   });
 
+const nearbyIcon = (price: number, isCheapest: boolean) =>
+  L.divIcon({
+    className: 'trip-pin-wrap',
+    html: `<div class="trip-pin-nearby ${isCheapest ? 'is-cheap' : ''}"><span>€${price.toFixed(3)}</span></div>`,
+    iconSize: [56, 22],
+    iconAnchor: [28, 11],
+  });
+
 function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
   const map = useMap();
   useEffect(() => {
@@ -58,6 +66,8 @@ interface Props {
   setTripCurrentFuel: (v: number | null) => void;
   tripToll: boolean;
   setTripToll: (v: boolean) => void;
+  tripNearby?: any[];
+  onStationClick?: (s: FuelStation) => void;
 }
 
 const STRATEGIES = [
@@ -85,6 +95,29 @@ export function TripTab(p: Props) {
 
   const [locating, setLocating] = useState(false);
   const autoFillRef = useRef(false);
+  const [nearbySort, setNearbySort] = useState<'price'|'detour'|'progress'>('price');
+
+  const nearbyMinPrice = (() => {
+    if (!p.tripNearby || p.tripNearby.length === 0) return null;
+    let min = Infinity;
+    for (const s of p.tripNearby) {
+      const v = s.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price || 0;
+      if (v > 0 && v < min) min = v;
+    }
+    return min === Infinity ? null : min;
+  })();
+
+  const sortedNearby = (() => {
+    if (!p.tripNearby) return [];
+    const arr = p.tripNearby.map(s => ({
+      ...s,
+      _price: s.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price || 0,
+    }));
+    if (nearbySort === 'price') arr.sort((a, b) => (a._price || Infinity) - (b._price || Infinity));
+    else if (nearbySort === 'detour') arr.sort((a, b) => a.routeDetourKm - b.routeDetourKm);
+    else arr.sort((a, b) => a.routeProgressKm - b.routeProgressKm);
+    return arr;
+  })();
 
   const extraCities = useMemo(
     () => Array.from(new Set(p.stations.map(s => (s.city || '').trim()).filter(Boolean))),
@@ -394,8 +427,26 @@ export function TripTab(p: Props) {
                   <Marker position={[p.tripRoute.end.lat, p.tripRoute.end.lng]} icon={endIcon}>
                     <Popup className="trip-popup">ARRIVO</Popup>
                   </Marker>
+                  {(p.tripNearby || []).map((st: any) => {
+                    if (p.tripStops.some(s => s.id === st.id)) return null;
+                    const price = st.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price || 0;
+                    const isCheap = nearbyMinPrice !== null && price === nearbyMinPrice;
+                    return (
+                      <Marker
+                        key={`near-${st.id}`}
+                        position={[st.location.lat, st.location.lng]}
+                        icon={nearbyIcon(price, isCheap)}
+                        eventHandlers={p.onStationClick ? { click: () => p.onStationClick!(st) } : undefined}
+                      />
+                    );
+                  })}
                   {p.tripStops.map((s: any, i: number) => (
-                    <Marker key={i} position={[s.location.lat, s.location.lng]} icon={stopIcon(i + 1)}>
+                    <Marker
+                      key={i}
+                      position={[s.location.lat, s.location.lng]}
+                      icon={stopIcon(i + 1)}
+                      eventHandlers={p.onStationClick ? { click: () => p.onStationClick!(s) } : undefined}
+                    >
                       <Popup className="trip-popup">Sosta {i + 1} · {s.brand}</Popup>
                     </Marker>
                   ))}
@@ -448,6 +499,71 @@ export function TripTab(p: Props) {
                           €{price ? price.toFixed(3) : '—'}
                         </p>
                         <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">sosta {i+1}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {sortedNearby.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between gap-2 px-1 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                  <h2 className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Stazioni lungo il percorso</h2>
+                  <span className="text-[9px] font-black text-[#48484a] uppercase tracking-widest tabular-nums">{sortedNearby.length}</span>
+                </div>
+              </div>
+              <div className="flex gap-1.5 mb-3">
+                {[
+                  { id: 'price' as const, label: 'Prezzo' },
+                  { id: 'detour' as const, label: 'Deviazione' },
+                  { id: 'progress' as const, label: 'Tappa' },
+                ].map(o => (
+                  <button
+                    key={o.id}
+                    onClick={() => setNearbySort(o.id)}
+                    className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+                      nearbySort === o.id
+                        ? 'bg-blue-600 text-white border-blue-400/40 shadow-[0_0_12px_rgba(37,99,235,0.4)]'
+                        : 'bg-white/5 text-[#8e8e93] border-white/10 hover:text-white'
+                    }`}
+                  >{o.label}</button>
+                ))}
+              </div>
+              <div className="bg-[#09090b]/50 backdrop-blur-xl rounded-[32px] border border-white/5 overflow-hidden divide-y divide-white/5 shadow-2xl max-h-[480px] overflow-y-auto no-scrollbar">
+                {sortedNearby.map((st: any) => {
+                  const logo = getBrandLogo(st.brand || st.name || '');
+                  const isCheapest = nearbyMinPrice !== null && st._price === nearbyMinPrice;
+                  const isStop = p.tripStops.some(s => s.id === st.id);
+                  return (
+                    <div
+                      key={st.id}
+                      onClick={() => p.onStationClick?.(st)}
+                      className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/[0.03] active:scale-[0.99] transition-all"
+                    >
+                      <div className={`w-10 h-10 rounded-full bg-black border flex items-center justify-center flex-shrink-0 overflow-hidden ${isCheapest ? 'border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'border-white/10'}`}>
+                        <img src={logo} alt={st.brand} className="w-full h-full object-contain scale-[0.9]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[13px] font-black uppercase italic tracking-tight text-white truncate">{st.brand || st.name}</p>
+                          {isCheapest && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex-shrink-0">Min</span>}
+                          {isStop && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex-shrink-0">Sosta</span>}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-[#8e8e93] uppercase tracking-widest mt-0.5 tabular-nums">
+                          <span>{st.routeProgressKm.toFixed(0)} km</span>
+                          <span className="opacity-40">•</span>
+                          <span>+{(st.routeDetourKm * 2).toFixed(1)} km dev.</span>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`text-[15px] font-black tabular-nums tracking-tighter ${isCheapest ? 'text-emerald-400' : 'text-white'}`}>
+                          €{st._price ? st._price.toFixed(3) : '—'}
+                        </p>
+                        <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.selectedFuel}</p>
                       </div>
                     </div>
                   );

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator } from 'lucide-react';
+import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator, Layers, MapPinned } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
 import { analyzeFuelMarket } from './services/geminiService';
 import { buildLocalMarketAnalysis, calculateMarketStats } from './services/localAnalysis';
 import { loadHistory } from './services/historyService';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 // @ts-ignore
@@ -67,6 +67,31 @@ function CenterBtn({ loc }: { loc: { lat: number; lng: number } | null }) {
   return <button onClick={() => map.setView([loc.lat, loc.lng], 15)} className="absolute bottom-6 right-6 z-[500] p-4 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-95 transition-all outline-none"><Target size={24} /></button>;
 }
 
+function HeatmapToggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`absolute top-4 right-4 z-[500] w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-all border ${
+        active
+          ? 'bg-blue-600 text-white border-blue-400/40 shadow-[0_0_24px_rgba(37,99,235,0.5)]'
+          : 'bg-black/85 text-white border-white/15 backdrop-blur-md'
+      }`}
+      title={active ? 'Vista pin' : 'Vista heatmap'}
+      aria-label="Toggle heatmap"
+    >
+      {active ? <MapPinned size={20} /> : <Layers size={20} />}
+    </button>
+  );
+}
+
+function priceToHeatColor(price: number, avg: number): string {
+  if (!price || !avg || !isFinite(avg)) return 'hsl(200, 50%, 50%)';
+  const delta = (price - avg) / avg;
+  const t = Math.max(-1, Math.min(1, delta / 0.035));
+  const hue = 120 * (1 - (t + 1) / 2);
+  return `hsl(${Math.round(hue)}, 80%, 50%)`;
+}
+
 function normalizeFuelNews(raw: any): any[] {
   if (Array.isArray(raw)) return raw;
   if (Array.isArray(raw?.events)) return raw.events.map((e: any) => ({ title: e.title || 'Aggiornamento', summary: e.summary || e.content || '', content: e.content || e.summary || '', impact: e.impact || 'neutral', source: e.source || 'Fuel Now', url: e.url || e.link, date: e.date || raw.generated_at }));
@@ -114,6 +139,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showBudget, setShowBudget] = useState(false);
   const [stationDetail, setStationDetail] = useState<FuelStation | null>(null);
+  const [heatmapOn, setHeatmapOn] = useState<boolean>(() => localStorage.getItem('mf_heatmap') === '1');
+  useEffect(() => { localStorage.setItem('mf_heatmap', heatmapOn ? '1' : '0'); }, [heatmapOn]);
   const [brands, setBrands] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
   const [radius, setRadius] = useState(20);
@@ -130,6 +157,7 @@ export default function App() {
   const [tankL, setTankL] = useState(50);
   const [tripRoute, setTripRoute] = useState<any>(null);
   const [tripStops, setTripStops] = useState<any[]>([]);
+  const [tripNearby, setTripNearby] = useState<any[]>([]);
   const [tripStatus, setTripStatus] = useState('');
   const [tripStrat, setTripStrat] = useState<'balanced'|'save'|'fast'>('balanced');
   const [tripCalc, setTripCalc] = useState(false);
@@ -326,7 +354,8 @@ export default function App() {
       const pRange = fullRange; // riusato sotto come step normale
 
       const stops: any[] = [];
-      if (nStops > 0 && stations.length > 0) {
+      let enriched: { st: any; dist: number; progress: number; price: number }[] = [];
+      if (stations.length > 0) {
         // Haversine raw (no rounding)
         const hav = (lat1: number, lng1: number, lat2: number, lng2: number) => {
           const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
@@ -358,7 +387,6 @@ export default function App() {
         minLat -= pad; maxLat += pad; minLng -= pad; maxLng += pad;
 
         // Per ogni stazione nel BB, calcola distFromRoute + progressKm
-        const enriched: { st: any; dist: number; progress: number; price: number }[] = [];
         for (const st of stations) {
           const lat = st.location.lat, lng = st.location.lng;
           if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) continue;
@@ -372,7 +400,9 @@ export default function App() {
           if (bestD > 3) continue; // max 3km dal tragitto
           enriched.push({ st, dist: bestD, progress: bestProg, price: pr });
         }
+      }
 
+      if (nStops > 0 && enriched.length > 0) {
         // Pesi per strategia
         const w = tripStrat === 'save'
           ? { price: 8, detour: 1.2, off: 0.5 }
@@ -400,6 +430,12 @@ export default function App() {
         }
       }
       setTripStops(stops.sort((a, b) => a.routeProgressKm - b.routeProgressKm));
+
+      const nearbyArr = enriched
+        .map(x => ({ ...x.st, routeProgressKm: x.progress, routeDetourKm: x.dist }))
+        .sort((a, b) => a.routeProgressKm - b.routeProgressKm);
+      setTripNearby(nearbyArr);
+
       setTripCalc(true);
     } catch (e:any) { setTripStatus(e.message); }
   };
@@ -515,6 +551,7 @@ export default function App() {
               <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
               <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} />
               <CenterBtn loc={userLoc} />
+              <HeatmapToggle active={heatmapOn} onToggle={() => setHeatmapOn(v => !v)} />
               {userLoc && (
                 <>
                   <Marker 
@@ -530,7 +567,22 @@ export default function App() {
                   </Marker>
                 </>
               )}
-              {mapSt.map(s => {
+              {heatmapOn && mapSt.map(s => {
+                const cp = s.prices.find(p => p.type === fuel)?.price || 0;
+                if (!cp || isPriceAnom(s, fuel)) return null;
+                const color = priceToHeatColor(cp, avgP === Infinity ? cp : avgP);
+                const radius = mapZoom >= 14 ? 250 : mapZoom >= 12 ? 500 : mapZoom >= 10 ? 1000 : 1800;
+                return (
+                  <Circle
+                    key={`heat-${s.id}`}
+                    center={[s.location.lat, s.location.lng]}
+                    radius={radius}
+                    pathOptions={{ color, fillColor: color, fillOpacity: 0.32, opacity: 0.4, weight: 1 }}
+                    eventHandlers={{ click: () => setStationDetail(s) }}
+                  />
+                );
+              })}
+              {!heatmapOn && mapSt.map(s => {
                 const cp = s.prices.find(p => p.type === fuel)?.price || 0;
                 const best = cp === cheapP && cheapP !== Infinity;
                 const anom = isPriceAnom(s, fuel);
@@ -581,7 +633,7 @@ export default function App() {
                 exit="exit"
               >
                 {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0} onStationClick={setStationDetail}/>}
-                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={stations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll}/>}
+                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={stations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail}/>}
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
