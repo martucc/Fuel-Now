@@ -1,11 +1,16 @@
 import type { MarketAnalysis } from '../types';
 
+interface HistoryPt { date: string; price: number; }
+interface NewsItem { title?: string; summary?: string; impact?: string; source?: string; }
+
 export async function analyzeFuelMarket(
   apiKey: string,
   model: string,
   fuelType: string = 'Benzina',
   question?: string,
-  localContext?: string
+  localContext?: string,
+  historySeries?: HistoryPt[],
+  news?: NewsItem[],
 ): Promise<MarketAnalysis> {
   if (!apiKey || apiKey.trim().length === 0) {
     throw new Error('MISSING_KEY');
@@ -14,70 +19,99 @@ export async function analyzeFuelMarket(
   const { GoogleGenAI } = await import('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
 
-  const ctx = localContext ? `Contesto dati locali attuali: ${localContext}. ` : '';
+  // === System instruction: identita, ruolo, regole costanti ===
+  const systemInstruction = [
+    "Sei l'analista AI di MartuccFuel, app italiana per i prezzi dei carburanti.",
+    "Rispondi sempre in italiano, tono professionale ma diretto e accessibile, mai 'military' o iper-formale.",
+    "Lavora SOLO sui dati reali forniti nel prompt utente: media, min, spread, storico, news. Non inventare numeri.",
+    "Quando manca un dato, dichiaralo invece di tirarlo a indovinare.",
+    "Output esclusivamente JSON valido. Nessun markdown, nessun testo prima o dopo, nessun backtick.",
+    "Le previsioni devono essere coerenti col trend recente: estrapola dallo storico, non saltare di colpo.",
+    "Considera fattori reali: accise IT, prezzo brent, cambio EUR/USD, stagionalita, raffinazione europea, news fornite.",
+  ].join(' ');
 
-  const prompt = question
-    ? `Sei un analista senior del mercato energetico e carburanti in Italia (Signal AI). Rispondi alla domanda dell'utente: "${question}".
-Contesto carburante analizzato: ${fuelType}.
-${ctx}
-Fornisci una risposta analitica, tattica e altamente professionale. Non usare markdown fuori dal JSON.
-Rispondi in formato JSON valido con questa struttura esatta:
+  // === Compact history + news context ===
+  const histLine = historySeries && historySeries.length > 0
+    ? `Storico (${historySeries.length} punti, eta crescente): ${historySeries.slice(-12).map(p => `${p.date}=€${p.price.toFixed(3)}`).join(', ')}.`
+    : '';
+  const newsLine = news && news.length > 0
+    ? `News recenti (impatto): ${news.slice(0, 4).map(n => `[${(n.impact || 'neutral').toLowerCase()}] ${n.title || ''}`).join(' | ')}.`
+    : '';
+  const ctx = [localContext, histLine, newsLine].filter(Boolean).join(' ');
+
+  // === Prompt domanda: schema LEAN per risparmiare tokens ===
+  const userPrompt = question
+    ? `Domanda dell'utente sul carburante ${fuelType}: "${question}".
+${ctx ? 'Contesto: ' + ctx : ''}
+
+Rispondi all'utente in modo conciso e utile, basandoti sui dati forniti.
+Output JSON con questa struttura ESATTA (nessun campo extra):
 {
   "advice": "FILL-FULL" | "WAIT" | "TEN-EURO" | "URGENT",
-  "reasoning": "Sintesi di 1-2 frasi della risposta alla domanda",
-  "detailedReport": "Risposta approfondita e dettagliata alla domanda, divisa in più frasi fluenti",
-  "categories": [{"title":"Analisi Domanda","content":"...","icon":"Globe"}],
-  "tips": [{"title":"...","text":"...","impact":"HIGH"}],
+  "reasoning": "Risposta breve diretta in 1-2 frasi",
+  "detailedReport": "Risposta approfondita in 2-4 paragrafi separati da \\n",
   "trend": "UP" | "DOWN" | "STABLE",
-  "historicalData": [{"date":"-2g","price":1.800}],
-  "forecast": [{"date":"+1g","price":1.800}]
+  "categories": [],
+  "tips": [],
+  "forecast": []
 }`
-    : `Sei l'Intelligenza Artificiale "Signal Core" integrata in "MartuccFuel", un'app premium e tattica per l'analisi dei carburanti in Italia.
-La tua missione è fornire il briefing operativo giornaliero per il carburante: ${fuelType}.
-Considera le macro-dinamiche globali (prezzo petrolio brent, tensioni geopolitiche, cambio EUR/USD, raffinazione europea) e la situazione locale in Italia.
-${ctx}
-Lo stile del report deve essere professionale, sintetico, "military/tactical" (usando termini come 'Briefing', 'Outlook', 'Target') ma estremamente chiaro.
+    : `Briefing giornaliero per ${fuelType} in Italia.
+${ctx ? 'Contesto: ' + ctx : ''}
 
-Rispondi in formato JSON valido con questa struttura esatta:
+Genera l'analisi completa. Tono professionale, sintetico, italiano corrente.
+Output JSON con questa struttura ESATTA:
 {
   "advice": "FILL-FULL" | "WAIT" | "TEN-EURO" | "URGENT",
-  "reasoning": "Spiegazione tattica immediata in 1-2 frasi sul perché agire o aspettare oggi",
-  "detailedReport": "Report di mercato esteso (3-4 paragrafi) che analizza i fattori globali, l'impatto sul mercato italiano e le prospettive a breve termine per il ${fuelType}.",
+  "reasoning": "Cosa fare oggi in 1-2 frasi, motivato dai dati",
+  "detailedReport": "3-4 paragrafi separati da \\n: (1) contesto macro (brent, EUR/USD, geopolitica), (2) situazione Italia (accise, distribuzione, MIMIT), (3) outlook 7 giorni, (4) consiglio operativo per l'automobilista. Cita numeri reali dal contesto quando possibile.",
   "categories": [
-    {"title":"Scenario Macro","content":"Contesto geopolitico e greggio","icon":"Globe"},
-    {"title":"Dinamica Nazionale","content":"Accise, logistica e media MIMIT","icon":"MapPin"},
-    {"title":"Outlook 7 Giorni","content":"Previsione a breve termine","icon":"Calendar"}
+    {"title": "Macro", "content": "1-2 frasi su petrolio, cambio, geopolitica", "icon": "Globe"},
+    {"title": "Mercato Italia", "content": "1-2 frasi su accise, logistica, prezzi MIMIT", "icon": "MapPin"},
+    {"title": "Outlook 7G", "content": "1-2 frasi sulla direzione attesa", "icon": "Calendar"}
   ],
   "tips": [
-    {"title":"Consiglio 1","text":"...","impact":"HIGH"},
-    {"title":"Consiglio 2","text":"...","impact":"MEDIUM"},
-    {"title":"Consiglio 3","text":"...","impact":"LOW"}
+    {"title": "Titolo breve", "text": "Consiglio concreto", "impact": "HIGH"},
+    {"title": "Titolo breve", "text": "Consiglio concreto", "impact": "MEDIUM"},
+    {"title": "Titolo breve", "text": "Consiglio concreto", "impact": "LOW"}
   ],
   "trend": "UP" | "DOWN" | "STABLE",
-  "historicalData": [{"date":"-Xg","price":0.000} (esattamente 7 oggetti per gli ultimi 7 giorni)],
-  "forecast": [{"date":"+Xg","price":0.000} (esattamente 7 oggetti per i prossimi 7 giorni)]
+  "forecast": [
+    {"date": "+1g", "price": 0.000},
+    {"date": "+2g", "price": 0.000},
+    {"date": "+3g", "price": 0.000},
+    {"date": "+4g", "price": 0.000},
+    {"date": "+5g", "price": 0.000},
+    {"date": "+6g", "price": 0.000},
+    {"date": "+7g", "price": 0.000}
+  ]
 }
-NON aggiungere alcun testo, markdown o backtick prima o dopo il JSON. Assicurati che il JSON sia formattato correttamente.`;
+Il forecast deve essere coerente con lo storico fornito: massimo ±2% di delta totale su 7 giorni in condizioni normali.`;
 
   try {
     const response = await ai.models.generateContent({
       model: model || 'gemini-2.5-flash',
-      contents: prompt,
-    });
+      contents: userPrompt,
+      config: { systemInstruction },
+    } as any);
 
-    const text = response.text || '';
+    const text = (response as any).text || '';
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
     let jsonStr = (jsonMatch[1] || text).trim();
-    
-    // In case AI leaves text around JSON
+
     const firstBrace = jsonStr.indexOf('{');
     const lastBrace = jsonStr.lastIndexOf('}');
     if (firstBrace >= 0 && lastBrace >= 0) {
       jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
     }
 
-    const parsed = JSON.parse(jsonStr);
-    return parsed as MarketAnalysis;
+    const parsed = JSON.parse(jsonStr) as MarketAnalysis;
+
+    // Safety: garantisci sempre array vuoti se l'AI omette
+    if (!Array.isArray(parsed.categories)) parsed.categories = [];
+    if (!Array.isArray(parsed.tips)) parsed.tips = [];
+    if (!Array.isArray(parsed.forecast)) parsed.forecast = [];
+
+    return parsed;
   } catch (error: any) {
     console.error('Gemini API error:', error);
     throw new Error('Errore API Gemini: ' + (error.message || 'Sconosciuto'));

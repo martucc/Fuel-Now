@@ -66,6 +66,83 @@ html, body {
   font-size: 13px;
 }
 
+/* === TRIP ROUTE PINS === */
+.trip-pin-wrap { position: relative; display: block; }
+
+.trip-pin-start {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 4px solid #3b82f6;
+  box-shadow:
+    0 0 0 4px rgba(59,130,246,0.18),
+    0 0 22px rgba(59,130,246,0.65),
+    0 6px 14px -4px rgba(0,0,0,0.6);
+}
+
+.trip-pin-end {
+  position: relative;
+  width: 28px; height: 36px;
+}
+.trip-pin-end::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  clip-path: path('M14 0 C 4 0 0 8 0 14 C 0 24 14 36 14 36 C 14 36 28 24 28 14 C 28 8 24 0 14 0 Z');
+  filter: drop-shadow(0 0 14px rgba(59,130,246,0.7)) drop-shadow(0 8px 14px rgba(0,0,0,0.55));
+}
+.trip-pin-end::after {
+  content: '';
+  position: absolute;
+  top: 6px; left: 50%;
+  transform: translateX(-50%);
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: inset 0 0 0 2px #1d4ed8;
+}
+
+.trip-pin-stop {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #fbbf24 0%, #f59e0b 70%);
+  color: #1c1917;
+  font-weight: 900;
+  font-size: 13px;
+  border: 3px solid #ffffff;
+  box-shadow:
+    0 0 0 3px rgba(245,158,11,0.25),
+    0 8px 18px -6px rgba(245,158,11,0.85),
+    0 4px 10px -2px rgba(0,0,0,0.55);
+  font-family: 'Inter', ui-sans-serif, system-ui;
+}
+
+/* Dark popup variant for trip */
+.trip-popup .leaflet-popup-content-wrapper {
+  background: #0a0f1d !important;
+  color: white !important;
+  border: 1px solid rgba(59,130,246,0.4) !important;
+  box-shadow: 0 0 30px rgba(59,130,246,0.35) !important;
+}
+.trip-popup .leaflet-popup-tip {
+  background: #0a0f1d !important;
+  border: 1px solid rgba(59,130,246,0.4) !important;
+}
+.trip-popup .leaflet-popup-content {
+  margin: 10px 14px !important;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* Mantieni i pannelli Leaflet sotto la topbar/navbar (z-1000) */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom { z-index: 400 !important; }
+.leaflet-control { z-index: 410 !important; }
+
 /* Leaflet popup overrides */
 .leaflet-popup-content-wrapper {
   border-radius: 1.5rem !important;

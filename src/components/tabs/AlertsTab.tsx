@@ -17,21 +17,21 @@ export function AlertsTab(p: Props) {
         <h3 className="text-4xl font-black tracking-tight text-white uppercase italic leading-none">Price <span className="text-blue-500">Alert</span></h3>
       </header>
 
-      <div className="bg-[#1c1c1e] p-8 rounded-[3.5rem] border border-white/5 space-y-8 shadow-2xl relative overflow-hidden">
+      <div className="bg-[#1c1c1e] p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3.5rem] border border-white/5 space-y-6 sm:space-y-8 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[50px] pointer-events-none" />
         <div className="space-y-2 relative z-10">
           <h4 className="text-lg font-black uppercase italic tracking-tight text-white">Smart Monitor</h4>
           <p className="text-xs text-[#8e8e93] font-medium leading-relaxed">Configura una soglia di prezzo. Riceverai una notifica quando il mercato raggiunge il tuo target.</p>
         </div>
         <div className="space-y-6 relative z-10">
-          <div className="flex bg-black/40 rounded-[2.5rem] p-6 justify-between items-center border border-white/5">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-500/10 rounded-[1.5rem] flex items-center justify-center text-blue-500 border border-blue-500/20 font-black text-xl shadow-lg">{p.selectedFuel[0]}</div>
-              <div><span className="font-black uppercase italic tracking-tighter text-white">{p.selectedFuel}</span><div className="text-[8px] font-black text-blue-500/60 uppercase tracking-widest">Carburante Attivo</div></div>
+          <div className="flex bg-black/40 rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-6 gap-3 justify-between items-center border border-white/5">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-500/10 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center text-blue-500 border border-blue-500/20 font-black text-xl shadow-lg flex-shrink-0">{p.selectedFuel[0]}</div>
+              <div className="min-w-0 flex-1"><span className="font-black uppercase italic tracking-tighter text-white truncate block">{p.selectedFuel}</span><div className="text-[8px] font-black text-blue-500/60 uppercase tracking-widest truncate">Carburante Attivo</div></div>
             </div>
-            <div className="text-right">
+            <div className="text-right flex-shrink-0">
               <div className="text-[8px] text-[#48484a] font-black uppercase tracking-widest mb-1">Target €/L</div>
-              <input type="number" step="0.001" placeholder="1.750" className="bg-transparent text-3xl font-black text-blue-500 w-28 text-right outline-none placeholder:text-blue-900/30" id="alert-price-input" />
+              <input type="number" step="0.001" placeholder="1.750" className="bg-transparent text-2xl sm:text-3xl font-black text-blue-500 w-24 sm:w-28 text-right outline-none placeholder:text-blue-900/30 tabular-nums" id="alert-price-input" />
             </div>
           </div>
           <button onClick={() => {
@@ -45,16 +45,16 @@ export function AlertsTab(p: Props) {
       <div className="space-y-6 px-2">
         <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#48484a]">Alert Attivi</h3><div className="h-px flex-1 bg-white/5 ml-4" /></div>
         {p.alerts.length === 0 ? (
-          <div className="p-16 text-center space-y-4 bg-[#1c1c1e]/40 rounded-[3rem] border border-white/5 opacity-40 italic"><BellOff size={40} className="mx-auto text-[#48484a]" /><p className="text-[10px] font-black uppercase tracking-widest text-[#48484a]">Nessun alert attivo</p></div>
+          <div className="p-10 sm:p-16 text-center space-y-4 bg-[#1c1c1e]/40 rounded-[2.5rem] sm:rounded-[3rem] border border-white/5 opacity-40 italic"><BellOff size={40} className="mx-auto text-[#48484a]" /><p className="text-[10px] font-black uppercase tracking-widest text-[#48484a]">Nessun alert attivo</p></div>
         ) : (
           <div className="grid gap-4">
             {p.alerts.map(a => (
-              <div key={a.id} className="group bg-[#1c1c1e] p-6 rounded-[2.5rem] border border-white/5 hover:border-blue-500/20 transition-all flex items-center justify-between shadow-lg">
-                <div className="flex items-center gap-5">
-                  <div className={cn("w-3 h-3 rounded-full", a.active ? "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]" : "bg-[#48484a]")} />
-                  <div><div className="text-sm font-black text-white uppercase italic tracking-tight">{a.fuelType}</div><div className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest mt-0.5 italic">Target: <span className="text-white">€{a.threshold.toFixed(3)}</span></div></div>
+              <div key={a.id} className="group bg-[#1c1c1e] p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-white/5 hover:border-blue-500/20 transition-all flex items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-4 sm:gap-5 min-w-0 flex-1">
+                  <div className={cn("w-3 h-3 rounded-full flex-shrink-0", a.active ? "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]" : "bg-[#48484a]")} />
+                  <div className="min-w-0 flex-1"><div className="text-sm font-black text-white uppercase italic tracking-tight truncate">{a.fuelType}</div><div className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest mt-0.5 italic truncate">Target: <span className="text-white tabular-nums">€{a.threshold.toFixed(3)}</span></div></div>
                 </div>
-                <button onClick={() => p.setAlerts(prev => prev.filter(al => al.id !== a.id))} className="p-3 bg-white/5 hover:bg-red-500/10 rounded-2xl text-[#48484a] hover:text-red-500 border border-transparent hover:border-red-500/20"><X size={18} /></button>
+                <button onClick={() => p.setAlerts(prev => prev.filter(al => al.id !== a.id))} className="p-3 bg-white/5 hover:bg-red-500/10 rounded-2xl text-[#48484a] hover:text-red-500 border border-transparent hover:border-red-500/20 flex-shrink-0"><X size={18} /></button>
               </div>
             ))}
           </div>

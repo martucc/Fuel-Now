@@ -19,7 +19,7 @@ const tabs = [
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 px-2 pb-2 pt-1 safe-bottom pointer-events-none">
+    <div className="fixed bottom-0 left-0 right-0 z-[1000] px-2 pb-2 pt-1 safe-bottom pointer-events-none">
       {/* Gradient fade */}
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black via-black/80 to-transparent -z-10" />
       

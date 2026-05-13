@@ -5,6 +5,7 @@ import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
 import { analyzeFuelMarket } from './services/geminiService';
 import { buildLocalMarketAnalysis, calculateMarketStats } from './services/localAnalysis';
+import { loadHistory } from './services/historyService';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -47,8 +48,11 @@ const pageVariants = {
   }),
 };
 
-function MapUpdater({ onMove }: { onMove: (c: { lat: number; lng: number }) => void }) {
-  useMapEvents({ moveend: (e: any) => { const c = e.target.getCenter(); onMove({ lat: c.lat, lng: c.lng }); } });
+function MapUpdater({ onMove, onZoom }: { onMove: (c: { lat: number; lng: number }) => void; onZoom?: (z: number) => void }) {
+  useMapEvents({
+    moveend: (e: any) => { const c = e.target.getCenter(); onMove({ lat: c.lat, lng: c.lng }); onZoom?.(e.target.getZoom()); },
+    zoomend: (e: any) => { onZoom?.(e.target.getZoom()); },
+  });
   return null;
 }
 function CenterBtn({ loc }: { loc: { lat: number; lng: number } | null }) {
@@ -63,19 +67,23 @@ function normalizeFuelNews(raw: any): any[] {
   return [];
 }
 
-function calcDist(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 10) / 10;
-}
-
 export default function App() {
-  const [tab, setTab] = useState<TabType>('home');
+  const [tab, setTab] = useState<TabType>(() => {
+    const p = new URLSearchParams(window.location.search);
+    const t = p.get('tab') as TabType | null;
+    const valid: TabType[] = ['home','map','veicolo','analysis','alerts','trip'];
+    return t && valid.includes(t) ? t : 'home';
+  });
   const [userLoc, setUserLoc] = useState<{lat:number;lng:number}|null>(null);
   const [stations, setStations] = useState<FuelStation[]>([]);
   const [nationalStats, setNationalStats] = useState<any>({});
   const [marketAnalyses, setMarketAnalyses] = useState<Record<string, MarketAnalysis>>({});
-  const [fuel, setFuel] = useState<FuelType>('Benzina');
+  const [fuel, setFuel] = useState<FuelType>(() => {
+    const p = new URLSearchParams(window.location.search);
+    const f = p.get('fuel');
+    const valid: FuelType[] = ['Benzina','Diesel','GPL','Metano'];
+    return f && (valid as string[]).includes(f) ? (f as FuelType) : 'Benzina';
+  });
   const [loading, setLoading] = useState(true);
   const [favs, setFavs] = useState<string[]>([]);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
@@ -93,6 +101,8 @@ export default function App() {
   const [tripDist, setTripDist] = useState(575);
   const [tripKml, setTripKml] = useState(15);
   const [tripUnit, setTripUnit] = useState<'kml'|'l100'>('kml');
+  const [tripCurrentFuel, setTripCurrentFuel] = useState<number | null>(null);
+  const [tripToll, setTripToll] = useState(true);
   const [tankL, setTankL] = useState(50);
   const [tripRoute, setTripRoute] = useState<any>(null);
   const [tripStops, setTripStops] = useState<any[]>([]);
@@ -110,6 +120,8 @@ export default function App() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [direction, setDirection] = useState(0);
   const [showSplash, setShowSplash] = useState(true);
+  const [mapZoom, setMapZoom] = useState(13);
+  const [aiAnswer, setAiAnswer] = useState<{ question: string; answer: string; ts: number; source: 'ai' | 'local' } | null>(null);
   const [driveMode] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('drive')==='1') localStorage.setItem('mf_drive','on');
@@ -135,9 +147,9 @@ export default function App() {
     const today = new Date().toISOString().split('T')[0];
     const hasKey = apiKey.trim().length > 0;
     const ck = `mf_analysis_${f}_${apiModel}_${hasKey ? 'ai' : 'local'}`;
-    
+
     if (force && !q) localStorage.removeItem(ck);
-    
+
     if (!force && !q) {
       const c = localStorage.getItem(ck);
       if (c) {
@@ -153,26 +165,38 @@ export default function App() {
     try {
       const mStats = calculateMarketStats(src, f);
       const lCtx = `Media: €${mStats.average}, Minimo: €${mStats.min}, Spread: €${mStats.spread}`;
-      
+
       let analysis: MarketAnalysis;
       if (!hasKey) {
         analysis = buildLocalMarketAnalysis(f, src, q);
         setAiErr(null);
       } else {
-        analysis = await analyzeFuelMarket(apiKey, apiModel, f, q, lCtx);
+        // grounding: passa al modello la storia reale e le news fresche
+        const fuelKey = f.toLowerCase();
+        const history = await loadHistory();
+        const recentHist = (history[fuelKey] || []).slice(-30).map(p => ({ date: p.date, price: p.avg }));
+        analysis = await analyzeFuelMarket(apiKey, apiModel, f, q, lCtx, recentHist, fuelNews);
+      }
+
+      if (q) {
+        // domanda one-off: rotta verso aiAnswer separato, non sovrascrivere analisi giornaliera
+        const answerText = analysis.detailedReport?.trim() || analysis.reasoning?.trim() || 'Nessuna risposta disponibile.';
+        setAiAnswer({ question: q, answer: answerText, ts: Date.now(), source: (hasKey ? 'ai' : 'local') });
+        return;
       }
 
       const enriched = { ...analysis, source: (hasKey ? 'ai' : 'local') as any, generatedAt: new Date().toISOString() };
       setMarketAnalyses(pr => ({ ...pr, [f]: enriched }));
-      
-      if (!q) {
-        localStorage.setItem(ck, JSON.stringify({ date: today, analysis: enriched }));
-      }
+      localStorage.setItem(ck, JSON.stringify({ date: today, analysis: enriched }));
     } catch (e: any) {
       console.error('Analysis error:', e);
-      const fallback = buildLocalMarketAnalysis(f, src, q);
-      setMarketAnalyses(pr => ({ ...pr, [f]: { ...fallback, source: 'local' } }));
-      setAiErr(hasKey && e.message !== 'MISSING_KEY' ? 'Gemini non disponibile: analisi locale attiva.' : null);
+      if (q) {
+        setAiAnswer({ question: q, answer: `Errore: ${e.message || 'AI non disponibile'}. Prova con il motore locale o riprova piu tardi.`, ts: Date.now(), source: 'local' });
+      } else {
+        const fallback = buildLocalMarketAnalysis(f, src, q);
+        setMarketAnalyses(pr => ({ ...pr, [f]: { ...fallback, source: 'local' } }));
+        setAiErr(hasKey && e.message !== 'MISSING_KEY' ? 'Gemini non disponibile: analisi locale attiva.' : null);
+      }
     } finally {
       setAnalysisLoading(false);
     }
@@ -227,7 +251,7 @@ export default function App() {
   };
   const handleSelectCar = (car:any) => { setSelCar(car); if(car.liters) setTankL(car.liters); if(car.kml) setTripKml(car.kml); localStorage.setItem('mf_car', car.model); };
 
-  const geocode = async (q:string) => { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`); const d = await r.json(); if (!d.length) throw new Error(`Non trovato: ${q}`); return {lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon),label:d[0].display_name}; };
+  const geocode = async (q:string) => { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=it&accept-language=it`); const d = await r.json(); if (!d.length) throw new Error(`Non trovato: ${q}`); return {lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon),label:d[0].display_name}; };
   const calcTrip = async () => {
     if (!tripStart||!tripEnd) { setTripStatus('Inserisci partenza e arrivo'); return; }
     setTripStatus('Calcolo percorso...');
@@ -235,24 +259,93 @@ export default function App() {
       const s = await geocode(tripStart), e = await geocode(tripEnd);
       const rr = await fetch(`https://router.project-osrm.org/route/v1/driving/${s.lng},${s.lat};${e.lng},${e.lat}?overview=full&geometries=geojson`);
       const rd = await rr.json(); if (!rd.routes?.length) throw new Error('Percorso non trovato');
-      const route = {distanceKm:rd.routes[0].distance/1000, durationMin:rd.routes[0].duration/60, coords:rd.routes[0].geometry.coordinates, start:s, end:e};
+      const coords: [number, number][] = rd.routes[0].geometry.coordinates; // [lng, lat]
+      const route = {distanceKm:rd.routes[0].distance/1000, durationMin:rd.routes[0].duration/60, coords, start:s, end:e};
       setTripRoute(route); setTripDist(Math.round(route.distanceKm)); setTripStatus('');
+
       const kpl = tripUnit==='kml' ? tripKml : 100/tripKml;
-      const pRange = tankL * kpl * 0.8;
-      const nStops = Math.max(0, Math.ceil((route.distanceKm - pRange) / pRange));
+      const fullRange = tankL * kpl * 0.8;
+      const startLiters = tripCurrentFuel == null ? tankL : Math.max(0, Math.min(tankL, tripCurrentFuel));
+      const initRange = Math.max(startLiters * kpl * 0.8, 5);
+      const remaining = route.distanceKm - initRange;
+      const nStops = remaining > 0 ? Math.ceil(remaining / fullRange) : 0;
+      const pRange = fullRange; // riusato sotto come step normale
+
       const stops: any[] = [];
       if (nStops > 0 && stations.length > 0) {
+        // Haversine raw (no rounding)
+        const hav = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+          const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+          const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+          return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        };
+
+        // Sample percorso (max ~200 punti) con progresso cumulato
+        const stride = Math.max(1, Math.floor(coords.length / 200));
+        const samples: { lat: number; lng: number; progressKm: number }[] = [];
+        let acc = 0, lastLat = coords[0][1], lastLng = coords[0][0];
+        samples.push({ lat: lastLat, lng: lastLng, progressKm: 0 });
+        for (let i = 1; i < coords.length; i++) {
+          const [lng, lat] = coords[i];
+          acc += hav(lastLat, lastLng, lat, lng);
+          lastLat = lat; lastLng = lng;
+          if (i % stride === 0) samples.push({ lat, lng, progressKm: acc });
+        }
+
+        // Bounding box (con padding) per filtro veloce
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        for (const sm of samples) {
+          if (sm.lat < minLat) minLat = sm.lat;
+          if (sm.lat > maxLat) maxLat = sm.lat;
+          if (sm.lng < minLng) minLng = sm.lng;
+          if (sm.lng > maxLng) maxLng = sm.lng;
+        }
+        const pad = 0.1; // ~10km
+        minLat -= pad; maxLat += pad; minLng -= pad; maxLng += pad;
+
+        // Per ogni stazione nel BB, calcola distFromRoute + progressKm
+        const enriched: { st: any; dist: number; progress: number; price: number }[] = [];
+        for (const st of stations) {
+          const lat = st.location.lat, lng = st.location.lng;
+          if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) continue;
+          const pr = st.prices.find(pp => pp.type === fuel)?.price || 0;
+          if (pr <= 0) continue;
+          let bestD = Infinity, bestProg = 0;
+          for (const sm of samples) {
+            const d = hav(sm.lat, sm.lng, lat, lng);
+            if (d < bestD) { bestD = d; bestProg = sm.progressKm; }
+          }
+          if (bestD > 3) continue; // max 3km dal tragitto
+          enriched.push({ st, dist: bestD, progress: bestProg, price: pr });
+        }
+
+        // Pesi per strategia
+        const w = tripStrat === 'save'
+          ? { price: 8, detour: 1.2, off: 0.5 }
+          : tripStrat === 'fast'
+          ? { price: 1.2, detour: 4, off: 1.8 }
+          : { price: 4, detour: 2.2, off: 0.9 }; // balanced
+
+        const used = new Set<string>();
         for (let i = 1; i <= nStops; i++) {
-          const tgt = Math.min(pRange*i, route.distanceKm-20);
-          const cands = stations.map(st => {
-            const dS = calcDist(s.lat,s.lng,st.location.lat,st.location.lng);
-            const pr = st.prices.find(p=>p.type===fuel)?.price||1.8;
-            return {station:st, score:pr+Math.abs(dS-tgt)/100, distToStart:dS};
-          }).sort((a,b)=>a.score-b.score);
-          if (cands[0]) stops.push({...cands[0].station, routeProgressKm:cands[0].distToStart});
+          const tgt = Math.min(initRange + pRange * (i - 1), route.distanceKm - 30);
+          const tgtMin = tgt - pRange * 0.35;
+          const tgtMax = tgt + pRange * 0.15;
+
+          let pool = enriched.filter(x => !used.has(x.st.id) && x.progress >= tgtMin && x.progress <= tgtMax);
+          if (pool.length === 0) pool = enriched.filter(x => !used.has(x.st.id));
+          if (pool.length === 0) break;
+
+          pool.sort((a, b) =>
+            (a.price * w.price + a.dist * w.detour + Math.abs(a.progress - tgt)/Math.max(pRange,1) * w.off) -
+            (b.price * w.price + b.dist * w.detour + Math.abs(b.progress - tgt)/Math.max(pRange,1) * w.off)
+          );
+          const pick = pool[0];
+          used.add(pick.st.id);
+          stops.push({ ...pick.st, routeProgressKm: pick.progress, routeDetourKm: pick.dist });
         }
       }
-      setTripStops(stops.sort((a,b)=>a.routeProgressKm-b.routeProgressKm));
+      setTripStops(stops.sort((a, b) => a.routeProgressKm - b.routeProgressKm));
       setTripCalc(true);
     } catch (e:any) { setTripStatus(e.message); }
   };
@@ -306,7 +399,9 @@ export default function App() {
   const isLocal = marketRef?.source !== 'ai';
   const tTone = marketRef?.trend==='DOWN' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : marketRef?.trend==='UP' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
   const allBrands = [...new Set(stations.map(s=>s.brand))].filter(Boolean).sort();
-  const mapSt = filtered.slice(0,250);
+  // Declutter mappa: meno zoom -> meno marker, sempre i piu economici
+  const zoomLimit = mapZoom >= 15 ? 250 : mapZoom >= 13 ? 80 : mapZoom >= 11 ? 25 : mapZoom >= 9 ? 8 : mapZoom >= 7 ? 4 : mapZoom >= 5 ? 2 : 1;
+  const mapSt = filtered.slice(0, zoomLimit);
 
   // @ts-ignore - tabs is intended for future menu expansions or logging
   const tabs: {id:TabType;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'alerts',icon:Bell,label:'Alert'}];
@@ -317,7 +412,7 @@ export default function App() {
         {showSplash && <SplashScreen key="splash" />}
       </AnimatePresence>
       {/* Header / Top Bar */}
-      <header className="fixed top-0 left-0 right-0 z-[60] bg-black/80 backdrop-blur-3xl px-6 py-4 flex items-center justify-between border-b border-white/5 shadow-2xl">
+      <header className="fixed top-0 left-0 right-0 z-[1000] bg-black/80 backdrop-blur-3xl px-6 py-4 flex items-center justify-between border-b border-white/5 shadow-2xl">
         <div className="flex items-center gap-3">
           <div className="flex items-baseline gap-1">
             <h1 className="text-xl font-black italic tracking-tighter text-white uppercase">
@@ -353,7 +448,7 @@ export default function App() {
           <div className="fixed inset-0 top-[80px] bottom-[80px] z-[10]">
             <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
               <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
-              <MapUpdater onMove={handleMapMove} />
+              <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} />
               <CenterBtn loc={userLoc} />
               {userLoc && (
                 <>
@@ -448,9 +543,9 @@ export default function App() {
                 exit="exit"
               >
                 {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius}/>}
-                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip}/>}
+                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={stations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll}/>}
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
-                {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings}/>}
+                {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
               </motion.div>
             </AnimatePresence>
