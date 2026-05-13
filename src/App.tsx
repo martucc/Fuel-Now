@@ -18,6 +18,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
 import { PienoTab } from './components/tabs/PienoTab';
+import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder } from './services/notificationService';
 import { AnalysisTab } from './components/tabs/AnalysisTab';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { FiltersModal } from './components/modals/FiltersModal';
@@ -258,6 +259,30 @@ export default function App() {
   useEffect(() => { localStorage.setItem('mf_favs', JSON.stringify(favs)); }, [favs]);
   useEffect(() => { localStorage.setItem('mf_blocked', JSON.stringify(blockedIds)); }, [blockedIds]);
   useEffect(() => { localStorage.setItem('mf_alerts', JSON.stringify(alerts)); }, [alerts]);
+
+  useEffect(() => {
+    if (!stations.length) return;
+    checkPriceThresholds(alerts, stations);
+  }, [stations, alerts]);
+
+  useEffect(() => {
+    const a = marketAnalyses[fuel];
+    if (!a) return;
+    checkDailyTrend(fuel, a);
+  }, [marketAnalyses, fuel]);
+
+  useEffect(() => {
+    if (!stations.length) return;
+    const allPrices = stations.flatMap(s => s.prices.filter(p => p.type === fuel).map(p => p.price)).filter(p => p > 0);
+    if (!allPrices.length) return;
+    const avg = allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
+    checkBestDeal(fuel, stations, avg);
+  }, [stations, fuel]);
+
+  useEffect(() => {
+    if (!selCar) return;
+    checkPienoReminder(selCar.model, selCar.kml, selCar.liters);
+  }, [selCar]);
 
   const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
   const toggleFav = (id:string) => setFavs(p => p.includes(id) ? p.filter(f=>f!==id) : [...p,id]);

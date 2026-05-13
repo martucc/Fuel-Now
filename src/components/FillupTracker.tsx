@@ -17,6 +17,14 @@ const fmtEUR = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractio
 const fmtKm = (n: number) => Math.round(n).toLocaleString('it-IT') + ' km';
 const fmtL = (n: number) => n.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' L';
 const fmtKml = (n: number) => n.toFixed(1) + ' km/L';
+
+function autoPrice(v: string): string {
+  if (/[.,]/.test(v)) return v;
+  const digits = v.replace(/\D/g, '');
+  if (digits.length === 0) return '';
+  if (digits.length === 1) return digits;
+  return digits[0] + '.' + digits.slice(1, 4);
+}
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
@@ -400,7 +408,7 @@ function AddFillupSheet({ carModel, defaultFuel, tankLiters, lastOdo, onClose, o
                 inputMode="decimal"
                 placeholder="0.000"
                 value={pricePerLiter}
-                onChange={e => { setPricePerLiter(e.target.value); onEdit('p'); }}
+                onChange={e => { setPricePerLiter(autoPrice(e.target.value)); onEdit('p'); }}
                 className="w-full bg-transparent text-white text-[15px] font-bold tracking-tight outline-none tabular-nums placeholder:text-[#48484a]"
               />
             </FieldRow>
