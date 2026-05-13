@@ -67,6 +67,17 @@ function normalizeFuelNews(raw: any): any[] {
   return [];
 }
 
+// Estrae nome breve veicolo (es. "BMW Serie 3 320d (Diesel)" -> "BMW Serie 3")
+function shortCarName(m: string): string {
+  if (!m) return '';
+  let s = m.split('(')[0].trim();
+  const cutRe = /\s+(\d+\.\d+|\d{2,3}(?!cc\b)[a-z]+|[BDT]\d(?:\/[BDT]\d)+|[BDT][2-9]|TSI|TDI|TFSI|JTDm?|MultiJet|BlueHDi|EcoBoost|EcoBlue|dCi|TCe|SkyActiv[-\s]?[A-Z]?|T-Jet|T-GDi|CRDi|PureTech|FireFly|e-Hybrid|e:HEV|Hybrid|MHEV|PHEV|FHEV|TGI|G-Tec|Eco-G|Turbo|Plug-in|sDrive\w*|xDrive\w*|DIG-T|IG-T|VVT-i|e-Tech|e-POWER|BoosterJet|DDiS|HDi|CDTi|cdti|BiTurbo|GPL|Metano|Diesel|Benzina|Mild|Full)\b.*$/i;
+  s = s.replace(cutRe, '');
+  // Standalone digit at end (codici Audi/Mercedes "25", "180") - non tagliare se preceduto da "Serie"/"Classe"
+  if (!/\b(Serie|Classe)\s+\w+$/i.test(s)) s = s.replace(/\s+\d{1,3}$/, '');
+  return s.trim();
+}
+
 export default function App() {
   const [tab, setTab] = useState<TabType>(() => {
     const p = new URLSearchParams(window.location.search);
@@ -433,7 +444,7 @@ export default function App() {
               className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all active:scale-95"
             >
               <Car size={14} className="text-[#8e8e93]" />
-              <span className="text-[11px] font-bold text-white uppercase tracking-wider">{selCar.model}</span>
+              <span className="text-[11px] font-bold text-white uppercase tracking-wider">{shortCarName(selCar.model)}</span>
             </button>
           )}
           <button 
@@ -546,7 +557,7 @@ export default function App() {
                 animate="animate"
                 exit="exit"
               >
-                {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius}/>}
+                {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0}/>}
                 {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={stations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll}/>}
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}

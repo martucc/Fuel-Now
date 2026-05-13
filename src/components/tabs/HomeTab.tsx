@@ -35,6 +35,7 @@ interface Props {
   isPriceAnom: (s: FuelStation, f: FuelType) => boolean;
   radius: number;
   setRadius: (v: number) => void;
+  hasApiKey: boolean;
 }
 
 export function HomeTab(p: Props) {
@@ -213,6 +214,23 @@ export function HomeTab(p: Props) {
             </button>
           </div>
         </div>
+
+        {/* Loading banner — Gemini generation */}
+        {p.analysisLoading && p.hasApiKey && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="px-4 py-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-3 mb-4 shadow-[0_0_24px_rgba(59,130,246,0.18)]"
+          >
+            <div className="relative w-4 h-4 flex-shrink-0">
+              <div className="absolute inset-0 rounded-full border-2 border-blue-500/25" />
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 animate-spin" />
+            </div>
+            <p className="text-[11px] font-black text-blue-300 uppercase tracking-widest">
+              Gemini sta generando l'analisi...
+            </p>
+          </motion.div>
+        )}
 
         {/* === VERDETTO BIG: fare pieno o aspettare === */}
         {verdict && (
