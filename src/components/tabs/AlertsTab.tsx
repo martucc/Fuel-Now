@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, BellOff, X, TrendingUp, Flame, Fuel, AlertCircle, Send, Plus, Target, CalendarClock, Wallet } from 'lucide-react';
 import type { FuelType, Alert } from '../../types';
+import { Capacitor } from '@capacitor/core';
 import {
   loadPrefs, savePrefs, requestPermission, permissionState, fireTest,
   type NotifPrefs, type NotifCategory,
@@ -44,6 +45,18 @@ export function AlertsTab({ selectedFuel, alerts, setAlerts }: Props) {
     const h = () => setPrefs(loadPrefs());
     window.addEventListener('mf-notif-prefs', h);
     return () => window.removeEventListener('mf-notif-prefs', h);
+  }, []);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+        LocalNotifications.checkPermissions().then(status => {
+          const result = status.display === 'granted' ? 'granted' : 'denied';
+          localStorage.setItem('mf_native_notif_perm', result);
+          setPerm(result);
+        });
+      });
+    }
   }, []);
 
   const updatePrefs = (patch: Partial<NotifPrefs> | ((p: NotifPrefs) => Partial<NotifPrefs>)) => {
@@ -193,6 +206,50 @@ export function AlertsTab({ selectedFuel, alerts, setAlerts }: Props) {
           })}
         </div>
       </div>
+
+      {prefs.enabled && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 px-2">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#48484a]">Filtra Carburanti</h3>
+            <div className="h-px flex-1 bg-white/5" />
+          </div>
+
+          <div className="bg-[#0a0f1d] p-5 sm:p-6 rounded-[28px] border border-white/5 grid grid-cols-2 gap-3 shadow-xl relative overflow-hidden">
+            <div className="absolute -top-12 -left-12 w-48 h-48 bg-blue-600/5 blur-[60px] pointer-events-none rounded-full" />
+            {(['Benzina', 'Diesel', 'GPL', 'Metano'] as FuelType[]).map(f => {
+              const catId = `fuel${f}` as NotifCategory;
+              const on = prefs.categories[catId] !== false; // defaults to true
+              const disabled = !prefs.enabled;
+              const emoji = f === 'Benzina' ? '⛽' : f === 'Diesel' ? '🛢️' : f === 'GPL' ? '💨' : '🔵';
+              
+              return (
+                <button
+                  key={f}
+                  onClick={() => !disabled && toggleCategory(catId)}
+                  disabled={disabled}
+                  className={`flex items-center justify-between p-4 rounded-[20px] border transition-all text-left ${
+                    disabled
+                      ? 'bg-black/20 border-white/5 opacity-40 cursor-not-allowed'
+                      : on
+                        ? 'bg-black/40 border-blue-500/30 text-white shadow-[0_0_12px_rgba(37,99,235,0.08)]'
+                        : 'bg-black/20 border-white/5 text-gray-500 hover:border-white/10'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-black uppercase italic tracking-tight">{emoji} {f}</div>
+                    <div className="text-[9px] font-bold text-[#8e8e93] uppercase tracking-widest mt-0.5">
+                      {on ? 'Abilitato' : 'Disattivato'}
+                    </div>
+                  </div>
+                  <div className={`relative w-8 h-5 rounded-full flex-shrink-0 transition-colors ${on && !disabled ? 'bg-blue-600' : 'bg-white/10'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on && !disabled ? 'left-[14px]' : 'left-0.5'}`} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {prefs.categories.priceThresholds && prefs.enabled && (

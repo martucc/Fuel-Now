@@ -1,6 +1,8 @@
 import type { Alert, FuelStation, FuelType, MarketAnalysis } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
-export type NotifCategory = 'priceThresholds' | 'dailyTrend' | 'bestDealZone' | 'pienoReminder' | 'deadlineReminder' | 'budgetAlert';
+export type NotifCategory = 'priceThresholds' | 'dailyTrend' | 'bestDealZone' | 'pienoReminder' | 'deadlineReminder' | 'budgetAlert' | 'fuelBenzina' | 'fuelDiesel' | 'fuelGpl' | 'fuelMetano';
 
 export interface NotifPrefs {
   enabled: boolean;
@@ -21,6 +23,10 @@ const DEFAULTS: NotifPrefs = {
     pienoReminder: false,
     deadlineReminder: true,
     budgetAlert: true,
+    fuelBenzina: true,
+    fuelDiesel: true,
+    fuelGpl: true,
+    fuelMetano: true,
   },
   lastNotified: {},
   lastTrendDay: {},
@@ -49,11 +55,25 @@ export function savePrefs(p: NotifPrefs) {
 }
 
 export function permissionState(): NotificationPermission | 'unsupported' {
+  if (Capacitor.isNativePlatform()) {
+    const saved = localStorage.getItem('mf_native_notif_perm') as NotificationPermission;
+    return saved || 'default';
+  }
   if (typeof Notification === 'undefined') return 'unsupported';
   return Notification.permission;
 }
 
 export async function requestPermission(): Promise<NotificationPermission | 'unsupported'> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const status = await LocalNotifications.requestPermissions();
+      const result: NotificationPermission = status.display === 'granted' ? 'granted' : 'denied';
+      localStorage.setItem('mf_native_notif_perm', result);
+      return result;
+    } catch {
+      return 'denied';
+    }
+  }
   if (typeof Notification === 'undefined') return 'unsupported';
   if (Notification.permission === 'granted') return 'granted';
   if (Notification.permission === 'denied') return 'denied';
@@ -66,6 +86,25 @@ export async function requestPermission(): Promise<NotificationPermission | 'uns
 
 async function show(title: string, body: string, tag?: string, icon?: string) {
   const ICON = icon || '/icon-192x192.png';
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const permission = permissionState();
+      if (permission !== 'granted') return false;
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: title,
+            body: body,
+            id: Math.floor(Math.random() * 100000),
+            extra: { tag }
+          }
+        ]
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
   try {
     if ('serviceWorker' in navigator) {
@@ -107,6 +146,10 @@ export async function checkPriceThresholds(alerts: Alert[], stations: FuelStatio
   if (!prefs.enabled || !prefs.categories.priceThresholds) return;
   for (const al of alerts) {
     if (!al.active) continue;
+    // Filter by specific fuel type preference
+    const fuelCat = `fuel${al.fuelType}` as NotifCategory;
+    if (prefs.categories[fuelCat] === false) continue;
+
     let triggered: { station: FuelStation; price: number } | null = null;
     for (const s of stations) {
       const fp = s.prices.find(p => p.type === al.fuelType);
@@ -130,6 +173,10 @@ export async function checkPriceThresholds(alerts: Alert[], stations: FuelStatio
 export async function checkDailyTrend(fuel: FuelType, analysis: MarketAnalysis | undefined) {
   const prefs = loadPrefs();
   if (!prefs.enabled || !prefs.categories.dailyTrend) return;
+  // Filter by specific fuel type preference
+  const fuelCat = `fuel${fuel}` as NotifCategory;
+  if (prefs.categories[fuelCat] === false) return;
+
   if (!analysis?.historicalData || analysis.historicalData.length < 2) return;
   const today = new Date().toISOString().slice(0, 10);
   if (prefs.lastTrendDay[fuel] === today) return;
@@ -157,6 +204,10 @@ export async function checkDailyTrend(fuel: FuelType, analysis: MarketAnalysis |
 export async function checkBestDeal(fuel: FuelType, stations: FuelStation[], avgPrice: number) {
   const prefs = loadPrefs();
   if (!prefs.enabled || !prefs.categories.bestDealZone || !avgPrice || avgPrice === Infinity) return;
+  // Filter by specific fuel type preference
+  const fuelCat = `fuel${fuel}` as NotifCategory;
+  if (prefs.categories[fuelCat] === false) return;
+
   let best: { s: FuelStation; price: number } | null = null;
   for (const s of stations) {
     const fp = s.prices.find(p => p.type === fuel);

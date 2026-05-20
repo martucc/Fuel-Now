@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/Fuel-Now/',
+  base: '/',
   plugins: [
     react(),
     tailwindcss(),
@@ -20,8 +20,8 @@ export default defineConfig({
         background_color: '#050607',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/Fuel-Now/',
-        scope: '/Fuel-Now/',
+        start_url: '/',
+        scope: '/',
         lang: 'it',
         icons: [
           {
@@ -47,35 +47,35 @@ export default defineConfig({
           {
             name: 'Mappa stazioni',
             short_name: 'Mappa',
-            url: '/Fuel-Now/?tab=map',
+            url: '/?tab=map',
             description: 'Apri la mappa delle pompe vicine.',
             icons: [{ src: 'icon-192.png', sizes: '192x192' }]
           },
           {
             name: 'Miglior Diesel',
             short_name: 'Diesel',
-            url: '/Fuel-Now/?tab=home&fuel=Diesel',
+            url: '/?tab=home&fuel=Diesel',
             description: 'Vai dritto al miglior prezzo diesel in zona.',
             icons: [{ src: 'icon-192.png', sizes: '192x192' }]
           },
           {
             name: 'Miglior Benzina',
             short_name: 'Benzina',
-            url: '/Fuel-Now/?tab=home&fuel=Benzina',
+            url: '/?tab=home&fuel=Benzina',
             description: 'Vai dritto al miglior prezzo benzina in zona.',
             icons: [{ src: 'icon-192.png', sizes: '192x192' }]
           },
           {
             name: 'Analisi mercato',
             short_name: 'Intel',
-            url: '/Fuel-Now/?tab=analysis',
+            url: '/?tab=analysis',
             description: 'Apri il dashboard prezzi e analisi IA.',
             icons: [{ src: 'icon-192.png', sizes: '192x192' }]
           },
           {
             name: 'Modalita guida',
             short_name: 'Guida',
-            url: '/Fuel-Now/?drive=1',
+            url: '/?drive=1',
             description: 'Avvia Martucc Fuel con controlli grandi e mappa pronta.',
             icons: [{ src: 'icon-192.png', sizes: '192x192' }]
           }

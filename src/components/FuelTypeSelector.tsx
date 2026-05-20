@@ -2,6 +2,8 @@ import { cn } from '../lib/utils';
 import type { FuelType } from '../types';
 import { Fuel, Droplets, Flame, Wind } from 'lucide-react';
 import { motion } from 'motion/react';
+import { triggerHaptic } from '../lib/haptics';
+
 
 const FUEL_TYPES: {id: FuelType, icon: any, label: string}[] = [
   {id: 'Benzina', icon: Fuel, label: 'Benzina'},
@@ -19,7 +21,10 @@ export function FuelTypeSelector({ current, onSelect }: { current: FuelType; onS
         return (
           <motion.button
             key={t.id}
-            onClick={() => onSelect(t.id)}
+            onClick={() => {
+              triggerHaptic('selection');
+              onSelect(t.id);
+            }}
             whileTap={{ scale: 0.95 }}
             className={cn(
               "relative flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-bold outline-none z-10",

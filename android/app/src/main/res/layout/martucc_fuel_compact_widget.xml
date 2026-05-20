@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_compact_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="12dp"
+    android:gravity="center">
+
+    <!-- Brand / Title -->
+    <TextView
+        android:id="@+id/widget_compact_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Martucc Fuel"
+        android:textColor="#3B82F6"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textAllCaps="true" />
+
+    <!-- Station Name -->
+    <TextView
+        android:id="@+id/widget_compact_station"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Carica i dati..."
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:gravity="center"
+        android:layout_marginTop="6dp" />
+
+    <!-- Giant Fuel Price -->
+    <TextView
+        android:id="@+id/widget_compact_price"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="---"
+        android:textColor="#22C55E"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:layout_marginTop="4dp" />
+
+    <!-- AI Recommendation Tip -->
+    <TextView
+        android:id="@+id/widget_compact_ai_tip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="💡 Apri l'app"
+        android:textColor="#94A3B8"
+        android:textSize="9sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:gravity="center"
+        android:layout_marginTop="6dp" />
+
+</LinearLayout>

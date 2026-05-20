@@ -19,8 +19,10 @@ html, body {
 }
 
 /* Hide scrollbar globally for a native app feel */
-::-webkit-scrollbar {
-  display: none;
+::-webkit-scrollbar, *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 * {
   -ms-overflow-style: none;
@@ -220,5 +222,40 @@ input[type="range"] {
 
 .animate-shimmer {
   animation: shimmer 2.5s infinite;
+}
+
+/* --- ANDROID & NATIVE WEBVIEW EXPERIENCE OPTIMIZATIONS --- */
+
+/* 1. Prevent default blue highlight flash on tap */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+  outline: none !important;
+}
+
+/* 2. Prevent browser selection overlays for non-text UI elements to feel like a native app */
+body, button, nav, header, select, option {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/* 3. Re-enable standard selection only for essential inputs/editable fields so forms work perfectly */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* 4. Smooth scrolling transitions with momentum-based scroll on WebKit container */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  will-change: transform;
+}
+
+/* 5. Fluid system-like active states for buttons and interactive items */
+.active-native-scale:active {
+  transform: scale(0.96);
+  opacity: 0.88;
+  transition: all 0.1s ease;
 }
 

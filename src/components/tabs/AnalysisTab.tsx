@@ -5,6 +5,7 @@ import {
   MapPin, Calendar, Sparkles, Activity, Brain, Zap, Newspaper, Lightbulb,
   Clock, History, ShieldCheck, RefreshCw, Target,
   ArrowRight, X, MessageSquare, Database, Maximize2, BarChart2, Radio,
+  Mic, MicOff, Volume2, VolumeX
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { MarketAnalysis, FuelType, FuelStation } from '../../types';
@@ -74,7 +75,128 @@ export function AnalysisTab(p: Props) {
   const [period, setPeriod] = useState<Period>('1Y');
   const [hover, setHover] = useState<HistoryPoint | null>(null);
 
+  const [isListening, setIsListening] = useState(false);
+  const [recognition, setRecognition] = useState<any>(null);
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSynth, setSpeechSynth] = useState<SpeechSynthesis | null>(null);
+
   useEffect(() => { loadHistory().then(setHistory); }, []);
+
+  // Initialize Speech Recognition & Synthesis
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const rec = new SpeechRecognition();
+        rec.lang = 'it-IT';
+        rec.continuous = false;
+        rec.interimResults = false;
+        
+        rec.onstart = () => {
+          setIsListening(true);
+          setVoiceActive(true);
+          import('../../lib/haptics').then(m => m.triggerHaptic('light'));
+        };
+        
+        rec.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          if (transcript.trim()) {
+            p.setUserQuestion(transcript);
+            import('../../lib/haptics').then(m => m.triggerHaptic('success'));
+            p.fetchAnalysis(p.selectedFuel, false, transcript);
+          }
+          setIsListening(false);
+        };
+        
+        rec.onerror = (err: any) => {
+          console.warn('Speech recognition error:', err);
+          setIsListening(false);
+          import('../../lib/haptics').then(m => m.triggerHaptic('error'));
+        };
+        
+        rec.onend = () => {
+          setIsListening(false);
+        };
+        
+        setRecognition(rec);
+      }
+      
+      if (window.speechSynthesis) {
+        setSpeechSynth(window.speechSynthesis);
+      }
+    }
+  }, [p.selectedFuel, p.fetchAnalysis, p.setUserQuestion]);
+
+  // Clean markdown text for smoother Italian reading
+  const cleanMarkdownForSpeech = (text: string) => {
+    return text
+      .replace(/\*\*([\s\S]*?)\*\*/g, '$1')
+      .replace(/\*([\s\S]*?)\*/g, '$1')
+      .replace(/#+\s+(.*?)\n/g, '$1. ')
+      .replace(/`([\s\S]*?)`/g, '$1')
+      .replace(/[-*+]\s+/g, '')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .replace(/€/g, ' euro ')
+      .replace(/%/g, ' per cento ')
+      .replace(/\//g, ' su ');
+  };
+
+  const speakResponse = (text: string) => {
+    if (!speechSynth) return;
+    
+    speechSynth.cancel();
+    const cleanText = cleanMarkdownForSpeech(text);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'it-IT';
+    
+    const voices = speechSynth.getVoices();
+    const itVoice = voices.find(v => v.lang.startsWith('it-IT') && v.name.includes('Google')) ||
+                    voices.find(v => v.lang.startsWith('it-IT'));
+    if (itVoice) {
+      utterance.voice = itVoice;
+    }
+    
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setVoiceActive(false);
+    };
+    
+    speechSynth.speak(utterance);
+  };
+
+  // Speak when answer changes and voice is active
+  useEffect(() => {
+    if (p.aiAnswer && voiceActive && speechSynth) {
+      speakResponse(p.aiAnswer.answer);
+    }
+  }, [p.aiAnswer, voiceActive, speechSynth]);
+
+  // Toggle speak manually
+  const handleToggleSpeak = () => {
+    if (!speechSynth) return;
+    if (isSpeaking) {
+      speechSynth.cancel();
+      setIsSpeaking(false);
+      setVoiceActive(false);
+    } else if (p.aiAnswer) {
+      setVoiceActive(true);
+      speakResponse(p.aiAnswer.answer);
+    }
+  };
+
+  // Cleanup synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (speechSynth) {
+        speechSynth.cancel();
+      }
+    };
+  }, [speechSynth]);
 
   const series = useMemo(() => getSeries(history, p.selectedFuel, period), [history, p.selectedFuel, period]);
   const stats = useMemo(() => rangeStats(series), [series]);
@@ -515,7 +637,84 @@ export function AnalysisTab(p: Props) {
                 </p>
               </div>
             </div>
+            
+            {/* Pulsante Mic Neon */}
+            {recognition && (
+              <div className="relative flex-shrink-0">
+                {isListening && (
+                  <>
+                    <motion.div
+                      animate={{ scale: [1, 1.8], opacity: [0.6, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
+                      className="absolute inset-0 rounded-full bg-blue-500/30"
+                    />
+                    <motion.div
+                      animate={{ scale: [1, 2.4], opacity: [0.4, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut", delay: 0.4 }}
+                      className="absolute inset-0 rounded-full bg-indigo-500/20"
+                    />
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    if (isListening) {
+                      recognition.stop();
+                    } else {
+                      recognition.start();
+                    }
+                  }}
+                  className={cn(
+                    "relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer",
+                    isListening
+                      ? "bg-gradient-to-r from-red-500 to-pink-500 shadow-[0_0_20px_rgba(239,68,68,0.6)] active:scale-95"
+                      : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-[0_4px_12px_rgba(59,130,246,0.3)] hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] active:scale-95"
+                  )}
+                  aria-label={isListening ? "Ferma ascolto" : "Avvia assistente vocale"}
+                >
+                  {isListening ? (
+                    <motion.div
+                      animate={{ scale: [0.9, 1.1, 0.9] }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                    >
+                      <MicOff size={18} className="text-white" />
+                    </motion.div>
+                  ) : (
+                    <Mic size={18} className="text-white" />
+                  )}
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Listening State Ripple Radar Overlay */}
+          {isListening && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="mb-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-6 flex flex-col items-center justify-center space-y-4"
+            >
+              <div className="relative w-16 h-16 flex items-center justify-center">
+                <motion.div
+                  animate={{ scale: [1, 2.3], opacity: [0.4, 0] }}
+                  transition={{ repeat: Infinity, duration: 1.6, ease: "easeOut" }}
+                  className="absolute inset-0 rounded-full bg-blue-500/25"
+                />
+                <motion.div
+                  animate={{ scale: [1, 3], opacity: [0.2, 0] }}
+                  transition={{ repeat: Infinity, duration: 1.6, ease: "easeOut", delay: 0.4 }}
+                  className="absolute inset-0 rounded-full bg-purple-500/15"
+                />
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-650 flex items-center justify-center shadow-lg relative z-10">
+                  <Mic size={20} className="text-white animate-pulse" />
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-[13px] font-bold text-white tracking-widest uppercase">Sto ascoltando...</p>
+                <p className="text-[11px] text-zinc-400 mt-1">Parla liberamente. Ti risponderò a voce appena finisci.</p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Quick prompts */}
           <div className="flex flex-wrap gap-2 mb-4">
@@ -553,27 +752,62 @@ export function AnalysisTab(p: Props) {
             </button>
           </div>
 
-          {/* Answer card */}
+          {/* Answer card with Audio waves & Mute button */}
           {p.aiAnswer && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               className="mt-4 bg-blue-500/8 rounded-2xl p-4 border border-blue-500/30 relative"
             >
-              <button
-                onClick={p.clearAiAnswer}
-                aria-label="Chiudi risposta"
-                className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center text-zinc-400 hover:text-white transition-all"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-              <div className="flex items-center gap-2 mb-2 pr-8">
+              <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                {speechSynth && (
+                  <button
+                    onClick={handleToggleSpeak}
+                    aria-label={isSpeaking ? "Silenzia assistente" : "Riproduci risposta a voce"}
+                    className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer",
+                      isSpeaking
+                        ? "bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)] active:scale-95"
+                        : "bg-black/30 hover:bg-black/50 text-zinc-400 hover:text-white"
+                    )}
+                  >
+                    {isSpeaking ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+                <button
+                  onClick={p.clearAiAnswer}
+                  aria-label="Chiudi risposta"
+                  className="w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center text-zinc-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-2 mb-2 pr-16">
                 <MessageSquare className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                 <p className="text-[11px] text-blue-300 font-semibold uppercase tracking-wider truncate">
                   Risposta {p.aiAnswer.source === 'ai' ? 'Gemini' : 'locale'}
                 </p>
+                {isSpeaking && (
+                  <div className="flex items-end gap-[2px] h-3 ml-2 flex-shrink-0 animate-pulse">
+                    {[1, 2, 3, 4, 5].map(bar => (
+                      <motion.div
+                        key={bar}
+                        animate={{ height: [4, 12, 4] }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 0.6 + bar * 0.1,
+                          ease: "easeInOut",
+                          delay: bar * 0.05
+                        }}
+                        className="w-[2px] bg-blue-400 rounded-full"
+                        style={{ height: '4px' }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-[12px] text-zinc-500 italic mb-2 pr-8 line-clamp-2">
+              <p className="text-[12px] text-zinc-500 italic mb-2 pr-16 line-clamp-2">
                 "{p.aiAnswer.question}"
               </p>
               <div className="text-[14px] text-white leading-relaxed whitespace-pre-wrap">

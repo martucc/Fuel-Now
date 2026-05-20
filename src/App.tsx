@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Preferences } from '@capacitor/preferences';
 import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator, Layers, MapPinned } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
@@ -18,7 +19,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
 import { PienoTab } from './components/tabs/PienoTab';
-import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines, checkBudget } from './services/notificationService';
+import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines, checkBudget, permissionState, requestPermission, loadPrefs, savePrefs } from './services/notificationService';
 import { BudgetCalcModal } from './components/BudgetCalcModal';
 import { InstallPwaButton } from './components/InstallPwaButton';
 import { StationHistoryModal } from './components/StationHistoryModal';
@@ -35,22 +36,33 @@ const DefaultIcon = L.icon({ iconUrl: markerIcon, shadowUrl: markerShadow, iconS
 L.Marker.prototype.options.icon = DefaultIcon;
 
 type TabType = 'home'|'map'|'veicolo'|'analysis'|'alerts'|'trip'|'pieno';
-const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'pieno'];
+const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'pieno', 'alerts'];
 
 const pageVariants = {
   initial: (direction: number) => ({
-    x: direction > 0 ? 30 : -30,
+    x: direction > 0 ? 100 : -100,
+    scale: 0.96,
     opacity: 0,
   }),
   animate: {
     x: 0,
+    scale: 1,
     opacity: 1,
-    transition: { type: "spring" as any, stiffness: 800, damping: 50 },
+    transition: {
+      x: { type: "spring" as const, stiffness: 350, damping: 32, mass: 0.8 },
+      scale: { type: "spring" as const, stiffness: 350, damping: 32, mass: 0.8 },
+      opacity: { duration: 0.25, ease: "easeOut" as const }
+    },
   },
   exit: (direction: number) => ({
-    x: direction > 0 ? -30 : 30,
+    x: direction > 0 ? -100 : 100,
+    scale: 0.96,
     opacity: 0,
-    transition: { duration: 0.05 },
+    transition: {
+      x: { type: "spring" as const, stiffness: 350, damping: 32, mass: 0.8 },
+      scale: { type: "spring" as const, stiffness: 350, damping: 32, mass: 0.8 },
+      opacity: { duration: 0.18, ease: "easeIn" as const }
+    },
   }),
 };
 
@@ -108,6 +120,176 @@ function shortCarName(m: string): string {
   // Standalone digit at end (codici Audi/Mercedes "25", "180") - non tagliare se preceduto da "Serie"/"Classe"
   if (!/\b(Serie|Classe)\s+\w+$/i.test(s)) s = s.replace(/\s+\d{1,3}$/, '');
   return s.trim();
+}
+
+const WEATHER_MAP: Record<number, { icon: string; desc: string }> = {
+  0: { icon: "☀️", desc: "Soleggiato" },
+  1: { icon: "⛅", desc: "Poco Nuvoloso" },
+  2: { icon: "⛅", desc: "Poco Nuvoloso" },
+  3: { icon: "☁️", desc: "Coperto" },
+  45: { icon: "🌫️", desc: "Nebbia" },
+  48: { icon: "🌫️", desc: "Nebbia" },
+  51: { icon: "🌧️", desc: "Pioggerella" },
+  53: { icon: "🌧️", desc: "Pioggerella" },
+  55: { icon: "🌧️", desc: "Pioggerella" },
+  61: { icon: "🌧️", desc: "Pioggia" },
+  63: { icon: "🌧️", desc: "Pioggia" },
+  65: { icon: "🌧️", desc: "Forte Pioggia" },
+  71: { icon: "❄️", desc: "Neve" },
+  73: { icon: "❄️", desc: "Neve" },
+  75: { icon: "❄️", desc: "Fitta Neve" },
+  80: { icon: "🌧️", desc: "Rovesci" },
+  81: { icon: "🌧️", desc: "Rovesci" },
+  82: { icon: "🌧️", desc: "Rovesci" },
+  95: { icon: "⚡", desc: "Temporale" },
+  96: { icon: "⚡", desc: "Temporale" },
+  99: { icon: "⚡", desc: "Temporale" }
+};
+
+async function updateWidgetData(stations: FuelStation[], fuelType: FuelType, loc: { lat: number; lng: number } | null) {
+  try {
+    if (loc) {
+      await Preferences.set({ key: "mf_widget_user_lat", value: String(loc.lat) });
+      await Preferences.set({ key: "mf_widget_user_lng", value: String(loc.lng) });
+    }
+    await Preferences.set({ key: "mf_widget_fuel_type", value: fuelType });
+
+    // 1. Filter stations by location if available (limit to 20 km)
+    let localStations = stations;
+    if (loc) {
+      localStations = stations.filter(s => (s.distance ?? 999) <= 20);
+      // Fallback: if no stations within 20km, search up to 40km or use all
+      if (localStations.length === 0) {
+        localStations = stations.filter(s => (s.distance ?? 999) <= 40);
+      }
+      if (localStations.length === 0) {
+        localStations = stations;
+      }
+    }
+
+    let cheapest: FuelStation | null = null;
+    let minPrice = Infinity;
+    
+    for (const s of localStations) {
+      const p = s.prices.find(pr => pr.type === fuelType);
+      if (p && p.price && p.price < minPrice) {
+        minPrice = p.price;
+        cheapest = s;
+      }
+    }
+
+    if (cheapest) {
+      const brandName = cheapest.brand && cheapest.brand !== "Indipendente" ? cheapest.brand : cheapest.name;
+      const distText = cheapest.distance !== undefined ? ` · ${cheapest.distance.toFixed(1)} km` : "";
+      const stationText = `${brandName}${distText}`;
+      const priceText = `${minPrice.toFixed(3)} €/L`;
+      
+      await Preferences.set({ key: "mf_widget_cheapest_name", value: stationText });
+      await Preferences.set({ key: "mf_widget_cheapest_price", value: priceText });
+    } else {
+      await Preferences.set({ key: "mf_widget_cheapest_name", value: "Apri l'app..." });
+      await Preferences.set({ key: "mf_widget_cheapest_price", value: "--- €/L" });
+    }
+
+    let aiTip = "💡 Risparmia su Martucc Fuel";
+    if (localStations.length > 0 && cheapest) {
+      const allPrices = localStations.flatMap(s => s.prices.filter(p => p.type === fuelType).map(p => p.price)).filter(p => p > 0);
+      if (allPrices.length > 0) {
+        const avg = allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
+        const diff = avg - minPrice;
+        if (diff > 0.05) {
+          aiTip = `💡 Risparmio: -${Math.round(diff * 100)}¢ vs media!`;
+        } else {
+          aiTip = "💡 Prezzi stabili. Fai rifornimento.";
+        }
+      }
+    }
+    await Preferences.set({ key: "mf_widget_ai_tip", value: aiTip });
+
+    // CALCOLA IL DISTRIBUTORE PIU VICINO ENTRO 20 KM
+    let closest: FuelStation | null = null;
+    let minDistance = Infinity;
+
+    for (const s of localStations) {
+      const p = s.prices.find(pr => pr.type === fuelType);
+      if (p && p.price) {
+        const dist = s.distance ?? 999;
+        if (dist < minDistance) {
+          minDistance = dist;
+          closest = s;
+        }
+      }
+    }
+
+    if (closest) {
+      const brandName = closest.brand && closest.brand !== "Indipendente" ? closest.brand : closest.name;
+      const distText = closest.distance !== undefined ? ` · ${closest.distance.toFixed(1)} km` : "";
+      const stationText = `${brandName}${distText}`;
+      const closestPrice = closest.prices.find(pr => pr.type === fuelType)?.price || 0;
+      const priceText = `${closestPrice.toFixed(3)} €/L`;
+      
+      await Preferences.set({ key: "mf_widget_closest_name", value: stationText });
+      await Preferences.set({ key: "mf_widget_closest_price", value: priceText });
+
+      let closestAiTip = "💡 Più vicino a te";
+      if (cheapest && closest.id === cheapest.id) {
+        closestAiTip = "⭐ Più economico e vicino!";
+      } else if (cheapest) {
+        const diff = closestPrice - minPrice;
+        if (diff > 0) {
+          closestAiTip = `💡 +${Math.round(diff * 100)}¢ rispetto al min`;
+        }
+      }
+      await Preferences.set({ key: "mf_widget_closest_ai_tip", value: closestAiTip });
+    } else {
+      await Preferences.set({ key: "mf_widget_closest_name", value: "Apri l'app..." });
+      await Preferences.set({ key: "mf_widget_closest_price", value: "--- €/L" });
+      await Preferences.set({ key: "mf_widget_closest_ai_tip", value: "💡 Apri Martucc Fuel" });
+    }
+
+    // SALVA LE TOP 5 STAZIONI PIU VICINE PER IL MAP/RADAR WIDGET
+    const sortedByDist = [...localStations]
+      .filter(s => s.prices.some(pr => pr.type === fuelType && pr.price > 0))
+      .sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999))
+      .slice(0, 5);
+
+    const nearbyData = sortedByDist.map(s => {
+      const p = s.prices.find(pr => pr.type === fuelType)?.price || 0;
+      return {
+        id: s.id,
+        name: s.brand && s.brand !== "Indipendente" ? s.brand : s.name,
+        lat: s.location.lat,
+        lng: s.location.lng,
+        distance: s.distance ?? 0,
+        price: p
+      };
+    });
+
+    await Preferences.set({ key: "mf_widget_nearby_stations", value: JSON.stringify(nearbyData) });
+
+    if (loc) {
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lng}&current_weather=true`);
+        if (res.ok) {
+          const wData = await res.json();
+          const cw = wData.current_weather;
+          if (cw) {
+            const tempText = `${Math.round(cw.temperature)}°C`;
+            const code = cw.weathercode ?? 0;
+            const wMapped = WEATHER_MAP[code] || { icon: "☀️", desc: "Soleggiato" };
+            
+            await Preferences.set({ key: "mf_widget_weather_icon", value: wMapped.icon });
+            await Preferences.set({ key: "mf_widget_weather_temp", value: tempText });
+            await Preferences.set({ key: "mf_widget_weather_desc", value: wMapped.desc });
+          }
+        }
+      } catch (err) {
+        console.error("Widget Weather Fetch error:", err);
+      }
+    }
+  } catch (err) {
+    console.error("Error updating widget preferences:", err);
+  }
 }
 
 export default function App() {
@@ -181,6 +363,43 @@ export default function App() {
     return localStorage.getItem('mf_drive')==='on';
   });
   const initDone = useRef(false);
+  const [showBottomNav, setShowBottomNav] = useState(true);
+  const lastScrollY = useRef(0);
+
+  const fuels: FuelType[] = ['Benzina', 'Diesel', 'GPL', 'Metano'];
+  const allAverages = fuels.reduce((acc, f) => {
+    const vp = stations.map(s => s.prices.find(p => p.type === f)?.price).filter(p => p && p > 0.5) as number[];
+    if (vp.length === 0) {
+      acc[f] = Infinity;
+    } else {
+      vp.sort((a, b) => a - b);
+      const trim = Math.floor(vp.length * 0.15);
+      const trimmed = vp.slice(trim, vp.length - trim || vp.length);
+      acc[f] = (trimmed.reduce((a, b) => a + b, 0) / trimmed.length) || (vp.reduce((a, b) => a + b, 0) / vp.length);
+    }
+    return acc;
+  }, {} as Record<FuelType, number>);
+
+  const isPriceAnom = (s: FuelStation, f: FuelType) => {
+    const p = s.prices.find(pp => pp.type === f)?.price || 0;
+    const jsonKey = f.toLowerCase();
+    const natAvg = nationalStats[jsonKey]?.avg;
+    const avg = natAvg || allAverages[f];
+    
+    // An anomaly is a price <= 0, or < 93% of average, or < 0.5 EUR, or > 3.0 EUR, or > 15% above average
+    if (p <= 0) return true;
+    if (p < 0.5 || p > 3.0) return true;
+    if (avg !== Infinity && (p < avg * 0.93 || p > avg * 1.15)) return true;
+    return false;
+  };
+
+  const activeStations = useMemo(() => {
+    return stations.filter(s => {
+      const isBlocked = blockedIds.includes(s.id);
+      const anom = isPriceAnom(s, fuel);
+      return !isBlocked && !anom;
+    });
+  }, [stations, fuel, blockedIds, nationalStats]);
 
   useEffect(() => {
     if (!loading) {
@@ -189,11 +408,33 @@ export default function App() {
     }
   }, [loading]);
 
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (tab === 'map') {
+      if (!showBottomNav) setShowBottomNav(true);
+      return;
+    }
+    const currentScrollY = e.currentTarget.scrollTop;
+    const diff = currentScrollY - lastScrollY.current;
+    
+    // ignore tiny scrolls to avoid flickering
+    if (Math.abs(diff) < 8) return;
+    
+    if (currentScrollY > lastScrollY.current && currentScrollY > 60) {
+      // Scrolling down - hide BottomNav
+      setShowBottomNav(false);
+    } else {
+      // Scrolling up - show BottomNav
+      setShowBottomNav(true);
+    }
+    lastScrollY.current = currentScrollY;
+  };
+
   const handleTabChange = (newTab: TabType) => {
     const currentIndex = tabOrder.indexOf(tab);
     const newIndex = tabOrder.indexOf(newTab);
     setDirection(newIndex > currentIndex ? 1 : -1);
     setTab(newTab);
+    setShowBottomNav(true); // Reset BottomNav visibility on tab change!
   };
   const fetchAnalysis = async (f: FuelType, force=false, q?: string, src: FuelStation[] = stations) => {
     const today = new Date().toISOString().split('T')[0];
@@ -287,7 +528,6 @@ export default function App() {
         const {stations: d, nationalStats: ns} = await getStations(loc); 
         setStations(d); 
         setNationalStats(ns); 
-        localStorage.setItem('mf_last_fetch_time', String(Date.now()));
         // Set loading false as soon as stations are ready to show UI quickly
         setLoading(false);
         initDone.current=true;
@@ -303,6 +543,24 @@ export default function App() {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(p => { const l={lat:p.coords.latitude,lng:p.coords.longitude}; setUserLoc(l); load(l); }, () => { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }, {enableHighAccuracy:true,timeout:10000});
     } else { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }
+    
+    // Prompt per permessi notifiche all'avvio se non ancora impostato
+    (async () => {
+      try {
+        const currentPerm = permissionState();
+        if (currentPerm === 'default') {
+          const res = await requestPermission();
+          if (res === 'granted') {
+            const currentPrefs = loadPrefs();
+            currentPrefs.enabled = true;
+            savePrefs(currentPrefs);
+          }
+        }
+      } catch (err) {
+        console.error('Error requesting startup notification permission:', err);
+      }
+    })();
+
     const sf = localStorage.getItem('mf_favs'); if (sf) setFavs(JSON.parse(sf));
     const sb = localStorage.getItem('mf_blocked'); if (sb) setBlockedIds(JSON.parse(sb));
     const sa = localStorage.getItem('mf_alerts'); if (sa) setAlerts(JSON.parse(sa));
@@ -361,6 +619,11 @@ export default function App() {
   }, [stations, alerts]);
 
   useEffect(() => {
+    if (!stations.length) return;
+    updateWidgetData(activeStations, fuel, userLoc);
+  }, [activeStations, fuel, userLoc]);
+
+  useEffect(() => {
     const a = marketAnalyses[fuel];
     if (!a) return;
     checkDailyTrend(fuel, a);
@@ -385,9 +648,8 @@ export default function App() {
   const toggleFav = (id:string) => setFavs(p => p.includes(id) ? p.filter(f=>f!==id) : [...p,id]);
   const blockStation = (s: FuelStation) => {
     const choice = confirm(`Cosa vuoi fare per "${s.city || s.name}"?\n\n[OK] Nascondi solo per me\n[ANNULLA] Segnala alla Community (per tutti)`);
-    if (choice) {
-      setBlockedIds(prev => [...prev, s.id]);
-    } else {
+    setBlockedIds(prev => prev.includes(s.id) ? prev : [...prev, s.id]);
+    if (!choice) {
       const body = encodeURIComponent(`ID Stazione: ${s.id}\nNome: ${s.name}\nCittà: ${s.city}\nIndirizzo: ${s.address}\n\nMotivo: Segnalata come CHIUSA o ERRATA dal proprietario.`);
       window.open(`https://github.com/martucc/Fuel-Now/issues/new?title=%5BBLOCCHIAMO%5D+Stazione+${s.id}&body=${body}`, '_blank');
     }
@@ -416,7 +678,7 @@ export default function App() {
 
       const stops: any[] = [];
       let enriched: { st: any; dist: number; progress: number; price: number }[] = [];
-      if (stations.length > 0) {
+      if (activeStations.length > 0) {
         // Haversine raw (no rounding)
         const hav = (lat1: number, lng1: number, lat2: number, lng2: number) => {
           const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
@@ -448,7 +710,7 @@ export default function App() {
         minLat -= pad; maxLat += pad; minLng -= pad; maxLng += pad;
 
         // Per ogni stazione nel BB, calcola distFromRoute + progressKm
-        for (const st of stations) {
+        for (const st of activeStations) {
           const lat = st.location.lat, lng = st.location.lng;
           if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) continue;
           const pr = st.prices.find(pp => pp.type === fuel)?.price || 0;
@@ -501,29 +763,7 @@ export default function App() {
     } catch (e:any) { setTripStatus(e.message); }
   };
 
-  const fuels: FuelType[] = ['Benzina', 'Diesel', 'GPL', 'Metano'];
-  const allAverages = fuels.reduce((acc, f) => {
-    const vp = stations.map(s => s.prices.find(p => p.type === f)?.price).filter(p => p && p > 0.5) as number[];
-    if (vp.length === 0) {
-      acc[f] = Infinity;
-    } else {
-      vp.sort((a, b) => a - b);
-      const trim = Math.floor(vp.length * 0.15);
-      const trimmed = vp.slice(trim, vp.length - trim || vp.length);
-      acc[f] = (trimmed.reduce((a, b) => a + b, 0) / trimmed.length) || (vp.reduce((a, b) => a + b, 0) / vp.length);
-    }
-    return acc;
-  }, {} as Record<FuelType, number>);
 
-  const isPriceAnom = (s: FuelStation, f: FuelType) => {
-    const p = s.prices.find(pp => pp.type === f)?.price || 0;
-    const jsonKey = f.toLowerCase();
-    const natAvg = nationalStats[jsonKey]?.avg;
-    const avg = natAvg || allAverages[f];
-    
-    // An anomaly is a price < 93% of average (national if available) or < 0.5 EUR
-    return p > 0 && ((avg !== Infinity && p < avg * 0.93) || p < 0.5);
-  };
 
   const avgP = allAverages[fuel];
   
@@ -563,7 +803,7 @@ export default function App() {
         {showSplash && <SplashScreen key="splash" />}
       </AnimatePresence>
       {/* Header / Top Bar */}
-      <header className="fixed top-0 left-0 right-0 z-[1000] bg-black/80 backdrop-blur-3xl px-6 py-4 flex items-center justify-between border-b border-white/5 shadow-2xl">
+      <header className="fixed top-0 left-0 right-0 z-[1000] bg-black/80 backdrop-blur-3xl px-6 pb-4 flex items-center justify-between border-b border-white/5 shadow-2xl" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
         <div className="flex items-center gap-3">
           <div className="flex items-baseline gap-1">
             <h1 className="text-xl font-black italic tracking-tighter text-white uppercase">
@@ -602,111 +842,116 @@ export default function App() {
           </button>
         </div>
       </header>
-
+ 
       {/* Content Area */}
-      <div className="pt-[80px] pb-[90px] min-h-screen overflow-y-auto no-scrollbar">
-        {/* Map Tab - Full area map */}
-        {tab === 'map' && (
-          <div className="fixed inset-0 top-[80px] bottom-[80px] z-[10]">
-            <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
-              <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} />
-              <CenterBtn loc={userLoc} />
-              <HeatmapToggle active={heatmapOn} onToggle={() => setHeatmapOn(v => !v)} />
-              {userLoc && (
-                <>
-                  <Marker 
-                    position={[userLoc.lat, userLoc.lng]} 
-                    icon={L.divIcon({
-                      className: 'user-location-div-icon',
-                      html: '<div class="user-location-marker"><span></span></div>',
-                      iconSize: [30, 30],
-                      iconAnchor: [15, 15]
-                    })}
-                  >
-                    <Popup>Base Operativa</Popup>
-                  </Marker>
-                </>
-              )}
-              {heatmapOn && mapSt.map(s => {
-                const cp = s.prices.find(p => p.type === fuel)?.price || 0;
-                if (!cp || isPriceAnom(s, fuel)) return null;
-                const color = priceToHeatColor(cp, avgP === Infinity ? cp : avgP);
-                const radius = mapZoom >= 14 ? 250 : mapZoom >= 12 ? 500 : mapZoom >= 10 ? 1000 : 1800;
-                return (
-                  <Circle
-                    key={`heat-${s.id}`}
-                    center={[s.location.lat, s.location.lng]}
-                    radius={radius}
-                    pathOptions={{ color, fillColor: color, fillOpacity: 0.32, opacity: 0.4, weight: 1 }}
-                    eventHandlers={{ click: () => setStationDetail(s) }}
-                  />
-                );
-              })}
-              {!heatmapOn && mapSt.map(s => {
-                const cp = s.prices.find(p => p.type === fuel)?.price || 0;
-                const best = cp === cheapP && cheapP !== Infinity;
-                const anom = isPriceAnom(s, fuel);
-                let bg = 'bg-[#1c1c1e]', bc = 'border-white/20', tc = 'text-white', gl = '', extra = ' ', arrowBorder = 'border-t-[#1c1c1e]';
-                
-                if (anom) {
-                  bg = 'bg-black/60'; bc = 'border-gray-600/50'; tc = 'text-gray-500'; extra = 'grayscale opacity-60'; arrowBorder = 'border-t-black/60';
-                } else if (best) {
-                  bg = 'bg-blue-600'; bc = 'border-blue-400'; tc = 'text-white'; gl = 'alpha-glow'; extra = 'scale-110 z-50'; arrowBorder = 'border-t-blue-600';
-                } else if (cp > 0 && avgP !== Infinity) {
-                  if (cp > avgP + 0.015) {
-                    bg = 'bg-red-500'; bc = 'border-red-400'; tc = 'text-white'; gl = 'shadow-[0_0_15px_rgba(239,68,68,0.6)]'; arrowBorder = 'border-t-red-500';
-                  } else if (cp < avgP - 0.015) {
-                    bg = 'bg-emerald-500'; bc = 'border-emerald-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(16,185,129,0.6)]'; arrowBorder = 'border-t-emerald-500';
-                  } else {
-                    bg = 'bg-amber-500'; bc = 'border-amber-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(245,158,11,0.6)]'; arrowBorder = 'border-t-amber-500';
+      <div className="min-h-screen overflow-y-auto no-scrollbar" onScroll={handleScroll} style={{ paddingTop: 'calc(env(safe-area-inset-top) + 80px)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 90px)' }}>
+        <AnimatePresence mode="wait" custom={direction}>
+          {tab === 'map' ? (
+            <motion.div
+              key="map"
+              custom={direction}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="fixed inset-0 z-[10]"
+              style={{ top: 'calc(env(safe-area-inset-top) + 80px)', bottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}
+            >
+              <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
+                <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
+                <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} />
+                <CenterBtn loc={userLoc} />
+                <HeatmapToggle active={heatmapOn} onToggle={() => setHeatmapOn(v => !v)} />
+                {userLoc && (
+                  <>
+                    <Marker 
+                      position={[userLoc.lat, userLoc.lng]} 
+                      icon={L.divIcon({
+                        className: 'user-location-div-icon',
+                        html: '<div class="user-location-marker"><span></span></div>',
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                      })}
+                    >
+                      <Popup>Base Operativa</Popup>
+                    </Marker>
+                  </>
+                )}
+                {heatmapOn && mapSt.map(s => {
+                  const cp = s.prices.find(p => p.type === fuel)?.price || 0;
+                  if (!cp || isPriceAnom(s, fuel)) return null;
+                  const color = priceToHeatColor(cp, avgP === Infinity ? cp : avgP);
+                  const radius = mapZoom >= 14 ? 250 : mapZoom >= 12 ? 500 : mapZoom >= 10 ? 1000 : 1800;
+                  return (
+                    <Circle
+                      key={`heat-${s.id}`}
+                      center={[s.location.lat, s.location.lng]}
+                      radius={radius}
+                      pathOptions={{ color, fillColor: color, fillOpacity: 0.32, opacity: 0.4, weight: 1 }}
+                      eventHandlers={{ click: () => setStationDetail(s) }}
+                    />
+                  );
+                })}
+                {!heatmapOn && mapSt.map(s => {
+                  const cp = s.prices.find(p => p.type === fuel)?.price || 0;
+                  const best = cp === cheapP && cheapP !== Infinity;
+                  const anom = isPriceAnom(s, fuel);
+                  let bg = 'bg-[#1c1c1e]', bc = 'border-white/20', tc = 'text-white', gl = '', extra = ' ', arrowBorder = 'border-t-[#1c1c1e]';
+                  
+                  if (anom) {
+                    bg = 'bg-black/60'; bc = 'border-gray-600/50'; tc = 'text-gray-500'; extra = 'grayscale opacity-60'; arrowBorder = 'border-t-black/60';
+                  } else if (best) {
+                    bg = 'bg-blue-600'; bc = 'border-blue-400'; tc = 'text-white'; gl = 'alpha-glow'; extra = 'scale-110 z-50'; arrowBorder = 'border-t-blue-600';
+                  } else if (cp > 0 && avgP !== Infinity) {
+                    if (cp > avgP + 0.015) {
+                      bg = 'bg-red-500'; bc = 'border-red-400'; tc = 'text-white'; gl = 'shadow-[0_0_15px_rgba(239,68,68,0.6)]'; arrowBorder = 'border-t-red-500';
+                    } else if (cp < avgP - 0.015) {
+                      bg = 'bg-emerald-500'; bc = 'border-emerald-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(16,185,129,0.6)]'; arrowBorder = 'border-t-emerald-500';
+                    } else {
+                      bg = 'bg-amber-500'; bc = 'border-amber-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(245,158,11,0.6)]'; arrowBorder = 'border-t-amber-500';
+                    }
                   }
-                }
 
-                const logo = getBrandLogo(s.brand || s.name || '');
-                const markerLogoHtml = `<div class="absolute -top-6 -right-3 w-8 h-8 rounded-full bg-black border border-white/20 flex items-center justify-center overflow-hidden shadow-lg z-[100] grayscale-0"><img src="${logo}" class="w-full h-full object-contain scale-[0.9]" /></div>`;
+                  const logo = getBrandLogo(s.brand || s.name || '');
+                  const markerLogoHtml = `<div class="absolute -top-6 -right-3 w-8 h-8 rounded-full bg-black border border-white/20 flex items-center justify-center overflow-hidden shadow-lg z-[100] grayscale-0"><img src="${logo}" class="w-full h-full object-contain scale-[0.9]" /></div>`;
 
-                const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2.5 py-1.5 rounded-[12px] border-2 ${bc} text-xs font-black tracking-tight ${gl} ${tc} ${bg} backdrop-blur-md whitespace-nowrap shadow-xl">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent ${arrowBorder} drop-shadow-md -mt-[2px]"></div></div>`;
-                
-                return (
-                  <Marker
-                    key={s.id}
-                    position={[s.location.lat, s.location.lng]}
-                    icon={L.divIcon({ className: 'custom-div-icon', html: htmlStr, iconSize: [60, 40], iconAnchor: [30, 40] })}
-                    eventHandlers={{ click: () => setStationDetail(s) }}
-                  />
-                );
-              })}
-            </MapContainer>
-          </div>
-        )}
-
-        {/* Other Tabs - Scrollable content */}
-        {tab !== 'map' && (
-          <main className="max-w-md mx-auto px-4 pt-4 relative overflow-hidden">
-            <AnimatePresence mode="wait" custom={direction}>
-              <motion.div
-                key={tab}
-                custom={direction}
-                variants={pageVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-              >
+                  const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2.5 py-1.5 rounded-[12px] border-2 ${bc} text-xs font-black tracking-tight ${gl} ${tc} ${bg} backdrop-blur-md whitespace-nowrap shadow-xl">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent ${arrowBorder} drop-shadow-md -mt-[2px]"></div></div>`;
+                  
+                  return (
+                    <Marker
+                      key={s.id}
+                      position={[s.location.lat, s.location.lng]}
+                      icon={L.divIcon({ className: 'custom-div-icon', html: htmlStr, iconSize: [60, 40], iconAnchor: [30, 40] })}
+                      eventHandlers={{ click: () => setStationDetail(s) }}
+                    />
+                  );
+                })}
+              </MapContainer>
+            </motion.div>
+          ) : (
+            <motion.div
+              key={tab}
+              custom={direction}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <main className="max-w-md mx-auto px-4 pt-4 relative overflow-hidden">
                 {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0} onStationClick={setStationDetail}/>}
-                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={stations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail}/>}
+                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={activeStations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail}/>}
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
-                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab} stations={stations} selectedFuel={fuel} userLoc={userLoc}/>}
-              </motion.div>
-            </AnimatePresence>
-          </main>
-        )}
+                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab} stations={activeStations} selectedFuel={fuel} userLoc={userLoc}/>}
+              </main>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Tab Bar */}
-      <BottomNav activeTab={tab} onTabChange={handleTabChange} />
+      <BottomNav activeTab={tab} onTabChange={handleTabChange} visible={showBottomNav} />
 
       <FiltersModal show={showFilters} setShow={setShowFilters} selectedBrands={brands} setSelectedBrands={setBrands} selectedServices={services} setSelectedServices={setServices} h24={h24} setH24={setH24} noHighway={noHwy} setNoHighway={setNoHwy} hideAnomalies={hideAnom} setHideAnomalies={setHideAnom} radius={radius} setRadius={setRadius} brands={allBrands}/>
       <SettingsModal show={showSettings} setShow={setShowSettings} apiKey={apiKey} setApiKey={setApiKey} apiModel={apiModel} setApiModel={setApiModel}/>

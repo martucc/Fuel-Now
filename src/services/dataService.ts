@@ -1,4 +1,6 @@
 import type { FuelStation } from '../types';
+import { Preferences } from '@capacitor/preferences';
+
 
 export async function getStations(userLocation?: { lat: number; lng: number }): Promise<{ stations: FuelStation[]; nationalStats: any }> {
   try {
@@ -24,6 +26,13 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         } catch (cacheErr) {
           console.warn('Failed to save to Cache Storage:', cacheErr);
         }
+        try {
+          const text = await response.clone().text();
+          await Preferences.set({ key: 'mf_offline_stations_backup', value: text });
+          console.log('Saved secondary stations backup to Capacitor Preferences');
+        } catch (prefErr) {
+          console.warn('Failed to save to Capacitor Preferences:', prefErr);
+        }
       }
     } catch (e) {
       console.log('Fetching live data from GitHub failed, checking offline cache:', e);
@@ -39,6 +48,19 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         }
       } catch (cacheErr) {
         console.warn('Failed to retrieve from Cache Storage:', cacheErr);
+      }
+      
+      // Fallback a doppio livello: prova a caricare dalle preferenze persistenti
+      if (!response || !response.ok) {
+        try {
+          const backup = await Preferences.get({ key: 'mf_offline_stations_backup' });
+          if (backup && backup.value) {
+            console.log('Successfully retrieved stations.json from secondary Capacitor Preferences fallback!');
+            response = new Response(backup.value);
+          }
+        } catch (prefErr) {
+          console.warn('Failed to retrieve from Capacitor Preferences fallback:', prefErr);
+        }
       }
     }
 
@@ -119,8 +141,6 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
           if (communityBlocked.includes(String(s.id))) return false;
           if (!s.prices || s.prices.length === 0) return false;
           const lastUp = s.prices[0].lastUpdated;
-          if (!lastUp) return false;
-          
           const [datePart] = lastUp.split(' ');
           const [y, m, d] = datePart.split('-').map(Number);
           const upDate = new Date(y, m - 1, d);

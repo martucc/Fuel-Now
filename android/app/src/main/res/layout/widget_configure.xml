@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#050607"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- HEADER -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Martucc Fuel"
+            android:textColor="#3B82F6"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textAllCaps="true"
+            android:letterSpacing="0.1"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Personalizza Widget"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- CARD 1: STILE BACKGROUND -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#111827"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Sfondo Widget"
+                android:textColor="#94A3B8"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp" />
+
+            <RadioGroup
+                android:id="@+id/config_style_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/radio_style_oled"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="OLED Scuro (Nero assoluto)"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#3B82F6" />
+
+                <RadioButton
+                    android:id="@+id/radio_style_glass"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Effetto Vetro (Glassmorphic)"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#3B82F6" />
+
+                <RadioButton
+                    android:id="@+id/radio_style_transparent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Completamente Trasparente"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#3B82F6" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- CARD 2: TIPO DI CARBURANTE -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#111827"
+            android:padding="16dp"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Tipo di Carburante Preferito"
+                android:textColor="#94A3B8"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp" />
+
+            <RadioGroup
+                android:id="@+id/config_fuel_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/radio_fuel_benzina"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Benzina"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#22C55E" />
+
+                <RadioButton
+                    android:id="@+id/radio_fuel_diesel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Diesel"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#22C55E" />
+
+                <RadioButton
+                    android:id="@+id/radio_fuel_gpl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="GPL"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#22C55E" />
+
+                <RadioButton
+                    android:id="@+id/radio_fuel_metano"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Metano"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:padding="10dp"
+                    android:buttonTint="#22C55E" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- SAVE BUTTON -->
+        <Button
+            android:id="@+id/config_save_btn"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:text="Salva ed Applica"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:backgroundTint="#3B82F6"
+            android:layout_marginBottom="24dp" />
+
+    </LinearLayout>
+</ScrollView>

@@ -1,11 +1,14 @@
 import { motion } from "motion/react";
 import { Home, Map as MapIcon, Route, Car, Brain, Fuel } from "lucide-react";
+import { triggerHaptic } from "../lib/haptics";
+
 
 type Tab = "home" | "map" | "trip" | "veicolo" | "analysis" | "alerts" | "pieno";
 
 interface BottomNavProps {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
+  visible?: boolean;
 }
 
 const tabs = [
@@ -17,9 +20,17 @@ const tabs = [
   { id: "pieno" as const, icon: Fuel, label: "PIENO" },
 ];
 
-export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+export function BottomNav({ activeTab, onTabChange, visible = true }: BottomNavProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[1000] px-2 pb-2 pt-1 safe-bottom pointer-events-none">
+    <motion.div 
+      className="fixed bottom-0 left-0 right-0 z-[1000] px-2 pt-1 safe-bottom pointer-events-none" 
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+      animate={{
+        y: visible ? 0 : 120,
+        opacity: visible ? 1 : 0
+      }}
+      transition={{ type: "spring", stiffness: 260, damping: 30 }}
+    >
       {/* Gradient fade */}
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black via-black/80 to-transparent -z-10" />
       
@@ -36,7 +47,10 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           return (
             <motion.button
               key={tab.id}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => {
+                triggerHaptic('light');
+                onTabChange(tab.id);
+              }}
               className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-full transition-colors min-w-[50px] ${
                 isActive ? "text-blue-500" : "text-gray-500 hover:text-gray-300"
               }`}
@@ -74,6 +88,6 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           );
         })}
       </motion.nav>
-    </div>
+    </motion.div>
   );
 }

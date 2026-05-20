@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Martucc Fuel</string>
+    <string name="title_activity_main">Martucc Fuel</string>
+    <string name="package_name">com.martucc.fuel</string>
+    <string name="custom_url_scheme">com.martucc.fuel</string>
+</resources>
