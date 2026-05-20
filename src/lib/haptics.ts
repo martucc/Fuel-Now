@@ -12,22 +12,31 @@ export async function triggerHaptic(style: 'light' | 'medium' | 'heavy' | 'selec
     if (isCapacitorAvailable) {
       switch (style) {
         case 'light':
-          await Haptics.impact({ style: ImpactStyle.Light });
+        case 'selection':
+          try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+          try { await Haptics.vibrate({ duration: 15 }); } catch {}
           break;
         case 'medium':
-          await Haptics.impact({ style: ImpactStyle.Medium });
+          try { await Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
+          try { await Haptics.vibrate({ duration: 30 }); } catch {}
           break;
         case 'heavy':
-          await Haptics.impact({ style: ImpactStyle.Heavy });
-          break;
-        case 'selection':
-          await Haptics.selectionStart();
+          try { await Haptics.impact({ style: ImpactStyle.Heavy }); } catch {}
+          try { await Haptics.vibrate({ duration: 60 }); } catch {}
           break;
         case 'success':
-          await Haptics.notification({ type: 'SUCCESS' as any });
+          try { await Haptics.notification({ type: 'SUCCESS' as any }); } catch {}
+          try {
+            await Haptics.vibrate({ duration: 30 });
+            setTimeout(() => { Haptics.vibrate({ duration: 30 }).catch(() => {}); }, 80);
+          } catch {}
           break;
         case 'error':
-          await Haptics.notification({ type: 'ERROR' as any });
+          try { await Haptics.notification({ type: 'ERROR' as any }); } catch {}
+          try {
+            await Haptics.vibrate({ duration: 70 });
+            setTimeout(() => { Haptics.vibrate({ duration: 120 }).catch(() => {}); }, 120);
+          } catch {}
           break;
       }
     } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {

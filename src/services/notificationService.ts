@@ -84,6 +84,30 @@ export async function requestPermission(): Promise<NotificationPermission | 'uns
   }
 }
 
+export async function checkAndRequestStartupPermission() {
+  try {
+    let isDefault = false;
+    if (Capacitor.isNativePlatform()) {
+      const status = await LocalNotifications.checkPermissions();
+      isDefault = status.display === 'prompt' || status.display === 'prompt-with-rationale';
+    } else if (typeof Notification !== 'undefined') {
+      isDefault = Notification.permission === 'default';
+    }
+
+    if (isDefault) {
+      console.log('Attivazione del prompt dei permessi notifica all\'avvio...');
+      const res = await requestPermission();
+      if (res === 'granted') {
+        const currentPrefs = loadPrefs();
+        currentPrefs.enabled = true;
+        savePrefs(currentPrefs);
+      }
+    }
+  } catch (err) {
+    console.error('Error in checkAndRequestStartupPermission:', err);
+  }
+}
+
 async function show(title: string, body: string, tag?: string, icon?: string) {
   const ICON = icon || '/icon-192x192.png';
   if (Capacitor.isNativePlatform()) {

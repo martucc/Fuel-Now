@@ -19,7 +19,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
 import { VehicleTab } from './components/tabs/VehicleTab';
 import { PienoTab } from './components/tabs/PienoTab';
-import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines, checkBudget, permissionState, requestPermission, loadPrefs, savePrefs } from './services/notificationService';
+import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines, checkBudget, checkAndRequestStartupPermission } from './services/notificationService';
 import { BudgetCalcModal } from './components/BudgetCalcModal';
 import { InstallPwaButton } from './components/InstallPwaButton';
 import { StationHistoryModal } from './components/StationHistoryModal';
@@ -544,22 +544,10 @@ export default function App() {
       navigator.geolocation.getCurrentPosition(p => { const l={lat:p.coords.latitude,lng:p.coords.longitude}; setUserLoc(l); load(l); }, () => { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }, {enableHighAccuracy:true,timeout:10000});
     } else { const l={lat:45.4642,lng:9.19}; setUserLoc(l); load(l); }
     
-    // Prompt per permessi notifiche all'avvio se non ancora impostato
-    (async () => {
-      try {
-        const currentPerm = permissionState();
-        if (currentPerm === 'default') {
-          const res = await requestPermission();
-          if (res === 'granted') {
-            const currentPrefs = loadPrefs();
-            currentPrefs.enabled = true;
-            savePrefs(currentPrefs);
-          }
-        }
-      } catch (err) {
-        console.error('Error requesting startup notification permission:', err);
-      }
-    })();
+    // Prompt per permessi notifiche all'avvio dopo 3 secondi di attesa (per evitare conflitti con geolocalizzazione GPS)
+    setTimeout(() => {
+      checkAndRequestStartupPermission();
+    }, 3000);
 
     const sf = localStorage.getItem('mf_favs'); if (sf) setFavs(JSON.parse(sf));
     const sb = localStorage.getItem('mf_blocked'); if (sb) setBlockedIds(JSON.parse(sb));
