@@ -2,8 +2,23 @@ import type { FuelStation } from '../types';
 
 export async function getStations(userLocation?: { lat: number; lng: number }): Promise<{ stations: FuelStation[]; nationalStats: any }> {
   try {
-    const response = await fetch('stations.json');
-    if (!response.ok) throw new Error('Failed to fetch stations.json');
+    let response;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      response = await fetch('https://raw.githubusercontent.com/martucc/Fuel-Now/main/public/stations.json', {
+        signal: controller.signal,
+        cache: 'no-cache'
+      });
+      clearTimeout(timeoutId);
+    } catch (e) {
+      console.log('Fetching live data from GitHub failed, falling back to local stations.json:', e);
+    }
+
+    if (!response || !response.ok) {
+      response = await fetch('stations.json');
+      if (!response.ok) throw new Error('Failed to fetch stations.json');
+    }
     const data = await response.json();
 
     if (data.stations && Array.isArray(data.stations)) {

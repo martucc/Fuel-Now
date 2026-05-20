@@ -1,0 +1,38 @@
+name: Update Fuel Prices Daily
+
+on:
+  schedule:
+    # Runs at 06:00 and 15:00 UTC (08:00 and 17:00 Italian time) every day
+    - cron: '0 6,15 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run price fetcher script
+        run: python fetch_stations.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/stations.json data/history.csv
+          if git diff --staged --quiet; then
+            echo "No changes in prices today."
+          else
+            git commit -m "chore: auto-update fuel prices [skip ci]"
+            git push
+          fi
