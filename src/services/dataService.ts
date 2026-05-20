@@ -2,17 +2,44 @@ import type { FuelStation } from '../types';
 
 export async function getStations(userLocation?: { lat: number; lng: number }): Promise<{ stations: FuelStation[]; nationalStats: any }> {
   try {
+    const OFFLINE_CACHE_NAME = 'stations-offline-cache';
+    const GITHUB_URL = 'https://raw.githubusercontent.com/martucc/Fuel-Now/main/public/stations.json';
     let response;
+    let fetchedFromGithub = false;
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      response = await fetch('https://raw.githubusercontent.com/martucc/Fuel-Now/main/public/stations.json', {
+      response = await fetch(GITHUB_URL, {
         signal: controller.signal,
         cache: 'no-cache'
       });
       clearTimeout(timeoutId);
+
+      if (response && response.ok) {
+        fetchedFromGithub = true;
+        try {
+          const cache = await caches.open(OFFLINE_CACHE_NAME);
+          await cache.put(GITHUB_URL, response.clone());
+        } catch (cacheErr) {
+          console.warn('Failed to save to Cache Storage:', cacheErr);
+        }
+      }
     } catch (e) {
-      console.log('Fetching live data from GitHub failed, falling back to local stations.json:', e);
+      console.log('Fetching live data from GitHub failed, checking offline cache:', e);
+    }
+
+    if (!fetchedFromGithub) {
+      try {
+        const cache = await caches.open(OFFLINE_CACHE_NAME);
+        const cachedResponse = await cache.match(GITHUB_URL);
+        if (cachedResponse && cachedResponse.ok) {
+          console.log('Successfully retrieved fresh daily stations.json from offline Cache Storage!');
+          response = cachedResponse;
+        }
+      } catch (cacheErr) {
+        console.warn('Failed to retrieve from Cache Storage:', cacheErr);
+      }
     }
 
     if (!response || !response.ok) {
@@ -71,7 +98,7 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         if (cbRes.ok) communityBlocked = await cbRes.json();
       } catch {}
 
-      parsedStations = parsedStations.filter((s: any) => {
+      let finalStations = parsedStations.filter((s: any) => {
         if (communityBlocked.includes(String(s.id))) return false;
         if (!s.prices || s.prices.length === 0) return false;
         const lastUp = s.prices[0].lastUpdated;
@@ -85,6 +112,25 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         
         return diffDays < 7; // Ignore if older than 7 days
       });
+
+      if (finalStations.length === 0) {
+        console.log('No stations found within 7 days. Relaxing filter to 30 days to avoid blank screen.');
+        finalStations = parsedStations.filter((s: any) => {
+          if (communityBlocked.includes(String(s.id))) return false;
+          if (!s.prices || s.prices.length === 0) return false;
+          const lastUp = s.prices[0].lastUpdated;
+          if (!lastUp) return false;
+          
+          const [datePart] = lastUp.split(' ');
+          const [y, m, d] = datePart.split('-').map(Number);
+          const upDate = new Date(y, m - 1, d);
+          const diffDays = (now.getTime() - upDate.getTime()) / (1000 * 60 * 60 * 24);
+          
+          return diffDays < 30;
+        });
+      }
+
+      parsedStations = finalStations;
 
       if (userLocation) {
         parsedStations = parsedStations.filter(

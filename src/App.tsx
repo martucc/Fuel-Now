@@ -214,13 +214,30 @@ export default function App() {
     }
 
     setAnalysisLoading(true);
+    let activeSrc = src;
     try {
-      const mStats = calculateMarketStats(src, f);
+      if (force && !q) {
+        try {
+          console.log('Force-refreshing stations from github raw before regenerating analysis...');
+          const loc = userLoc || { lat: 45.4642, lng: 9.19 };
+          const { stations: d, nationalStats: ns } = await getStations(loc);
+          if (d && d.length > 0) {
+            setStations(d);
+            setNationalStats(ns);
+            localStorage.setItem('mf_last_fetch_time', String(Date.now()));
+            activeSrc = d;
+          }
+        } catch (e) {
+          console.error('Failed to force-refresh stations during manual refresh:', e);
+        }
+      }
+
+      const mStats = calculateMarketStats(activeSrc, f);
       const lCtx = `Media: €${mStats.average}, Minimo: €${mStats.min}, Spread: €${mStats.spread}`;
 
       let analysis: MarketAnalysis;
       if (!hasKey) {
-        analysis = buildLocalMarketAnalysis(f, src, q);
+        analysis = buildLocalMarketAnalysis(f, activeSrc, q);
         setAiErr(null);
       } else {
         // grounding: passa al modello la storia reale e le news fresche
@@ -249,7 +266,7 @@ export default function App() {
         setAiErr(e.message === 'MISSING_KEY' ? null : 'Gemini non disponibile. Riprova oppure controlla la API key.');
       } else {
         // No API key: usa l'analisi locale come prima
-        const fallback = buildLocalMarketAnalysis(f, src, q);
+        const fallback = buildLocalMarketAnalysis(f, activeSrc, q);
         setMarketAnalyses(pr => ({ ...pr, [f]: { ...fallback, source: 'local' } }));
         setAiErr(null);
       }
@@ -270,6 +287,7 @@ export default function App() {
         const {stations: d, nationalStats: ns} = await getStations(loc); 
         setStations(d); 
         setNationalStats(ns); 
+        localStorage.setItem('mf_last_fetch_time', String(Date.now()));
         // Set loading false as soon as stations are ready to show UI quickly
         setLoading(false);
         initDone.current=true;
@@ -289,6 +307,48 @@ export default function App() {
     const sb = localStorage.getItem('mf_blocked'); if (sb) setBlockedIds(JSON.parse(sb));
     const sa = localStorage.getItem('mf_alerts'); if (sa) setAlerts(JSON.parse(sa));
   }, []);
+
+  // Auto-refresh prices periodically and on resume/foreground
+  useEffect(() => {
+    const checkAndRefresh = async () => {
+      if (!initDone.current || !userLoc) return;
+      const lastFetch = localStorage.getItem('mf_last_fetch_time');
+      const now = Date.now();
+      const sixHours = 6 * 60 * 60 * 1000;
+      
+      if (!lastFetch || (now - Number(lastFetch)) > sixHours) {
+        console.log('Background auto-refreshing prices (6h elapsed)...');
+        try {
+          const { stations: d, nationalStats: ns } = await getStations(userLoc);
+          if (d && d.length > 0) {
+            setStations(d);
+            setNationalStats(ns);
+            localStorage.setItem('mf_last_fetch_time', String(Date.now()));
+            // Silently fetch analysis for current fuel
+            fetchAnalysis(fuel, true, undefined, d);
+          }
+        } catch (e) {
+          console.error('Background auto-refresh failed:', e);
+        }
+      }
+    };
+
+    // On resume (foreground visibility)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndRefresh();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    // Also check every 5 minutes in case the app is kept open
+    const interval = setInterval(checkAndRefresh, 5 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(interval);
+    };
+  }, [userLoc, fuel]);
 
   useEffect(() => { localStorage.setItem('mf_favs', JSON.stringify(favs)); }, [favs]);
   useEffect(() => { localStorage.setItem('mf_blocked', JSON.stringify(blockedIds)); }, [blockedIds]);
