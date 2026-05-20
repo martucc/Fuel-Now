@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Preferences } from '@capacitor/preferences';
-import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator, Layers, MapPinned } from 'lucide-react';
+import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator, Layers, MapPinned, Moon, Sun } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import { getStations } from './services/dataService';
@@ -92,6 +92,19 @@ function HeatmapToggle({ active, onToggle }: { active: boolean; onToggle: () => 
       aria-label="Toggle heatmap"
     >
       {active ? <MapPinned size={20} /> : <Layers size={20} />}
+    </button>
+  );
+}
+
+function MapStyleToggle({ style, onToggle }: { style: 'dark' | 'voyager'; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="absolute top-20 right-4 z-[500] w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-all border bg-black/85 text-white border-white/15 backdrop-blur-md hover:bg-black/95"
+      title={style === 'dark' ? 'Vista chiara' : 'Vista scura'}
+      aria-label="Toggle map style"
+    >
+      {style === 'dark' ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-blue-400" />}
     </button>
   );
 }
@@ -355,6 +368,8 @@ export default function App() {
   const [direction, setDirection] = useState(0);
   const [showSplash, setShowSplash] = useState(true);
   const [mapZoom, setMapZoom] = useState(13);
+  const [mapStyle, setMapStyle] = useState<'dark' | 'voyager'>(() => (localStorage.getItem('mf_map_style') as 'dark' | 'voyager') || 'dark');
+  useEffect(() => { localStorage.setItem('mf_map_style', mapStyle); }, [mapStyle]);
   const [aiAnswer, setAiAnswer] = useState<{ question: string; answer: string; ts: number; source: 'ai' | 'local' } | null>(null);
   const [driveMode] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -846,10 +861,11 @@ export default function App() {
               style={{ top: 'calc(env(safe-area-inset-top) + 80px)', bottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}
             >
               <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
+                <TileLayer url={mapStyle === 'dark' ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
                 <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} />
                 <CenterBtn loc={userLoc} />
                 <HeatmapToggle active={heatmapOn} onToggle={() => setHeatmapOn(v => !v)} />
+                <MapStyleToggle style={mapStyle} onToggle={() => setMapStyle(s => s === 'dark' ? 'voyager' : 'dark')} />
                 {userLoc && (
                   <>
                     <Marker 
@@ -927,7 +943,7 @@ export default function App() {
             >
               <main className="max-w-md mx-auto px-4 pt-4 relative overflow-hidden">
                 {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0} onStationClick={setStationDetail}/>}
-                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={activeStations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail}/>}
+                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={activeStations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail} mapStyle={mapStyle}/>}
                 {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
                 {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}

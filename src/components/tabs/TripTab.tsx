@@ -68,6 +68,7 @@ interface Props {
   setTripToll: (v: boolean) => void;
   tripNearby?: any[];
   onStationClick?: (s: FuelStation) => void;
+  mapStyle?: 'dark' | 'voyager';
 }
 
 const STRATEGIES = [
@@ -395,7 +396,7 @@ export function TripTab(p: Props) {
                   scrollWheelZoom={true}
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    url={p.mapStyle === 'voyager' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"}
                     attribution=""
                   />
                   <FitBounds bounds={bounds} />
