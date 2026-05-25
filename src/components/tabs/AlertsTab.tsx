@@ -50,7 +50,7 @@ export function AlertsTab({ selectedFuel, alerts, setAlerts }: Props) {
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
-        LocalNotifications.checkPermissions().then(status => {
+        LocalNotifications.checkPermissions().then((status: any) => {
           const result = status.display === 'granted' ? 'granted' : 'denied';
           localStorage.setItem('mf_native_notif_perm', result);
           setPerm(result);

@@ -6,13 +6,15 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
   try {
     const OFFLINE_CACHE_NAME = 'stations-offline-cache';
     const GITHUB_URL = 'https://raw.githubusercontent.com/martucc/Fuel-Now/main/public/stations.json';
+    const cacheBust = Math.floor(Date.now() / 3600000); // Hourly cache bust to bypass CDN & browser cache
+    const FETCH_URL = `${GITHUB_URL}?t=${cacheBust}`;
     let response;
     let fetchedFromGithub = false;
 
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      response = await fetch(GITHUB_URL, {
+      response = await fetch(FETCH_URL, {
         signal: controller.signal,
         cache: 'no-cache'
       });
@@ -22,6 +24,7 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
         fetchedFromGithub = true;
         try {
           const cache = await caches.open(OFFLINE_CACHE_NAME);
+          // Store under static clean URL for offline retrieval
           await cache.put(GITHUB_URL, response.clone());
         } catch (cacheErr) {
           console.warn('Failed to save to Cache Storage:', cacheErr);

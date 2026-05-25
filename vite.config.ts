@@ -86,7 +86,7 @@ export default defineConfig({
         globIgnores: ['stations.json'],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => ['/stations.json'].some(path => url.pathname.endsWith(path)),
+            urlPattern: ({ url }) => !url.href.includes('raw.githubusercontent') && url.pathname.endsWith('/stations.json'),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'stations-data',

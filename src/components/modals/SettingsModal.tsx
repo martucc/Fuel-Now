@@ -24,10 +24,10 @@ export function SettingsModal(p: Props) {
 
   useEffect(() => {
     if (p.show) {
-      Preferences.get({ key: 'mf_widget_map_zoom' }).then((res) => {
+      Preferences.get({ key: 'mf_widget_map_zoom' }).then((res: any) => {
         if (res.value) setZoom(parseInt(res.value) || 14);
       });
-      Preferences.get({ key: 'mf_haptics_disabled' }).then((res) => {
+      Preferences.get({ key: 'mf_haptics_disabled' }).then((res: any) => {
         setHapticsDisabled(res.value === 'true');
       });
     }
