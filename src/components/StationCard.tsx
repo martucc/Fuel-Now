@@ -20,6 +20,9 @@ export function StationCard({ station, fuelType, index, isAnomalous, tankLiters,
   const fullTankCost = price > 0 ? (price * tankLiters).toFixed(0) : '-';
   const logo = getBrandLogo(station.brand || station.name || '');
 
+  const lastUp = priceObj?.lastUpdated;
+  const formattedDate = lastUp ? lastUp.split(' ')[0].split('-').slice(1).reverse().join('/') : '';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -75,7 +78,7 @@ export function StationCard({ station, fuelType, index, isAnomalous, tankLiters,
           {station.city || station.name}
         </h4>
         <p className={cn('text-[11px] font-medium mt-0.5 truncate', isBest && !isAnomalous ? 'text-blue-300/70' : 'text-[#8e8e93]')}>
-          {station.brand} &bull; {station.distance || '0.5'} km &bull; {station.address}
+          {station.brand} &bull; {station.distance || '0.5'} km &bull; {station.address} {formattedDate && `• ${formattedDate}`}
         </p>
       </div>
 

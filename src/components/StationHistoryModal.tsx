@@ -17,6 +17,16 @@ const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
 };
+const formatLastUpdated = (lastUp?: string) => {
+  if (!lastUp) return '';
+  try {
+    const [datePart, timePart] = lastUp.split(' ');
+    const [y, m, d] = datePart.split('-');
+    return `${d}/${m}/${y} alle ${timePart}`;
+  } catch {
+    return lastUp;
+  }
+};
 
 export function StationHistoryModal({ station, fuel, onClose, onBlock }: Props) {
   const [activeFuel, setActiveFuel] = useState<FuelType>(fuel);
@@ -28,7 +38,9 @@ export function StationHistoryModal({ station, fuel, onClose, onBlock }: Props) 
     [station, activeFuel]
   );
 
-  const currentPrice = station?.prices.find(p => p.type === activeFuel)?.price || 0;
+  const priceObj = station?.prices.find(p => p.type === activeFuel);
+  const currentPrice = priceObj?.price || 0;
+  const lastUpdated = priceObj?.lastUpdated;
 
   return (
     <AnimatePresence>
@@ -94,7 +106,15 @@ export function StationHistoryModal({ station, fuel, onClose, onBlock }: Props) 
                     <div className="text-4xl sm:text-5xl font-black italic text-white tracking-tighter tabular-nums">
                       {currentPrice > 0 ? fmt3(currentPrice) : '—'}
                     </div>
-                    <div className="text-[11px] font-bold text-[#8e8e93] uppercase tracking-widest mt-1">{activeFuel} · €/L</div>
+                    <div className="text-[11px] font-bold text-[#8e8e93] uppercase tracking-widest mt-1">
+                      {activeFuel} · €/L
+                    </div>
+                    {lastUpdated && (
+                      <div className="text-[10px] font-bold text-blue-400/80 uppercase tracking-widest mt-2 flex items-center gap-1.5">
+                        <Clock size={11} className="text-blue-400/70" />
+                        <span>Rilevato: {formatLastUpdated(lastUpdated)}</span>
+                      </div>
+                    )}
                   </div>
                   {view && view.pointCount >= 2 && (
                     <div className={`flex flex-col items-end gap-0.5 ${view.deltaPct < 0 ? 'text-emerald-400' : view.deltaPct > 0 ? 'text-red-400' : 'text-[#8e8e93]'}`}>
