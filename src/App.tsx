@@ -66,10 +66,23 @@ const pageVariants = {
   }),
 };
 
-function MapUpdater({ onMove, onZoom }: { onMove: (c: { lat: number; lng: number }) => void; onZoom?: (z: number) => void }) {
+function MapUpdater({ onMove, onZoom, onBoundsChange }: { onMove: (c: { lat: number; lng: number }) => void; onZoom?: (z: number) => void; onBoundsChange?: (b: L.LatLngBounds) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onBoundsChange?.(map.getBounds());
+  }, [map]);
+
   useMapEvents({
-    moveend: (e: any) => { const c = e.target.getCenter(); onMove({ lat: c.lat, lng: c.lng }); onZoom?.(e.target.getZoom()); },
-    zoomend: (e: any) => { onZoom?.(e.target.getZoom()); },
+    moveend: (e: any) => { 
+      const c = e.target.getCenter(); 
+      onMove({ lat: c.lat, lng: c.lng }); 
+      onZoom?.(e.target.getZoom()); 
+      onBoundsChange?.(e.target.getBounds());
+    },
+    zoomend: (e: any) => { 
+      onZoom?.(e.target.getZoom()); 
+      onBoundsChange?.(e.target.getBounds());
+    },
   });
   return null;
 }
@@ -368,6 +381,7 @@ export default function App() {
   const [direction, setDirection] = useState(0);
   const [showSplash, setShowSplash] = useState(true);
   const [mapZoom, setMapZoom] = useState(13);
+  const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
   const [mapStyle, setMapStyle] = useState<'dark' | 'voyager'>(() => (localStorage.getItem('mf_map_style') as 'dark' | 'voyager') || 'dark');
   useEffect(() => { localStorage.setItem('mf_map_style', mapStyle); }, [mapStyle]);
   const [aiAnswer, setAiAnswer] = useState<{ question: string; answer: string; ts: number; source: 'ai' | 'local' } | null>(null);
@@ -476,7 +490,7 @@ export default function App() {
         try {
           console.log('Force-refreshing stations from github raw before regenerating analysis...');
           const loc = userLoc || { lat: 45.4642, lng: 9.19 };
-          const { stations: d, nationalStats: ns } = await getStations(loc);
+          const { stations: d, nationalStats: ns } = await getStations(loc, true);
           if (d && d.length > 0) {
             setStations(d);
             setNationalStats(ns);
@@ -580,7 +594,7 @@ export default function App() {
       if (!lastFetch || (now - Number(lastFetch)) > sixHours) {
         console.log('Background auto-refreshing prices (6h elapsed)...');
         try {
-          const { stations: d, nationalStats: ns } = await getStations(userLoc);
+          const { stations: d, nationalStats: ns } = await getStations(userLoc, true);
           if (d && d.length > 0) {
             setStations(d);
             setNationalStats(ns);
@@ -794,8 +808,23 @@ export default function App() {
   const tTone = marketRef?.trend==='DOWN' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : marketRef?.trend==='UP' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
   const allBrands = [...new Set(stations.map(s=>s.brand))].filter(Boolean).sort();
   // Declutter mappa: meno zoom -> meno marker, sempre i piu economici
-  const zoomLimit = mapZoom >= 15 ? 250 : mapZoom >= 13 ? 80 : mapZoom >= 11 ? 25 : mapZoom >= 9 ? 8 : mapZoom >= 7 ? 4 : mapZoom >= 5 ? 2 : 1;
-  const mapSt = filtered.slice(0, zoomLimit);
+  const zoomLimit = mapZoom >= 15 ? 150 : mapZoom >= 13 ? 80 : mapZoom >= 11 ? 25 : mapZoom >= 9 ? 8 : mapZoom >= 7 ? 4 : mapZoom >= 5 ? 2 : 1;
+  
+  const visibleStations = filtered.filter(s => {
+    if (!mapBounds) return true;
+    const sw = mapBounds.getSouthWest();
+    const ne = mapBounds.getNorthEast();
+    
+    const latPad = (ne.lat - sw.lat) * 0.1;
+    const lngPad = (ne.lng - sw.lng) * 0.1;
+    
+    return s.location.lat >= sw.lat - latPad &&
+           s.location.lat <= ne.lat + latPad &&
+           s.location.lng >= sw.lng - lngPad &&
+           s.location.lng <= ne.lng + lngPad;
+  });
+
+  const mapSt = visibleStations.slice(0, zoomLimit);
 
   // @ts-ignore - tabs is intended for future menu expansions or logging
   const tabs: {id:TabType;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'pieno',icon:Target,label:'Pieno'}];
@@ -862,7 +891,7 @@ export default function App() {
             >
               <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
                 <TileLayer url={mapStyle === 'dark' ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
-                <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} />
+                <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} onBoundsChange={setMapBounds} />
                 <CenterBtn loc={userLoc} />
                 <HeatmapToggle active={heatmapOn} onToggle={() => setHeatmapOn(v => !v)} />
                 <MapStyleToggle style={mapStyle} onToggle={() => setMapStyle(s => s === 'dark' ? 'voyager' : 'dark')} />

@@ -1,8 +1,45 @@
 import type { FuelStation } from '../types';
 import { Preferences } from '@capacitor/preferences';
 
+let inMemoryStations: any[] = [];
+let inMemoryNationalStats: any = {};
+let isInMemoryLoaded = false;
 
-export async function getStations(userLocation?: { lat: number; lng: number }): Promise<{ stations: FuelStation[]; nationalStats: any }> {
+export async function getStations(
+  userLocation?: { lat: number; lng: number },
+  forceRefresh = false
+): Promise<{ stations: FuelStation[]; nationalStats: any }> {
+  if (isInMemoryLoaded && !forceRefresh) {
+    let resultStations = inMemoryStations;
+    if (userLocation) {
+      // 1. Fast bounding box filter: ~66km lat, ~65-90km lng
+      const bboxLat = 0.6;
+      const bboxLng = 0.8;
+      const candidates = resultStations.filter(
+        (s: any) => Math.abs(s.location.lat - userLocation.lat) < bboxLat &&
+                   Math.abs(s.location.lng - userLocation.lng) < bboxLng
+      );
+      
+      // 2. Precise distance mapping
+      resultStations = candidates.map((s: any) => ({
+        ...s,
+        distance: calculateDistance(userLocation.lat, userLocation.lng, s.location.lat, s.location.lng)
+      }));
+
+      // 3. Filter distance < 50km and sort
+      resultStations = resultStations.filter(
+        (s: FuelStation) => s.distance !== undefined && s.distance < 50
+      );
+      resultStations.sort(
+        (a: FuelStation, b: FuelStation) => (a.distance || 0) - (b.distance || 0)
+      );
+    }
+    return {
+      stations: resultStations,
+      nationalStats: inMemoryNationalStats
+    };
+  }
+
   try {
     const OFFLINE_CACHE_NAME = 'stations-offline-cache';
     const GITHUB_URL = 'https://raw.githubusercontent.com/martucc/Fuel-Now/main/public/stations.json';
@@ -155,6 +192,11 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
 
       parsedStations = finalStations;
 
+      // Cache the full valid parsed stations and stats in memory
+      inMemoryStations = parsedStations;
+      inMemoryNationalStats = data.national || {};
+      isInMemoryLoaded = true;
+
       if (userLocation) {
         parsedStations = parsedStations.filter(
           (s: FuelStation) => s.distance !== undefined && s.distance < 50
@@ -166,7 +208,7 @@ export async function getStations(userLocation?: { lat: number; lng: number }): 
 
       return {
         stations: parsedStations,
-        nationalStats: data.national || {}
+        nationalStats: inMemoryNationalStats
       };
     }
   } catch (error) {
