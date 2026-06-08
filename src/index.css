@@ -184,10 +184,12 @@ html, body {
 .custom-div-icon {
   background: none !important;
   border: none !important;
+  will-change: transform;
 }
 .user-location-div-icon {
   background: none !important;
   border: none !important;
+  will-change: transform;
 }
 
 /* Range input accent */
@@ -196,11 +198,12 @@ input[type="range"] {
 }
 
 .marker-pop {
-  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* Removed transition to avoid lag/wobble during Leaflet map panning */
+  will-change: transform;
 }
 
 .marker-pop:hover {
-  transform: scale(1.2) translateY(-5px) !important;
+  transform: scale(1.08) translateY(-2px) !important;
   z-index: 9999 !important;
 }
 

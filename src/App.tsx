@@ -889,7 +889,7 @@ export default function App() {
               className="fixed inset-0 z-[10]"
               style={{ top: 'calc(env(safe-area-inset-top) + 80px)', bottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}
             >
-              <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true}>
+              <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true} preferCanvas={true}>
                 <TileLayer url={mapStyle === 'dark' ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
                 <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} onBoundsChange={setMapBounds} />
                 <CenterBtn loc={userLoc} />
@@ -946,9 +946,16 @@ export default function App() {
                   }
 
                   const logo = getBrandLogo(s.brand || s.name || '');
-                  const markerLogoHtml = `<div class="absolute -top-6 -right-3 w-8 h-8 rounded-full bg-black border border-white/20 flex items-center justify-center overflow-hidden shadow-lg z-[100] grayscale-0"><img src="${logo}" class="w-full h-full object-contain scale-[0.9]" /></div>`;
+                  const showLogo = mapZoom >= 15;
+                  const markerLogoHtml = showLogo 
+                    ? `<div class="absolute -top-6 -right-3 w-8 h-8 rounded-full bg-black border border-white/20 flex items-center justify-center overflow-hidden shadow-md z-[100] grayscale-0"><img src="${logo}" class="w-full h-full object-contain scale-[0.9]" loading="lazy" /></div>`
+                    : '';
 
-                  const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2.5 py-1.5 rounded-[12px] border-2 ${bc} text-xs font-black tracking-tight ${gl} ${tc} ${bg} backdrop-blur-md whitespace-nowrap shadow-xl">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent ${arrowBorder} drop-shadow-md -mt-[2px]"></div></div>`;
+                  const shadowClass = best 
+                    ? 'shadow-[0_0_15px_rgba(59,130,246,0.6)]' 
+                    : 'shadow-md';
+
+                  const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2 py-1 rounded-[10px] border-2 ${bc} text-[11px] font-black tracking-tight ${gl} ${tc} ${bg} whitespace-nowrap ${shadowClass}">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-transparent ${arrowBorder} -mt-[1px]"></div></div>`;
                   
                   return (
                     <Marker

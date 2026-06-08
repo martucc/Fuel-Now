@@ -394,6 +394,7 @@ export function TripTab(p: Props) {
                   className="h-full w-full"
                   zoomControl={false}
                   scrollWheelZoom={true}
+                  preferCanvas={true}
                 >
                   <TileLayer
                     url={p.mapStyle === 'voyager' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"}
