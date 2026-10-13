@@ -152,7 +152,6 @@ export function netSaving(i: NetInput): NetBreakdown {
 
   const gross = ((rif ? rif.price : i.cohortAvg) - i.price) * i.liters;
 
-  let roadFuelCost: number;
   let detourFriction = 0;
 
   let kmStrada: number;
@@ -166,7 +165,7 @@ export function netSaving(i: NetInput): NetBreakdown {
   } else {
     kmStrada = 2 * i.distanceKm * FATTORE_STRADA;
   }
-  roadFuelCost = (kmStrada / kml) * i.price;
+  const roadFuelCost = (kmStrada / kml) * i.price;
 
   const highwayFriction = i.isHighway
     ? (MINUTI_USCITA_AUTOSTRADA / 60) * VALORE_TEMPO_EURO_ORA

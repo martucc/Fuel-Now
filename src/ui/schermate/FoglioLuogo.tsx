@@ -20,11 +20,7 @@ export function FoglioLuogo({ titolo, conPosizione, onScegli, onChiudi }: Props)
   const [stato, setStato] = useState<'fermo' | 'cerco' | 'errore'>('fermo');
 
   useEffect(() => {
-    if (testo.trim().length < 3) {
-      setRisultati([]);
-      setStato('fermo');
-      return;
-    }
+    if (testo.trim().length < 3) return;
     const ctrl = new AbortController();
     // Si cerca quando l'utente si ferma: Nominatim non vuole una richiesta per lettera.
     const t = setTimeout(() => {
@@ -44,7 +40,13 @@ export function FoglioLuogo({ titolo, conPosizione, onScegli, onChiudi }: Props)
           <input
             autoFocus
             value={testo}
-            onChange={(e) => setTesto(e.target.value)}
+            onChange={(e) => {
+              setTesto(e.target.value);
+              if (e.target.value.trim().length < 3) {
+                setRisultati([]);
+                setStato('fermo');
+              }
+            }}
             placeholder="Città, paese o indirizzo"
             className="mf-body h-full min-w-0 flex-1 bg-transparent text-mf-ink outline-none placeholder:text-mf-ink-3"
             autoComplete="off"

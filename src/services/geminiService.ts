@@ -32,8 +32,8 @@ export const MESSAGGIO_ERRORE: Record<CodiceErroreIa, string> = {
   UNKNOWN: 'Gemini non è disponibile in questo momento.',
 };
 
-function classifica(e: any): CodiceErroreIa {
-  const testo = String(e?.message || e || '').toLowerCase();
+function classifica(e: unknown): CodiceErroreIa {
+  const testo = String((e instanceof Error ? e.message : e) || '').toLowerCase();
   if (testo.includes('api key') || testo.includes('api_key') || testo.includes('permission') || testo.includes('401') || testo.includes('403')) return 'BAD_KEY';
   if (testo.includes('quota') || testo.includes('resource_exhausted') || testo.includes('429')) return 'QUOTA';
   if (testo.includes('fetch') || testo.includes('network') || testo.includes('failed to fetch')) return 'NETWORK';
@@ -171,17 +171,17 @@ export async function analyzeFuelMarket(
       responseSchema: SCHEMA_RISPOSTA,
       temperature: question ? 0.4 : 0.7,
     },
-  } as any);
+  });
 
-  let response: any;
+  let response: { text?: string } | undefined;
   try {
-    response = await Promise.race([
+    response = await Promise.race<{ text?: string }>([
       richiesta,
       new Promise((_, rifiuta) =>
         setTimeout(() => rifiuta(new ErroreIa('TIMEOUT', MESSAGGIO_ERRORE.TIMEOUT)), TIMEOUT_MS)
       ),
     ]);
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e instanceof ErroreIa) throw e;
     const codice = classifica(e);
     throw new ErroreIa(codice, MESSAGGIO_ERRORE[codice]);
@@ -189,13 +189,13 @@ export async function analyzeFuelMarket(
 
   const testo = (response?.text || '').trim();
   const parsed = estraiJson(testo);
-  if (!parsed) throw new ErroreIa('PARSE', MESSAGGIO_ERRORE.PARSE);
+  if (!parsed || typeof parsed !== 'object') throw new ErroreIa('PARSE', MESSAGGIO_ERRORE.PARSE);
 
   return normalizza(parsed);
 }
 
 /** Con responseSchema il testo e gia JSON; il resto e rete di sicurezza. */
-export function estraiJson(testo: string): any | null {
+export function estraiJson(testo: string): unknown {
   if (!testo) return null;
   const candidati = [testo];
   const dentroBacktick = testo.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -214,7 +214,7 @@ export function estraiJson(testo: string): any | null {
   return null;
 }
 
-export function normalizza(parsed: any): MarketAnalysis {
+export function normalizza(parsed: unknown): MarketAnalysis {
   const analisi = parsed as MarketAnalysis;
   if (!Array.isArray(analisi.categories)) analisi.categories = [];
   if (!Array.isArray(analisi.tips)) analisi.tips = [];
@@ -241,18 +241,18 @@ export async function provaChiave(apiKey: string, model: string): Promise<{ ok: 
   try {
     const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey });
-    const risposta: any = await Promise.race([
+    const risposta = await Promise.race<{ text?: string }>([
       ai.models.generateContent({
         model: model || 'gemini-2.5-flash',
         contents: 'Rispondi solo con: ok',
-      } as any),
+      }),
       new Promise((_, rifiuta) => setTimeout(() => rifiuta(new ErroreIa('TIMEOUT', MESSAGGIO_ERRORE.TIMEOUT)), 12_000)),
     ]);
     if (!risposta?.text) {
       return { ok: false, codice: 'UNKNOWN', messaggio: MESSAGGIO_ERRORE.UNKNOWN };
     }
     return { ok: true };
-  } catch (e: any) {
+  } catch (e: unknown) {
     const codice = e instanceof ErroreIa ? e.codice : classifica(e);
     return { ok: false, codice, messaggio: MESSAGGIO_ERRORE[codice] };
   }
