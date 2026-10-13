@@ -13,7 +13,7 @@ const SCHEDE: Array<{ id: Scheda; etichetta: string; icona: LucideIcon }> = [
 
 /**
  * La barra delle schede, come su iOS: quattro voci, icona e parola, la
- * scheda attiva in blu. Fondo quasi pieno invece del vetro sfocato: la
+ * scheda attiva in bianco (il blu e solo per «vai qui»). Fondo quasi pieno invece del vetro sfocato: la
  * sfocatura sopra una mappa WebGL costa fotogrammi su Android.
  */
 export function BarraSchede({ attiva, onCambia }: { attiva: Scheda; onCambia: (s: Scheda) => void }) {
@@ -35,10 +35,10 @@ export function BarraSchede({ attiva, onCambia }: { attiva: Scheda; onCambia: (s
                 if (!attivo) void triggerHaptic('selection');
                 onCambia(id);
               }}
-              className={`flex flex-1 flex-col items-center justify-center gap-[3px] transition-colors ${attivo ? 'text-mf-accent' : 'text-mf-ink-3'}`}
+              className={`flex flex-1 flex-col items-center justify-center gap-[3px] transition-colors ${attivo ? 'text-mf-ink' : 'text-mf-ink-2'}`}
             >
               <Icona size={23} strokeWidth={attivo ? 2.3 : 1.9} aria-hidden />
-              <span className="text-[10.5px] font-medium tracking-[0.01em]">{etichetta}</span>
+              <span className="text-[11px] font-medium">{etichetta}</span>
             </button>
           );
         })}

@@ -69,9 +69,9 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
 
       <div className="overflow-hidden rounded-mf-md bg-mf-surface-2">
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-5 border-b border-mf-hairline px-4 py-2">
-          <span className="mf-caption uppercase tracking-[0.05em] text-mf-ink-3">Carburante</span>
-          <span className="mf-caption w-[72px] text-right uppercase tracking-[0.05em] text-mf-ink-3">Self</span>
-          <span className="mf-caption w-[72px] text-right uppercase tracking-[0.05em] text-mf-ink-3">Servito</span>
+          <span className="mf-caption text-mf-ink-2">Carburante</span>
+          <span className="mf-caption w-[72px] text-right text-mf-ink-2">Self</span>
+          <span className="mf-caption w-[72px] text-right text-mf-ink-2">Servito</span>
         </div>
         {carburanti.map((k) => {
           const self = r.prices[k];
@@ -99,7 +99,7 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
         })}
       </div>
 
-      <p className="mf-footnote mt-3 text-mf-ink-3">
+      <p className="mf-footnote mt-3 text-mf-ink-2">
         Il colore dice com’è il prezzo rispetto agli altri distributori della provincia{r.isHighway ? ' in autostrada' : ''}.
       </p>
 
@@ -115,7 +115,7 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
         >
           {nascosto ? 'Mostra di nuovo nei risultati' : 'Nascondi dai risultati'}
         </Pulsante>
-        <p className="mf-caption mt-2 px-1 text-mf-ink-3">
+        <p className="mf-caption mt-2 px-1 text-mf-ink-2">
           Per un distributore chiuso o con prezzi sbagliati: non verrà più consigliato.
         </p>
       </div>

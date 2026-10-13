@@ -45,7 +45,7 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
           nota={`Per il risparmio vero: un pieno da ${numero(m.litri, 0)} L e ${numero(m.kml, 1)} km con un litro.`}
         >
           <Riga
-            icona={<Car size={20} className="text-mf-accent" />}
+            icona={<Car size={20} className="text-mf-ink-2" />}
             titolo={m.auto ? m.auto.model : 'Nessuna auto scelta'}
             sottotitolo={m.auto ? `Serbatoio ${m.auto.liters} L · ${numero(m.auto.kml, 1)} km/L` : 'Uso i valori medi: scegli la tua per conti giusti'}
             freccia
@@ -55,7 +55,7 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
 
         <Gruppo titolo="Analisi dei prezzi" nota="La chiave resta sul telefono e serve solo per il commento dell’IA nella scheda Prezzi.">
           <Riga
-            icona={<Sparkles size={20} className="text-mf-accent" />}
+            icona={<Sparkles size={20} className="text-mf-ink-2" />}
             titolo="Google Gemini"
             valore={m.impostazioni.chiaveGemini ? 'Attiva' : 'Non attiva'}
             freccia
@@ -67,17 +67,17 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
           {m.posizione.fase === 'manuale' ? (
             <>
               <Riga icona={<MapPin size={20} className="text-mf-ink-2" />} titolo={m.posizione.luogo ?? 'Luogo scelto'} sottotitolo="Scelto a mano" />
-              <Riga icona={<LocateFixed size={20} className="text-mf-accent" />} titolo="Torna al GPS" onClick={() => void usaGps()} />
+              <Riga icona={<LocateFixed size={20} className="text-mf-ink-2" />} titolo="Torna al GPS" onClick={() => void usaGps()} />
             </>
           ) : (
-            <Riga icona={<LocateFixed size={20} className="text-mf-accent" />} titolo="GPS del telefono" sottotitolo={testoGps(m)} />
+            <Riga icona={<LocateFixed size={20} className="text-mf-ink-2" />} titolo="GPS del telefono" sottotitolo={testoGps(m)} />
           )}
-          <Riga icona={<Search size={20} className="text-mf-accent" />} titolo="Scegli una città" freccia onClick={onScegliLuogo} />
+          <Riga icona={<Search size={20} className="text-mf-ink-2" />} titolo="Scegli una città" freccia onClick={onScegliLuogo} />
         </Gruppo>
 
         <Gruppo titolo="Prezzi" nota="Si aggiornano da soli ogni volta che apri l’app. Fonte: Ministero delle Imprese e del Made in Italy.">
           <Riga
-            icona={<RefreshCw size={20} className={`text-mf-accent ${m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''}`} />}
+            icona={<RefreshCw size={20} className={`text-mf-ink-2 ${m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''}`} />}
             titolo="Aggiorna adesso"
             sottotitolo={stato.testo}
             onClick={() => void datasetStore().aggiorna('manuale')}
@@ -95,7 +95,7 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
         <Gruppo titolo="Informazioni">
           <Riga icona={<Info size={20} className="text-mf-ink-2" />} titolo="Martucc Fuel" valore={`Versione ${VERSIONE_APP}`} />
         </Gruppo>
-        <p className="mf-caption px-4 text-mf-ink-3">
+        <p className="mf-caption px-4 text-mf-ink-2">
           Mappa © OpenStreetMap, OpenFreeMap. Percorsi OSRM. Ricerca luoghi Nominatim.
         </p>
       </div>
@@ -116,7 +116,7 @@ function testoGps(m: Modello): string {
 function Intestazione({ titolo, onIndietro }: { titolo: string; onIndietro: () => void }) {
   return (
     <span className="flex items-center gap-1">
-      <button type="button" onClick={onIndietro} onPointerDown={(e) => e.stopPropagation()} aria-label="Indietro" className="mf-press -ml-1.5 grid h-8 w-8 place-items-center text-mf-accent">
+      <button type="button" onClick={onIndietro} onPointerDown={(e) => e.stopPropagation()} aria-label="Indietro" className="mf-press -ml-2 grid h-11 w-11 place-items-center text-mf-ink">
         <ChevronLeft size={24} />
       </button>
       {titolo}
@@ -152,7 +152,7 @@ function SceltaAuto({ m, onIndietro }: { m: Modello; onIndietro: () => void }) {
         <Riga
           titolo="Nessuna auto"
           sottotitolo="Valori medi del carburante"
-          valore={m.auto === null ? <Check size={18} className="text-mf-accent" /> : undefined}
+          valore={m.auto === null ? <Check size={18} className="text-mf-ink" /> : undefined}
           onClick={() => scegli(null)}
         />
         {elenco === null && <p className="mf-footnote px-4 py-3 text-mf-ink-2">Carico l’elenco…</p>}
@@ -161,7 +161,7 @@ function SceltaAuto({ m, onIndietro }: { m: Modello; onIndietro: () => void }) {
             key={a.model}
             titolo={a.model}
             sottotitolo={`Serbatoio ${a.liters} L · ${numero(a.kml, 1)} km/L`}
-            valore={m.auto?.model === a.model ? <Check size={18} className="text-mf-accent" /> : undefined}
+            valore={m.auto?.model === a.model ? <Check size={18} className="text-mf-ink" /> : undefined}
             onClick={() => scegli(a.model)}
           />
         ))}
@@ -220,7 +220,7 @@ function ChiaveIa({ m }: { m: Modello }) {
           </label>
           <p className="mf-footnote mt-2 px-1 text-mf-ink-2">
             Gratis su{' '}
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-mf-accent">
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-mf-ink-2">
               Google AI Studio
             </a>
             .
@@ -238,7 +238,7 @@ function ChiaveIa({ m }: { m: Modello }) {
               key={x.id}
               titolo={x.nome}
               sottotitolo={x.nota}
-              valore={modello === x.id ? <Check size={18} className="text-mf-accent" /> : undefined}
+              valore={modello === x.id ? <Check size={18} className="text-mf-ink" /> : undefined}
               onClick={() => { setModello(x.id); setProva({ stato: 'ferma' }); }}
             />
           ))}

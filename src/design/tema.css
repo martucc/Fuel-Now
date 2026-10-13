@@ -6,13 +6,23 @@
  * text-mf-ink-2, rounded-mf-lg…) e nessun suo default li puo sovrascrivere.
  *
  * Regole:
- *  - il blu e l'azione e il consigliato: bottoni principali, tab attiva,
- *    il distributore che l'app ti dice di scegliere. Mai un livello di prezzo;
+ *  - il blu vuol dire «vai qui»: il distributore consigliato, le soste del
+ *    viaggio, il bottone Portami lì. Mai schede, link, interruttori o grafici;
  *  - verde, bianco, ambra e rosso appartengono ai prezzi e a nient'altro;
  *  - le cifre sono sempre tabulari (classe .mf-num).
  */
-@import '@fontsource-variable/inter';
 @import 'tailwindcss';
+
+/* Solo il sottoinsieme latino di Inter (accenti ed € compresi): gli altri
+   sei pesavano 170 KB per niente. */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 @theme {
   /* Fondi: nero vero per l'OLED, grafite per le superfici (iOS dark). */
@@ -125,7 +135,7 @@
   /* Ogni cifra mostrata all'utente: tabulare, cosi le colonne non ballano. */
   .mf-num {
     font-variant-numeric: tabular-nums;
-    font-feature-settings: 'tnum' 1, 'cv11' 1;
+    font-feature-settings: 'tnum' 1;
   }
 
   /* Titolo grande di schermata, come le Large Title di iOS. */
@@ -170,14 +180,12 @@
     line-height: 16px;
   }
 
-  /* Etichetta di sezione sopra un gruppo, come nelle Impostazioni di iOS. */
+  /* Etichetta di sezione sopra un gruppo. Niente maiuscolo: LEGGIMI § 7. */
   .mf-section-label {
     font-size: 13px;
     line-height: 18px;
     font-weight: 500;
     color: var(--color-mf-ink-2);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
 
   /* I gruppi di righe: grafite sul nero, un tono piu chiaro dentro un foglio. */

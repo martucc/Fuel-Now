@@ -54,7 +54,7 @@ export function FoglioLuogo({ titolo, conPosizione, onScegli, onChiudi }: Props)
       </div>
       <div className="overflow-hidden rounded-mf-lg bg-mf-surface-2 [&>*+*]:border-t [&>*+*]:border-mf-hairline">
         {conPosizione && (
-          <Riga icona={<LocateFixed size={19} className="text-mf-accent" />} titolo="La mia posizione" onClick={() => onScegli('gps')} />
+          <Riga icona={<LocateFixed size={19} className="text-mf-ink-2" />} titolo="La mia posizione" onClick={() => onScegli('gps')} />
         )}
         {risultati.map((l) => (
           <Riga

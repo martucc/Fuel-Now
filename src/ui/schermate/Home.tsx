@@ -82,7 +82,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
           onClick={m.posizione.fase === 'gps' ? () => void aggiornaPosizione() : onScegliLuogo}
           className="mf-press flex min-w-0 items-center gap-1.5 rounded-full bg-mf-surface px-3 py-1.5 text-mf-ink-2"
         >
-          {m.posizione.fase === 'gps' ? <LocateFixed size={15} className="shrink-0 text-mf-accent" /> : <MapPin size={15} className="shrink-0" />}
+          {m.posizione.fase === 'gps' ? <LocateFixed size={15} className="shrink-0" /> : <MapPin size={15} className="shrink-0" />}
           <span className="mf-footnote truncate">{testoPosizione(m)}</span>
         </button>
         <span className="flex-1" />
@@ -108,7 +108,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
         className="mf-press mt-3 flex items-center gap-2 text-left"
         aria-label={`${stato.testo}. Tocca per aggiornare`}
       >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${m.dataset.fase === 'aggiorno' || m.dataset.fase === 'carico' ? 'animate-pulse bg-mf-accent' : stato.avviso ? 'bg-mf-warn' : 'bg-mf-best'}`} />
+        <span className={`h-2 w-2 shrink-0 rounded-full ${m.dataset.fase === 'aggiorno' || m.dataset.fase === 'carico' ? 'animate-pulse bg-mf-ink-2' : stato.avviso ? 'bg-mf-warn' : 'bg-mf-best'}`} />
         <span className={`mf-footnote ${stato.avviso ? 'text-mf-warn' : 'text-mf-ink-2'}`}>{stato.testo}</span>
         <RefreshCw size={13} className={`text-mf-ink-3 ${m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''}`} />
       </button>
@@ -132,7 +132,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
             <Vuoto
               titolo={`Nessun distributore di ${FUEL_LABEL[fuel].toLowerCase()} entro ${RAGGIO_HOME_KM} km`}
               testo="Prova un altro carburante o guarda la mappa."
-              azione={<Pulsante tono="tinta" onClick={onApriMappa}>Apri la mappa</Pulsante>}
+              azione={<Pulsante tono="grigio" onClick={onApriMappa}>Apri la mappa</Pulsante>}
             />
           </div>
         )}
@@ -189,7 +189,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
               </Pulsante>
             </div>
           )}
-          <p className="mf-caption mt-4 px-2 text-center text-mf-ink-3">
+          <p className="mf-caption mt-4 px-2 text-center text-mf-ink-2">
             Prezzi comunicati dai gestori al Ministero delle Imprese e del Made in Italy.
           </p>
         </section>
@@ -228,7 +228,7 @@ function SenzaPosizione({ m, onScegliLuogo }: { m: Modello; onScegliLuogo: () =>
         }
         azione={
           <div className="flex flex-col items-center gap-2">
-            {!cerco && <Pulsante onClick={() => void aggiornaPosizione()}>Usa la posizione</Pulsante>}
+            {!cerco && <Pulsante tono="grigio" onClick={() => void aggiornaPosizione()}>Usa la posizione</Pulsante>}
             <Pulsante tono="semplice" onClick={onScegliLuogo}>Scegli una città</Pulsante>
           </div>
         }
@@ -254,7 +254,7 @@ function SchedaConsiglio({ best, m, servito, onPerche, onApri }: SchedaProps) {
   const titolo = nomeMarchio(r.brand);
   return (
     <article className="rounded-mf-lg bg-mf-surface p-4">
-      <p className="mf-caption font-semibold uppercase tracking-[0.06em] text-mf-accent">Vai qui</p>
+      <p className="mf-footnote font-semibold text-mf-accent">Vai qui</p>
 
       <button type="button" onClick={onApri} className="mf-press mt-2 flex w-full items-center gap-3 text-left">
         <LogoMarchio marchio={r.brand} misura={44} />
@@ -335,7 +335,7 @@ function RigaImpianto({ it, m, ordine, consigliato, bestPrice, onApri }: RigaPro
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="mf-body truncate font-medium">{nomeMarchio(it.brand)}</span>
-            {consigliato && <span className="shrink-0 rounded-full bg-mf-accent-soft px-1.5 py-[1px] text-[10.5px] font-semibold text-mf-accent">Consigliato</span>}
+            {consigliato && <span className="shrink-0 rounded-full bg-mf-accent-soft px-1.5 py-[1px] text-[11px] font-semibold text-mf-accent">Consigliato</span>}
           </span>
           <span className="mf-footnote block truncate text-mf-ink-2">
             {distanza(it.distanceKm)} · <span className={vecchio ? 'text-mf-warn' : ''}>{etaPrezzo(riga?.updated, m.adesso)}</span>

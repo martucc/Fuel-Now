@@ -16,7 +16,7 @@ const TONI: Record<Tono, string> = {
   pieno: 'bg-mf-accent text-mf-accent-ink',
   tinta: 'bg-mf-accent-soft text-mf-accent',
   grigio: 'bg-mf-surface-2 text-mf-ink',
-  semplice: 'bg-transparent text-mf-accent',
+  semplice: 'bg-transparent text-mf-ink',
 };
 
 const MISURE: Record<Misura, string> = {
@@ -25,7 +25,10 @@ const MISURE: Record<Misura, string> = {
   piccola: 'h-8 px-3 text-[13px] font-semibold rounded-full gap-1.5',
 };
 
-/** Il bottone. Uno solo pieno per schermata: e l'azione che conta. */
+/**
+ * Il bottone. Il tono pieno (blu) e solo per «vai qui»: Portami lì e le
+ * azioni che portano a un distributore. Per tutto il resto, grigio o semplice.
+ */
 export function Pulsante({ tono = 'pieno', misura = 'media', icona, largo, className = '', onClick, children, disabled, ...resto }: Props) {
   return (
     <button

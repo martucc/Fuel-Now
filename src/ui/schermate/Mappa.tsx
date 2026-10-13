@@ -60,7 +60,7 @@ export function Mappa({ m, punti, best, scelto, onApriImpianto }: Props) {
           <button
             type="button"
             onClick={() => setLegenda(false)}
-            className="pointer-events-auto mx-auto mt-2 flex max-w-md items-center gap-3 rounded-full bg-[rgb(28_28_30/0.94)] px-3.5 py-1.5 text-[11.5px] text-mf-ink-2"
+            className="pointer-events-auto mx-auto mt-2 flex max-w-md items-center gap-3 rounded-full bg-[rgb(28_28_30/0.94)] px-3.5 py-1.5 text-[12px] text-mf-ink-2"
             aria-label="Nascondi la legenda"
           >
             <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-mf-best" /> economico</span>
@@ -78,11 +78,11 @@ export function Mappa({ m, punti, best, scelto, onApriImpianto }: Props) {
           className="h-11 w-11 bg-[rgb(28_28_30/0.94)] shadow-[0_6px_18px_rgb(0_0_0/0.5)]"
           onClick={() => void datasetStore().aggiorna('manuale')}
         >
-          <RefreshCw size={19} className={m.dataset.fase === 'aggiorno' ? 'animate-spin text-mf-accent' : ''} />
+          <RefreshCw size={19} className={m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''} />
         </PulsanteIcona>
         <PulsanteIcona
           etichetta="Torna alla tua posizione"
-          className="h-11 w-11 bg-[rgb(28_28_30/0.94)] text-mf-accent shadow-[0_6px_18px_rgb(0_0_0/0.5)]"
+          className="h-11 w-11 bg-[rgb(28_28_30/0.94)] shadow-[0_6px_18px_rgb(0_0_0/0.5)]"
           onClick={() => {
             void aggiornaPosizione();
             if (utente) comandi.current?.vola(utente, 13.5);
