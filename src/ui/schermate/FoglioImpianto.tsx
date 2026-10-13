@@ -12,7 +12,7 @@ import { Foglio } from '../kit/Foglio';
 import { Pulsante } from '../kit/Pulsante';
 import { Prezzo } from '../kit/Prezzo';
 import { LogoMarchio } from '../kit/LogoMarchio';
-import { nomeMarchio } from '../kit/marchio';
+import { nomeImpianto, nomeMarchio } from '../kit/marchio';
 import { ETICHETTA_LIVELLO, COLORE_LIVELLO } from '../kit/livelli';
 import { distanza, etaPrezzo, indirizzo, minutiGuida, oreDa } from '../kit/formatoUi';
 
@@ -53,9 +53,7 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
       <div className="flex items-center gap-3 pb-4">
         <LogoMarchio marchio={r.brand} misura={52} />
         <div className="min-w-0">
-          {r.name && r.name.toLowerCase() !== r.brand.toLowerCase() && (
-            <p className="mf-subhead truncate text-mf-ink">{r.name}</p>
-          )}
+          {nomeImpianto(r.name, r.brand) && <p className="mf-subhead truncate text-mf-ink">{nomeImpianto(r.name, r.brand)}</p>}
           <p className="mf-footnote text-mf-ink-2">
             {lontano !== null ? `${distanza(lontano)} · circa ${minutiGuida(lontano)} min · ` : ''}
             {r.isHighway ? 'in autostrada' : 'su strada'}

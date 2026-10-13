@@ -46,3 +46,15 @@ export function nomeMarchio(marchio: string): string {
   if (/^api-ip$/i.test(m)) return 'IP';
   return m.length <= 3 ? m.toUpperCase() : m.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\B\w+/g, (w) => w.toLowerCase());
 }
+
+/**
+ * Il nome dell'impianto quando dice qualcosa. Il MIMIT spesso mette un
+ * codice («53733 LUGO») o ripete il marchio: in quei casi meglio niente.
+ */
+export function nomeImpianto(nome: string, marchio: string): string | null {
+  const n = nome.trim();
+  if (!n || /^\d/.test(n) || /^[\d\s-]+$/.test(n)) return null;
+  if (n.toLowerCase() === marchio.trim().toLowerCase()) return null;
+  const bello = n === n.toUpperCase() ? n.toLowerCase().replace(/(^|[\s'(-])\p{L}/gu, (x) => x.toUpperCase()) : n;
+  return bello;
+}

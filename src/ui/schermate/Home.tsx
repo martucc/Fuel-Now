@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapPin, Settings, Navigation, RefreshCw, LocateFixed, ChevronRight, Info } from 'lucide-react';
 import type { Modello } from '../../app/modello';
 import { RAGGIO_HOME_KM } from '../../app/modello';
@@ -26,6 +26,7 @@ import { Vuoto, Segnaposto } from '../kit/Stato';
 import { nomeMarchio } from '../kit/marchio';
 import { distanza, etaPrezzo, indirizzo, minutiGuida, oreDa } from '../kit/formatoUi';
 import { MappaCarburanti } from '../mappa/MappaCarburanti';
+import type { ComandiMappa } from '../mappa/MappaCarburanti';
 import { FoglioPerche } from './FoglioPerche';
 
 interface Props {
@@ -71,6 +72,20 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
   }, [home, ordine]);
 
   const best = home?.best ?? null;
+  const miniMappa = useRef<ComandiMappa | null>(null);
+  const utente = m.posizione.punto;
+
+  // La mini mappa inquadra sempre te e il consigliato: e la risposta alla
+  // domanda «dov'e?», e non deve restare fuori dal riquadro.
+  const idBest = best?.row.id;
+  useEffect(() => {
+    if (!utente || !best) return;
+    const t = setTimeout(() => miniMappa.current?.inquadra([utente, { lat: best.row.lat, lng: best.row.lng }], 46), 250);
+    return () => clearTimeout(t);
+    // si rifa solo se cambiano il consigliato o la posizione
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idBest, utente?.lat, utente?.lng]);
+
   const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime(), datiDel(m));
 
   return (
@@ -142,6 +157,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
       {m.posizione.punto && (
         <section className="relative mt-4 h-[200px] overflow-hidden rounded-mf-lg ring-1 ring-mf-hairline">
           <MappaCarburanti
+            comandi={miniMappa}
             punti={punti}
             utente={m.posizione.punto}
             consigliato={best ? { id: best.row.id, lat: best.row.lat, lng: best.row.lng, testo: prezzoBreve(best.price) } : null}
@@ -149,7 +165,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
             interattiva={false}
           />
           <button type="button" onClick={onApriMappa} className="absolute inset-0" aria-label="Apri la mappa" />
-          <span className="pointer-events-none absolute bottom-1.5 left-2.5 text-[9.5px] text-mf-ink-3">© OpenStreetMap</span>
+          <span className="pointer-events-none absolute left-2 top-2 rounded bg-mf-veil px-1.5 py-0.5 text-[10px] text-mf-ink-2">© OpenStreetMap</span>
           <span className="pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-mf-veil px-2.5 py-1 text-[12px] font-medium text-mf-ink">
             Mappa <ChevronRight size={14} />
           </span>
