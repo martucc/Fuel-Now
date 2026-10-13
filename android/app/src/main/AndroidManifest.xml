@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      allowBackup spento: con il backup automatico di Android una
+      reinstallazione si riportava dietro i dati vecchi dell'app.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -15,6 +19,7 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:screenOrientation="portrait"
             android:exported="true">
 
             <intent-filter>
@@ -33,60 +38,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
-
-        <!-- Il Tabellone -->
-        <receiver android:name=".MartuccFuelWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.martucc.fuel.UPDATE_WIDGET" />
-                <action android:name="com.martucc.fuel.RUOTA_SFONDO" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/martucc_fuel_widget_info" />
-        </receiver>
-
-        <!-- La Tacca -->
-        <receiver android:name=".MartuccFuelCompactWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.martucc.fuel.UPDATE_WIDGET" />
-                <action android:name="com.martucc.fuel.RUOTA_SFONDO" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/martucc_fuel_compact_widget_info" />
-        </receiver>
-
-        <!-- Il Radar -->
-        <receiver android:name=".MartuccFuelMapWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.martucc.fuel.UPDATE_WIDGET" />
-                <action android:name="com.martucc.fuel.RUOTA_SFONDO" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/martucc_fuel_map_widget_info" />
-        </receiver>
-
-        <!-- Daily Sync Receiver for AlarmManager & Boot -->
-        <receiver android:name=".DailySyncReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="com.martucc.fuel.DAILY_ALARM" />
-            </intent-filter>
-        </receiver>
     </application>
 
-    <!-- Permissions -->
-
+    <!-- Rete per i prezzi, la mappa e i percorsi; posizione per «qui vicino»; vibrazione per il tocco. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- GPS and Network Location Permissions -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- Notification Permission for Android 13+ -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Per vedere quali navigatori ci sono quando si sceglie «Portami lì» (Android 11+). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
 </manifest>

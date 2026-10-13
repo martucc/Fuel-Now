@@ -14,6 +14,14 @@ const config: CapacitorConfig = {
     // questa voce e esattamente quello che succede.
     androidScheme: 'https',
   },
+  plugins: {
+    // App tutta scura: icone chiare sulle barre di sistema, e i margini
+    // sicuri passati alla pagina come --safe-area-inset-* (vedi tema.css).
+    SystemBars: {
+      style: 'DARK',
+      insetsHandling: 'css',
+    },
+  },
 };
 
 export default config;
