@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { netSaving, rankStations, pickBest, TIE_EURO } from './ranking';
+import { netSaving, rankStations, pickBest, TIE_EURO, ORE_RIFERIMENTO_FRESCO } from './ranking';
 import type { RankContext } from './ranking';
 import { buildCohorts } from './market';
 import { parseStations } from './parse';
@@ -12,8 +12,9 @@ describe('netSaving', () => {
       price: 1.9, cohortAvg: 2.0, liters: 38.25, distanceKm: 5, kml: 18, confidence: 1,
     });
     expect(b.gross).toBeCloseTo(3.825, 6);          // (2.00 − 1.90) × 38,25
-    expect(b.roadCost).toBeCloseTo(1.0555, 3);      // (2 × 5 / 18) × 1,90
-    expect(b.net).toBeCloseTo(2.7695, 3);
+    expect(b.kmStrada).toBeCloseTo(13, 6);          // 2 × 5 × 1,3 (fattore strada)
+    expect(b.roadCost).toBeCloseTo(1.3722, 3);      // (13 / 18) × 1,90
+    expect(b.net).toBeCloseTo(2.4528, 3);
   });
 
   it('sconta il lordo con la fiducia, non il costo della strada', () => {
@@ -70,10 +71,10 @@ describe('rankStations', () => {
   });
 
   it('a parità di netto entro 15 centesimi vince il più vicino', () => {
-    // 'b' costa 4 decimi di centesimo in meno e guida la classifica per un
+    // 'b' costa 8 decimi di centesimo in meno e guida la classifica per un
     // soffio, ma è 640 m più lontano: rientra nella parità, quindi vince 'a'.
     const a = row({ id: 'a', prices: { diesel: 1.95 }, lat: 45.4642, lng: 9.19 });
-    const b = row({ id: 'b', prices: { diesel: 1.946 }, lat: 45.47, lng: 9.19 });
+    const b = row({ id: 'b', prices: { diesel: 1.942 }, lat: 45.47, lng: 9.19 });
     const ranked = rankStations([a, b], ctx);
     expect(ranked[0]!.row.id).toBe('b');
     expect(Math.abs(ranked[0]!.net.net - ranked[1]!.net.net)).toBeLessThanOrEqual(TIE_EURO);
@@ -127,5 +128,26 @@ describe('rankStations', () => {
     for (const r of ranked) {
       expect(['province-highway', 'national-highway', 'national']).toContain(r.cohort.source);
     }
+  });
+
+  it('misura il risparmio contro il più vicino con un prezzo recente, non contro uno vecchio', () => {
+    // Il più vicino in assoluto ha un prezzo di sei giorni fa: non può fare
+    // da metro. Il riferimento diventa il più vicino fra quelli freschi.
+    const vecchio = row({ id: 'vecchio-vicino', prices: { diesel: 2.05 }, updated: '2026-06-02 10:00' });
+    const fresco = row({ id: 'fresco', prices: { diesel: 1.99 }, lat: 45.47, lng: 9.19 });
+    const altro = row({ id: 'altro', prices: { diesel: 1.95 }, lat: 45.48, lng: 9.19 });
+    const ranked = rankStations([vecchio, fresco, altro], ctx);
+    const r = ranked.find((x) => x.row.id === 'altro')!;
+    expect(r.net.riferimento?.price).toBe(1.99);
+    expect(ORE_RIFERIMENTO_FRESCO).toBe(72);
+  });
+
+  it('con almeno tre prezzi freschi non consiglia un prezzo di quattro giorni fa', () => {
+    const vecchiotto = row({ id: 'quattro-giorni', prices: { diesel: 1.90 }, updated: '2026-06-04 10:00' });
+    const f1 = row({ id: 'f1', prices: { diesel: 1.97 } });
+    const f2 = row({ id: 'f2', prices: { diesel: 1.98 }, lat: 45.465 });
+    const f3 = row({ id: 'f3', prices: { diesel: 1.99 }, lat: 45.466 });
+    const best = pickBest(rankStations([vecchiotto, f1, f2, f3], ctx))!;
+    expect(best.row.id).not.toBe('quattro-giorni');
   });
 });

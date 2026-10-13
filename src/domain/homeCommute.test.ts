@@ -7,6 +7,7 @@ import {
   limiteDeviazioneKm,
   netSaving,
   VALORE_TEMPO_EURO_ORA,
+  FATTORE_STRADA,
 } from './ranking';
 import type { RankContext } from './ranking';
 import type { StationRow } from './parse';
@@ -75,8 +76,9 @@ describe('rientro verso casa', () => {
 
     // Gli altri pagano solo i chilometri in piu, andata e ritorno.
     const extra = lontano.distanceKm - vicino.distanceKm;
-    expect(lontano.net.roadCost).toBeCloseTo((2 * extra / base.kml) * lontano.price, 6);
-    expect(lontano.net.roadCost).toBeLessThan((2 * lontano.distanceKm / base.kml) * lontano.price);
+    // In linea d'aria per il fattore strada: le strade non sono dritte.
+    expect(lontano.net.roadCost).toBeCloseTo((2 * extra * FATTORE_STRADA / base.kml) * lontano.price, 6);
+    expect(lontano.net.roadCost).toBeLessThan((2 * lontano.distanceKm * FATTORE_STRADA / base.kml) * lontano.price);
   });
 
   it('con casa impostata premia chi sta sul tragitto e scarta chi allunga troppo', () => {

@@ -47,6 +47,17 @@ export const VELOCITA_DEVIAZIONE_KMH = 35;
 /** Rampe, casello, rientro in carreggiata: uscire dall'autostrada costa tempo. */
 export const MINUTI_USCITA_AUTOSTRADA = 8;
 
+/**
+ * Le distanze sono in linea d'aria, le strade no: per arrivare a un
+ * distributore a 3 km se ne fanno di solito quasi 4. Senza questo fattore
+ * il costo della strada era sottostimato e i distributori lontani
+ * sembravano piu convenienti di quanto sono.
+ */
+export const FATTORE_STRADA = 1.3;
+
+/** Un prezzo piu vecchio di cosi non fa da riferimento: tre giorni. */
+export const ORE_RIFERIMENTO_FRESCO = 72;
+
 /** Consumo di riserva quando il veicolo non dichiara nulla, in km/l. */
 const KML_DI_RIPIEGO = 15;
 
@@ -101,6 +112,8 @@ export interface NetInput {
 
 export interface NetBreakdown extends NetInput {
   gross: number;
+  /** Km di strada contati nel costo (andata e ritorno, gia col fattore strada). */
+  kmStrada: number;
   roadCost: number;
   detourFriction: number;
   highwayFriction: number;
@@ -142,17 +155,18 @@ export function netSaving(i: NetInput): NetBreakdown {
   let roadFuelCost: number;
   let detourFriction = 0;
 
+  let kmStrada: number;
   if (i.detourKm !== undefined) {
-    roadFuelCost = (i.detourKm / kml) * i.price;
+    kmStrada = i.detourKm;
     detourFriction = calculateDetourFriction(i.detourKm);
   } else if (rif) {
     // Solo i chilometri in piu, e andata e ritorno perche per il pieno si
     // esce e si torna: fin dove arrivavi comunque non si paga niente.
-    const extra = Math.max(0, i.distanceKm - rif.distanceKm);
-    roadFuelCost = ((2 * extra) / kml) * i.price;
+    kmStrada = 2 * Math.max(0, i.distanceKm - rif.distanceKm) * FATTORE_STRADA;
   } else {
-    roadFuelCost = ((2 * i.distanceKm) / kml) * i.price;
+    kmStrada = 2 * i.distanceKm * FATTORE_STRADA;
   }
+  roadFuelCost = (kmStrada / kml) * i.price;
 
   const highwayFriction = i.isHighway
     ? (MINUTI_USCITA_AUTOSTRADA / 60) * VALORE_TEMPO_EURO_ORA
@@ -166,6 +180,7 @@ export function netSaving(i: NetInput): NetBreakdown {
   return {
     ...i,
     gross,
+    kmStrada,
     roadCost: roadFuelCost,
     detourFriction,
     highwayFriction,
@@ -345,13 +360,24 @@ export function rankStations(rows: StationRow[], ctx: RankContext): RankedStatio
     return { item, level, z, reliable, reason };
   });
 
+  // Il riferimento e il distributore utilizzabile piu vicino CON UN PREZZO
+  // RECENTE: misurare tutti contro un prezzo di cinque giorni fa vorrebbe
+  // dire promettere risparmi calcolati su un numero che forse non c'e piu.
+  // Solo se intorno non c'e niente di fresco si ripiega sul piu vicino.
   let riferimento: Riferimento | undefined;
+  let riferimentoQualsiasi: Riferimento | undefined;
   for (const g of giudizio) {
     if (g.reason !== undefined) continue;
-    if (!riferimento || g.item.distanceKm < riferimento.distanceKm) {
-      riferimento = { price: g.item.price, distanceKm: g.item.distanceKm };
+    const d = g.item.distanceKm;
+    if (!riferimentoQualsiasi || d < riferimentoQualsiasi.distanceKm) {
+      riferimentoQualsiasi = { price: g.item.price, distanceKm: d };
+    }
+    const fresco = g.item.ageH !== null && g.item.ageH <= ORE_RIFERIMENTO_FRESCO;
+    if (fresco && (!riferimento || d < riferimento.distanceKm)) {
+      riferimento = { price: g.item.price, distanceKm: d };
     }
   }
+  riferimento ??= riferimentoQualsiasi;
 
   const out: RankedStation[] = [];
 
@@ -420,8 +446,12 @@ export function pickBest(ranked: RankedStation[]): RankedStation | null {
   // Un consiglio va dato su un prezzo in cui si crede. Se pero l'unica roba
   // eleggibile e vecchia, meglio un consiglio incerto che nessun consiglio:
   // l'eta e comunque scritta sotto al nome.
+  // Prima scelta: prezzi di non piu di tre giorni, se ce ne sono almeno
+  // tre fra cui scegliere; poi fino a cinque giorni; poi qualunque.
+  const freschissimi = ranked.filter((r) => r.eligible && r.confidence >= 0.75);
   const freschi = ranked.filter((r) => r.eligible && r.confidence >= 0.5);
-  const eligible = freschi.length > 0 ? freschi : ranked.filter((r) => r.eligible);
+  const eligible =
+    freschissimi.length >= 3 ? freschissimi : freschi.length > 0 ? freschi : ranked.filter((r) => r.eligible);
 
   const leader = eligible[0];
   if (!leader) return null;

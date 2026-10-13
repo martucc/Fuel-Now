@@ -45,11 +45,10 @@ export function FoglioPerche({ best, m, onChiudi }: { best: RankedStation; m: Mo
     });
   }
 
-  const kmInPiu = rif ? Math.max(0, n.distanceKm - rif.distanceKm) : n.distanceKm;
   voci.push({
     etichetta: 'Strada in più',
     valore: `− ${euro(n.roadCost)}`,
-    nota: `${numero(kmInPiu * 2, 1)} km andata e ritorno, a ${numero(n.kml, 1)} km/L`,
+    nota: `circa ${numero(n.kmStrada, 1)} km di strada fra andata e ritorno, a ${numero(n.kml, 1)} km/L`,
   });
   if (n.highwayFriction > 0) voci.push({ etichetta: 'Uscita dall’autostrada', valore: `− ${euro(n.highwayFriction)}` });
   if (n.detourFriction > 0) voci.push({ etichetta: 'Tempo e usura', valore: `− ${euro(n.detourFriction)}` });
@@ -72,7 +71,7 @@ export function FoglioPerche({ best, m, onChiudi }: { best: RankedStation; m: Mo
         ))}
       </dl>
       <p className="mf-footnote mt-3 text-mf-ink-3">
-        A parità di risparmio (entro 15 centesimi) vince il più vicino. Le distanze sono in linea d’aria.
+        A parità di risparmio (entro 15 centesimi) vince il più vicino. I km di strada sono stimati dalla linea d’aria, aumentata del 30%.
       </p>
     </Foglio>
   );
