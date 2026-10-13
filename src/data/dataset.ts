@@ -1,5 +1,5 @@
 import type { RawDataset } from '../domain/raw';
-import { serveAggiornare } from '../domain/aggiornamento';
+import { attesePerTentativo, confronta, serveAggiornare } from '../domain/aggiornamento';
 import type { FaseDati, MotivoAggiornamento } from '../domain/aggiornamento';
 import { archivioPredefinito } from './archivio';
 import type { Archivio } from './archivio';
@@ -15,27 +15,35 @@ import type { Archivio } from './archivio';
  * SharedPreferences di Android, che non sono fatte per pesi cosi.
  *
  * Adesso: un solo negozio con uno stato osservabile. Si mostra subito
- * l'ultima copia salvata (IndexedDB), poi si riscarica sempre, all'avvio e
+ * l'ultima copia salvata (IndexedDB), poi si ricontrolla sempre, all'avvio e
  * a ogni ritorno in primo piano, e chi guarda i dati li vede cambiare.
  */
 
 export const DATASET_URL =
   'https://raw.githubusercontent.com/martucc/Fuel-Now/main/public/stations.json';
-/** Un telefono con poca rete ci mette: meglio aspettare che restare indietro di un giorno. */
-export const TIMEOUT_DOWNLOAD_MS = 25_000;
+/** Per ogni tentativo. Un telefono con poca rete ci mette: meglio aspettare che restare indietro. */
+export const TIMEOUT_DOWNLOAD_MS = 20_000;
 /** Un file con meno impianti di cosi e troncato o sbagliato: si tengono i dati che ci sono. */
 export const MIN_STAZIONI = 1000;
-const ATTESA_RIPROVA_MS = 1500;
+/**
+ * Al primo avvio senza copia salvata: dopo quanto si mostrano i prezzi
+ * inclusi nell'app invece di tenere l'utente davanti allo schermo vuoto.
+ * Il download continua e li sostituisce appena arriva.
+ */
+export const ATTESA_PRIMO_AVVIO_MS = 2500;
 
 export type OrigineDati = 'rete' | 'archivio' | 'pacchetto';
 
 export interface StatoDataset {
   dati: RawDataset | null;
   origine: OrigineDati | null;
-  /** Quando questi dati sono stati scaricati dalla rete. Nullo per i prezzi inclusi nell'app. */
-  scaricatoIl: number | null;
+  /**
+   * L'ultima volta che il telefono ha controllato con successo il file in
+   * rete, anche quando non era cambiato. Nullo per i prezzi inclusi nell'app.
+   */
+  verificatoIl: number | null;
   fase: FaseDati;
-  /** Cresce a ogni dataset nuovo: utile per ricalcolare solo quando serve. */
+  /** Cresce solo quando arriva un dataset diverso: e la chiave per ricalcolare. */
   versione: number;
   ultimoTentativo: number | null;
 }
@@ -49,14 +57,15 @@ export interface DipendenzeDataset {
   adesso: () => number;
   attendi: (ms: number) => Promise<void>;
   minStazioni: number;
+  attesaPrimoAvvioMs: number;
 }
 
 export interface NegozioDataset {
   stato(): StatoDataset;
   iscriviti(cb: () => void): () => void;
-  /** Mostra la copia salvata e poi riscarica. Chiamarla piu volte non rifa niente. */
+  /** Mostra la copia salvata e poi ricontrolla. Chiamarla piu volte non rifa niente. */
   avvia(): Promise<void>;
-  /** Riscarica se la regola del motivo lo consente. Restituisce true se ha portato dati nuovi. */
+  /** Ricontrolla se la regola del motivo lo consente. Restituisce true se ha portato dati nuovi. */
   aggiorna(motivo: MotivoAggiornamento): Promise<boolean>;
 }
 
@@ -74,9 +83,10 @@ function interpreta(testo: string | null, minStazioni: number): RawDataset | nul
 
 export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
   let stato: StatoDataset = {
-    dati: null, origine: null, scaricatoIl: null, fase: 'carico', versione: 0, ultimoTentativo: null,
+    dati: null, origine: null, verificatoIl: null, fase: 'carico', versione: 0, ultimoTentativo: null,
   };
   let ultimoSuccesso: number | null = null;
+  let ultimoEsito: 'ok' | 'errore' | null = null;
   let inCorso: Promise<boolean> | null = null;
   let avvio: Promise<void> | null = null;
   const ascoltatori = new Set<() => void>();
@@ -88,67 +98,81 @@ export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
     }
   }
 
-  function pubblica(dati: RawDataset, origine: OrigineDati, scaricatoIl: number | null, fase: FaseDati): void {
-    imposta({ dati, origine, scaricatoIl, fase, versione: stato.versione + 1 });
+  function pubblica(dati: RawDataset, origine: OrigineDati, verificatoIl: number | null, fase: FaseDati): void {
+    imposta({ dati, origine, verificatoIl, fase, versione: stato.versione + 1 });
   }
 
   async function scaricaUnaVolta(): Promise<{ dati: RawDataset; testo: string } | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_DOWNLOAD_MS);
+    let testo: string;
     try {
-      const testo = await dip.scarica(controller.signal);
-      const dati = interpreta(testo, dip.minStazioni);
-      return dati ? { dati, testo } : null;
+      testo = await dip.scarica(controller.signal);
     } catch {
       return null;
     } finally {
       clearTimeout(timer);
     }
+    const dati = interpreta(testo, dip.minStazioni);
+    return dati ? { dati, testo } : null;
   }
 
   async function dallaRete(motivo: MotivoAggiornamento): Promise<boolean> {
-    const adesso = dip.adesso();
-    imposta({ ultimoTentativo: adesso, fase: stato.dati ? 'aggiorno' : 'carico' });
+    imposta({ ultimoTentativo: dip.adesso(), fase: stato.dati ? 'aggiorno' : 'carico' });
 
-    let esito = await scaricaUnaVolta();
-    // Una seconda possibilita quando l'utente ha appena aperto l'app: spesso
-    // la rete del telefono si sveglia un attimo dopo l'app.
-    if (!esito && motivo !== 'intervallo') {
-      await dip.attendi(ATTESA_RIPROVA_MS);
+    let esito: { dati: RawDataset; testo: string } | null = null;
+    for (const attesa of attesePerTentativo(motivo)) {
+      if (attesa > 0) await dip.attendi(attesa);
       esito = await scaricaUnaVolta();
+      if (esito) break;
     }
 
-    if (esito) {
-      const quando = dip.adesso();
-      ultimoSuccesso = quando;
-      pubblica(esito.dati, 'rete', quando, 'pronto');
+    if (!esito) {
+      ultimoEsito = 'errore';
+      imposta({ fase: 'errore' });
+      return false;
+    }
+
+    const quando = dip.adesso();
+    ultimoSuccesso = quando;
+    ultimoEsito = 'ok';
+    const confronto = confronta(esito.dati, stato.origine === 'pacchetto' ? null : stato.dati);
+
+    if (confronto !== 'nuovo') {
+      // Stesso file (o la CDN che rimanda il precedente): i prezzi a schermo
+      // sono gia quelli giusti. Cambia solo l'ora del controllo.
+      imposta({ verificatoIl: quando, fase: 'pronto' });
       try {
-        await dip.archivio.scrivi({ testo: esito.testo, scaricatoIl: quando });
-      } catch { /* senza archivio si riscarica al prossimo avvio, niente di grave */ }
-      return true;
+        await dip.archivio.segnaVerifica(quando);
+      } catch { /* l'ora del controllo salvata e un dettaglio */ }
+      return false;
     }
 
-    if (!stato.dati) {
-      const dati = interpreta(await dip.pacchetto().catch(() => null), dip.minStazioni);
-      if (dati) {
-        pubblica(dati, 'pacchetto', null, 'errore');
-        return false;
-      }
-    }
-    imposta({ fase: 'errore' });
-    return false;
+    pubblica(esito.dati, 'rete', quando, 'pronto');
+    try {
+      await dip.archivio.scrivi({ testo: esito.testo, scaricatoIl: quando });
+    } catch { /* senza archivio si riscarica al prossimo avvio, niente di grave */ }
+    return true;
   }
 
   function aggiorna(motivo: MotivoAggiornamento): Promise<boolean> {
     if (inCorso) return inCorso;
     const ok = serveAggiornare(
       motivo,
-      { ultimoSuccesso, ultimoTentativo: stato.ultimoTentativo, inCorso: false },
+      { ultimoSuccesso, ultimoTentativo: stato.ultimoTentativo, ultimoEsito, inCorso: false },
       dip.adesso(),
     );
     if (!ok) return Promise.resolve(false);
     inCorso = dallaRete(motivo).finally(() => { inCorso = null; });
     return inCorso;
+  }
+
+  async function mostraPacchetto(): Promise<void> {
+    if (stato.dati) return;
+    const dati = interpreta(await dip.pacchetto().catch(() => null), dip.minStazioni);
+    if (dati && !stato.dati) {
+      pubblica(dati, 'pacchetto', null, inCorso ? 'aggiorno' : stato.fase === 'errore' ? 'errore' : 'pronto');
+    }
   }
 
   async function avviaUnaVolta(): Promise<void> {
@@ -160,10 +184,19 @@ export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
         pubblica(dati, 'archivio', salvato.scaricatoIl, 'pronto');
       }
     } catch { /* archivio illeggibile: si va in rete */ }
-    // Con una copia gia a schermo il download non blocca niente; senza, e
-    // lui che fa arrivare i primi dati.
+
     const download = aggiorna('avvio');
-    if (!stato.dati) await download;
+    if (stato.dati) return; // con una copia a schermo il download non blocca niente
+
+    // Primo avvio: si aspetta la rete per poco, poi si mostrano i prezzi
+    // inclusi nell'app e il download li sostituira appena arriva.
+    const scaduto = dip.attendi(dip.attesaPrimoAvvioMs).then(() => 'scaduto' as const);
+    const primo = await Promise.race([download.then(() => 'rete' as const), scaduto]);
+    if (primo === 'scaduto' || !stato.dati) await mostraPacchetto();
+    if (!stato.dati) {
+      await download;
+      await mostraPacchetto();
+    }
   }
 
   return {
@@ -180,11 +213,16 @@ export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
   };
 }
 
+/*
+  Indirizzo fisso e `cache: 'no-cache'`: la WebView rimanda l'ETag e, se il
+  file non e cambiato, GitHub risponde 304 senza ritrasmettere 1,4 MB.
+  Niente parametri per «rompere la cache»: la CDN di GitHub li ignora
+  (verificato) e farebbero solo perdere il 304. Niente intestazioni fatte a
+  mano: farebbero partire un preflight CORS, che raw.githubusercontent
+  respinge con 403. La CDN tiene il file al massimo cinque minuti.
+*/
 async function scaricaDallaRete(signal: AbortSignal): Promise<string> {
-  // Il parametro cambia a ogni richiesta: ne la cache HTTP della WebView ne
-  // quella della CDN di GitHub (cinque minuti) possono rispondere con il
-  // file di ieri.
-  const res = await fetch(`${DATASET_URL}?t=${Date.now()}`, { signal, cache: 'no-store' });
+  const res = await fetch(DATASET_URL, { signal, cache: 'no-cache' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
 }
@@ -202,6 +240,7 @@ function predefinito(): NegozioDataset {
     adesso: () => Date.now(),
     attendi: (ms) => new Promise((r) => setTimeout(r, ms)),
     minStazioni: MIN_STAZIONI,
+    attesaPrimoAvvioMs: ATTESA_PRIMO_AVVIO_MS,
   });
 }
 
