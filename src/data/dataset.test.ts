@@ -1,134 +1,172 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { loadDataset, refreshDataset, onDatasetUpdate, cachedDataset, resetDatasetCache } from './dataset';
-import type { RawDataset } from '../domain/raw';
+import { describe, it, expect, vi } from 'vitest';
+import { creaNegozioDataset } from './dataset';
+import type { DipendenzeDataset } from './dataset';
+import type { Archivio, CopiaSalvata } from './archivio';
 
-function dataset(nome: string): RawDataset {
-  return {
-    stations: [{ id: 1, name: nome, brand: '', operator: '', prov: 'RM', city: '', address: '',
-                 lat: 41.9, lng: 12.5, is_highway: false, p: {}, updated: '2026-08-19 08:00' }],
-    national: {}, by_province: {}, forecast: {}, history: {},
-  } as unknown as RawDataset;
+function file(nome: string, n = 3): string {
+  const stations = Array.from({ length: n }, (_, i) => ({
+    id: i + 1, name: `${nome}-${i}`, brand: '', operator: '', type: '', is_highway: false,
+    address: '', city: '', prov: 'RM', lat: 41.9, lng: 12.5, p: {}, updated: '2026-10-13 08:00',
+  }));
+  return JSON.stringify({ extracted_at: '2026-10-13', fuels: [], national: {}, by_province: {}, history: {}, forecast: {}, stations });
 }
 
-const DA_CACHE = dataset('cache');
-const DA_RETE = dataset('rete');
-
-function jsonResponse(body: unknown) {
-  const r: any = {
-    ok: true,
-    clone() { return jsonResponse(body); },
-    async json() { return body; },
-    async text() { return JSON.stringify(body); },
+function archivio(iniziale: CopiaSalvata | null = null) {
+  let copia = iniziale;
+  const a: Archivio & { copia: () => CopiaSalvata | null } = {
+    leggi: vi.fn(async () => copia),
+    scrivi: vi.fn(async (v: CopiaSalvata) => { copia = v; }),
+    copia: () => copia,
   };
-  return r;
+  return a;
 }
 
-/** Cache Storage finta: `match` risponde, `put` non fa nulla. */
-function stubCaches(body: unknown | null) {
-  vi.stubGlobal('caches', {
-    async open() {
-      return {
-        async match() { return body === null ? undefined : jsonResponse(body); },
-        async put() { /* niente */ },
-      };
-    },
-  });
+const ORA = new Date(2026, 9, 13, 9, 0).getTime();
+
+function dipendenze(over: Partial<DipendenzeDataset> = {}): DipendenzeDataset {
+  let t = ORA;
+  return {
+    archivio: archivio(),
+    scarica: vi.fn(async () => file('rete')),
+    pacchetto: vi.fn(async () => file('pacchetto')),
+    adesso: () => (t += 1000),
+    attendi: async () => {},
+    minStazioni: 2,
+    ...over,
+  };
 }
 
-beforeEach(() => {
-  resetDatasetCache();
-  stubCaches(null);
-});
+const nome = (s: { dati: { stations: { name: string }[] } | null }) => s.dati?.stations[0]?.name;
 
-afterEach(() => { vi.unstubAllGlobals(); });
-
-describe('loadDataset — spec § 7, la cache per prima', () => {
-  it('se la cache ha i dati NON aspetta la rete', async () => {
-    stubCaches(DA_CACHE);
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DA_RETE)));
-
-    const d = await loadDataset();
-    expect(d?.stations[0]?.name).toBe('cache');
-    expect(d?.stations[0]?.name).not.toBe('rete');
-  });
-
-  it('senza cache scarica dalla rete', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DA_RETE)));
-    const d = await loadDataset();
-    expect(d?.stations[0]?.name).toBe('rete');
-  });
-
-  it('il rinfresco dietro aggiorna e avvisa chi ascolta', async () => {
-    stubCaches(DA_CACHE);
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DA_RETE)));
-
+describe('il negozio dei prezzi', () => {
+  it('all’avvio mostra subito la copia salvata e poi la sostituisce con quella scaricata', async () => {
+    let rilascia!: () => void;
+    const rete = new Promise<void>((r) => { rilascia = r; });
+    const dip = dipendenze({
+      archivio: archivio({ testo: file('salvata'), scaricatoIl: ORA - 10 * 86_400_000 }),
+      scarica: vi.fn(async () => { await rete; return file('rete'); }),
+    });
+    const n = creaNegozioDataset(dip);
     const visti: string[] = [];
-    onDatasetUpdate((d) => { visti.push(String(d.stations[0]?.name)); });
+    n.iscriviti(() => { const x = nome(n.stato()); if (x && visti.at(-1) !== x) visti.push(x); });
 
-    await loadDataset();
-    await refreshDataset();
+    await n.avvia();
+    expect(nome(n.stato())).toBe('salvata-0');
+    expect(n.stato().fase).toBe('aggiorno');
 
-    expect(visti).toContain('rete');
-    expect(cachedDataset()?.stations[0]?.name).toBe('rete');
+    rilascia();
+    await n.aggiorna('manuale'); // aspetta il download gia partito
+    expect(nome(n.stato())).toBe('rete-0');
+    expect(n.stato().origine).toBe('rete');
+    expect(n.stato().fase).toBe('pronto');
+    expect(visti).toEqual(['salvata-0', 'rete-0']);
   });
 
-  it('la seconda chiamata non ricarica: il file pesa 7 MB', async () => {
-    const f = vi.fn(async () => jsonResponse(DA_RETE));
-    vi.stubGlobal('fetch', f);
-    await loadDataset();
-    await loadDataset();
-    expect(f).toHaveBeenCalledTimes(1);
+  it('il download riuscito viene salvato per il prossimo avvio', async () => {
+    const a = archivio();
+    const n = creaNegozioDataset(dipendenze({ archivio: a }));
+    await n.avvia();
+    expect(a.copia()?.testo).toContain('rete-0');
+    expect(a.copia()?.scaricatoIl).toBe(n.stato().scaricatoIl);
   });
 
-  it('force ricarica', async () => {
-    const f = vi.fn(async () => jsonResponse(DA_RETE));
-    vi.stubGlobal('fetch', f);
-    await loadDataset();
-    await loadDataset({ force: true });
-    expect(f).toHaveBeenCalledTimes(2);
+  it('senza copia salvata aspetta la rete prima di finire l’avvio', async () => {
+    const n = creaNegozioDataset(dipendenze());
+    await n.avvia();
+    expect(nome(n.stato())).toBe('rete-0');
   });
 
-  it('se la rete cade ripiega sul file del bundle', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).startsWith('http')) throw new Error('offline');
-      return jsonResponse(DA_RETE);
+  it('senza rete e senza copia ripiega sui prezzi inclusi nell’app, dichiarandolo', async () => {
+    const n = creaNegozioDataset(dipendenze({ scarica: vi.fn(async () => { throw new Error('offline'); }) }));
+    await n.avvia();
+    expect(nome(n.stato())).toBe('pacchetto-0');
+    expect(n.stato().origine).toBe('pacchetto');
+    expect(n.stato().scaricatoIl).toBeNull();
+    expect(n.stato().fase).toBe('errore');
+  });
+
+  it('un download fallito non cancella i dati gia mostrati', async () => {
+    const n = creaNegozioDataset(dipendenze({
+      archivio: archivio({ testo: file('salvata'), scaricatoIl: ORA - 3600_000 }),
+      scarica: vi.fn(async () => { throw new Error('offline'); }),
     }));
-    expect(await loadDataset()).not.toBeNull();
+    await n.avvia();
+    await n.aggiorna('manuale');
+    expect(nome(n.stato())).toBe('salvata-0');
+    expect(n.stato().fase).toBe('errore');
   });
 
-  it('se nessuna sorgente risponde restituisce null invece di lanciare', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
-    expect(await loadDataset()).toBeNull();
+  it('riprova una volta all’apertura: la rete del telefono spesso arriva un attimo dopo', async () => {
+    let chiamate = 0;
+    const scarica = vi.fn(async () => {
+      chiamate++;
+      if (chiamate === 1) throw new Error('rete non ancora pronta');
+      return file('rete');
+    });
+    const n = creaNegozioDataset(dipendenze({ scarica }));
+    await n.avvia();
+    expect(scarica).toHaveBeenCalledTimes(2);
+    expect(nome(n.stato())).toBe('rete-0');
   });
 
-  it('scarta una risposta senza array stations: meglio niente che un dataset finto', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ national: {} })));
-    expect(await loadDataset()).toBeNull();
+  it('scarta un file troncato o senza impianti invece di mostrarlo', async () => {
+    const n = creaNegozioDataset(dipendenze({
+      archivio: archivio({ testo: file('salvata'), scaricatoIl: ORA }),
+      scarica: vi.fn(async () => file('troncato', 1)),
+    }));
+    await n.avvia();
+    await n.aggiorna('manuale');
+    expect(nome(n.stato())).toBe('salvata-0');
   });
 
-  it('un rinfresco fallito NON cancella i dati buoni gia mostrati', async () => {
-    stubCaches(DA_CACHE);
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
-    await loadDataset();
-    await refreshDataset();
-    expect(cachedDataset()?.stations[0]?.name).toBe('cache');
+  it('scarta JSON rotto', async () => {
+    const n = creaNegozioDataset(dipendenze({ scarica: vi.fn(async () => '{"stations": [') }));
+    await n.avvia();
+    expect(n.stato().origine).toBe('pacchetto');
   });
 
-  it('cachedDataset espone quello gia in memoria senza attendere', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DA_RETE)));
-    expect(cachedDataset()).toBeNull();
-    await loadDataset();
-    expect(cachedDataset()).not.toBeNull();
+  it('una copia salvata rotta non blocca l’avvio', async () => {
+    const n = creaNegozioDataset(dipendenze({
+      archivio: { leggi: async () => { throw new Error('idb'); }, scrivi: async () => {} },
+    }));
+    await n.avvia();
+    expect(nome(n.stato())).toBe('rete-0');
   });
 
-  it('disiscriversi ferma gli avvisi', async () => {
-    stubCaches(DA_CACHE);
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DA_RETE)));
-    let n = 0;
-    const off = onDatasetUpdate(() => { n++; });
-    off();
-    await loadDataset();
-    await refreshDataset();
-    expect(n).toBe(0);
+  it('avvia due volte non scarica due volte', async () => {
+    const dip = dipendenze();
+    const n = creaNegozioDataset(dip);
+    await Promise.all([n.avvia(), n.avvia()]);
+    expect(dip.scarica).toHaveBeenCalledTimes(1);
+  });
+
+  it('richieste contemporanee condividono lo stesso download', async () => {
+    const dip = dipendenze();
+    const n = creaNegozioDataset(dip);
+    await n.avvia();
+    await Promise.all([n.aggiorna('manuale'), n.aggiorna('ripresa'), n.aggiorna('manuale')]);
+    expect(dip.scarica).toHaveBeenCalledTimes(2); // avvio + uno solo
+  });
+
+  it('alla ripresa riscarica, ma non due volte nello stesso minuto', async () => {
+    let t = ORA;
+    const dip = dipendenze({ adesso: () => t });
+    const n = creaNegozioDataset(dip);
+    await n.avvia();
+    t += 30_000;
+    expect(await n.aggiorna('ripresa')).toBe(false);
+    t += 60_000;
+    expect(await n.aggiorna('ripresa')).toBe(true);
+    expect(dip.scarica).toHaveBeenCalledTimes(2);
+  });
+
+  it('la versione cresce a ogni dataset nuovo', async () => {
+    const n = creaNegozioDataset(dipendenze({
+      archivio: archivio({ testo: file('salvata'), scaricatoIl: ORA }),
+    }));
+    await n.avvia();
+    await n.aggiorna('manuale'); // si aggancia al download dell'avvio
+    await n.aggiorna('manuale');
+    expect(n.stato().versione).toBe(3); // salvata, rete all'avvio, rete manuale
   });
 });

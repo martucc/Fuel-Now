@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
 import type { RankedStation } from './domain/ranking';
 import { getStations, getRows, getRawDataset } from './services/dataService';
+import { datasetStore } from './data/dataset';
+import { avviaAggiornamentiAutomatici } from './services/aggiornamentiAutomatici';
 import { analyzeFuelMarket, ErroreIa, MESSAGGIO_ERRORE } from './services/geminiService';
 import { buildAiContext } from './domain/aiContext';
 import { computeStats, fillupsForCar } from './services/fillupService';
@@ -456,47 +458,28 @@ export default function App() {
     const sa = localStorage.getItem('mf_alerts'); if (sa) setAlerts(JSON.parse(sa));
   }, []);
 
-  // Auto-refresh prices periodically and on resume/foreground
+  // I prezzi si riscaricano a ogni apertura: all'avvio ci pensa il negozio
+  // dei dati, alla ripresa lo chiede avviaAggiornamentiAutomatici. Quando
+  // arriva un dataset nuovo le schermate si ricalcolano.
   useEffect(() => {
-    const checkAndRefresh = async () => {
-      if (!initDone.current || !userLoc) return;
-      const lastFetch = localStorage.getItem('mf_last_fetch_time');
-      const now = Date.now();
-      const sixHours = 6 * 60 * 60 * 1000;
-      
-      if (!lastFetch || (now - Number(lastFetch)) > sixHours) {
-        console.log('Background auto-refreshing prices (6h elapsed)...');
-        try {
-          const { stations: d, nationalStats: ns } = await getStations(userLoc, true);
-          if (d && d.length > 0) {
+    const negozio = datasetStore();
+    let versioneVista = negozio.stato().versione;
+    const smetti = negozio.iscriviti(() => {
+      const v = negozio.stato().versione;
+      if (v === versioneVista || !userLoc || !initDone.current) return;
+      versioneVista = v;
+      getStations(userLoc)
+        .then(({ stations: d, nationalStats: ns }) => {
+          if (d.length > 0) {
             setStations(d);
             setNationalStats(ns);
-            localStorage.setItem('mf_last_fetch_time', String(Date.now()));
-            // Silently fetch analysis for current fuel
-            fetchAnalysis(fuel, true, undefined, d);
           }
-        } catch (e) {
-          console.error('Background auto-refresh failed:', e);
-        }
-      }
-    };
-
-    // On resume (foreground visibility)
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        checkAndRefresh();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    // Also check every 5 minutes in case the app is kept open
-    const interval = setInterval(checkAndRefresh, 5 * 60 * 1000);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      clearInterval(interval);
-    };
-  }, [userLoc, fuel]);
+        })
+        .catch(() => { /* restano i dati gia a schermo */ });
+    });
+    const ferma = avviaAggiornamentiAutomatici(negozio);
+    return () => { smetti(); ferma(); };
+  }, [userLoc]);
 
   useEffect(() => { localStorage.setItem('mf_favs', JSON.stringify(favs)); }, [favs]);
   useEffect(() => { localStorage.setItem('mf_blocked', JSON.stringify(blockedIds)); }, [blockedIds]);

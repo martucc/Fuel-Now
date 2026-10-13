@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { getStations, getRows } from './dataService';
-import { resetDatasetCache } from '../data/dataset';
+import { creaNegozioDataset, usaNegozioPerTest } from '../data/dataset';
 
 const OGGI = '2026-08-19 08:00';
 const VENTI_GIORNI_FA = '2026-07-30 08:00';
@@ -18,22 +18,18 @@ const dataset = {
 };
 
 beforeEach(() => {
-  resetDatasetCache();
-  vi.stubGlobal('caches', undefined);
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (String(url).includes('community_blocked')) {
-      return { ok: true, async json() { return []; } };
-    }
-    return {
-      ok: true,
-      clone() { return this; },
-      async json() { return dataset; },
-      async text() { return JSON.stringify(dataset); },
-    };
+  usaNegozioPerTest(creaNegozioDataset({
+    archivio: { leggi: async () => null, scrivi: async () => {} },
+    scarica: async () => JSON.stringify(dataset),
+    pacchetto: async () => null,
+    adesso: () => Date.now(),
+    attendi: async () => {},
+    minStazioni: 1,
   }));
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, async json() { return []; } })));
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); usaNegozioPerTest(null); });
 
 describe('getStations — spec § 7', () => {
   it('NON nasconde una stazione vecchia di 20 giorni', async () => {

@@ -3,6 +3,16 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { Capacitor } from '@capacitor/core'
+import { Preferences } from '@capacitor/preferences'
+import { datasetStore } from './data/dataset'
+
+// Il download dei prezzi parte subito, in parallelo al GPS e al primo
+// disegno: chi apre l'app deve vedere i prezzi di oggi il prima possibile.
+void datasetStore().avvia()
+
+// Il vecchio backup da 7 MB nelle Preferences (SharedPreferences) non serve
+// piu: la copia ora sta in IndexedDB. Toglierlo libera memoria all'avvio.
+void Preferences.remove({ key: 'mf_offline_stations_backup' }).catch(() => {})
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

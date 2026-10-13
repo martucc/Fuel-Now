@@ -8,7 +8,7 @@ import { Toggle } from '../../design/primitives/Toggle';
 import { Field } from '../../design/primitives/Field';
 import { provaChiave, chiediModelli, MODELLI_DI_RIPIEGO } from '../../services/geminiService';
 import type { ModelloIa } from '../../services/geminiService';
-import { resetDatasetCache } from '../../data/dataset';
+import { datasetStore } from '../../data/dataset';
 
 interface Props {
   show: boolean; setShow: (v: boolean) => void;
@@ -307,12 +307,10 @@ export function SettingsModal(p: Props) {
                   tone="quiet"
                   size="md"
                   onClick={() => {
-                    resetDatasetCache();
-                    localStorage.removeItem('mf_last_fetch_time');
                     Object.keys(localStorage)
                       .filter((k) => k.startsWith('mf_analysis_'))
                       .forEach((k) => localStorage.removeItem(k));
-                    window.location.reload();
+                    void datasetStore().aggiorna('manuale');
                   }}
                 >
                   Scarica di nuovo tutto
