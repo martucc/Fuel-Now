@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import type { GeoJSONSource, Map as MlMap, MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
 import type { FeatureCollection, Point } from 'geojson';
@@ -91,7 +91,9 @@ export function MappaCarburanti({
   const [pronta, setPronta] = useState(false);
   // I callback cambiano a ogni render: la mappa li legge da qui, cosi non va ricreata.
   const richiami = useRef({ onScegli, onMossa });
-  richiami.current = { onScegli, onMossa };
+  useLayoutEffect(() => {
+    richiami.current = { onScegli, onMossa };
+  });
 
   useImperativeHandle(comandi, () => ({
     vola(p, zoom) {
@@ -296,12 +298,12 @@ function preparaStile(m: MlMap): void {
   m.addLayer({
     id: 'mf-percorso-bordo', type: 'line', source: 'mf-percorso',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#0a3a73', 'line-width': 9, 'line-opacity': 0.9 },
+    paint: { 'line-color': '#000000', 'line-width': 9, 'line-opacity': 0.6 },
   });
   m.addLayer({
     id: 'mf-percorso', type: 'line', source: 'mf-percorso',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': HEX.accent, 'line-width': 5 },
+    paint: { 'line-color': HEX.ink, 'line-width': 5, 'line-opacity': 0.85 },
   });
 
   // Gruppi: un cerchio scuro col prezzo minimo e quanti impianti contiene.
