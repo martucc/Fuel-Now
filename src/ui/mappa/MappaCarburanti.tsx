@@ -60,6 +60,12 @@ interface Props {
   vistaIniziale?: { centro: LatLng; zoom: number };
   /** false per la mini mappa della Home: niente gesti, niente tocchi sui punti. */
   interattiva?: boolean;
+  /**
+   * false per il viaggio: gli impianti lungo la strada restano pallini anche
+   * da lontano, perche i gruppi grandi coprirebbero il percorso. Si legge
+   * solo alla creazione della mappa.
+   */
+  gruppi?: boolean;
   onScegli?: (id: string | null) => void;
   onMossa?: (v: { centro: LatLng; zoom: number }) => void;
   comandi?: Ref<ComandiMappa | null>;
@@ -83,7 +89,7 @@ function collezioneDi(feature: ReturnType<typeof puntoGeo> | null) {
 }
 
 export function MappaCarburanti({
-  punti, consigliato, scelto, utente, percorso, soste, vistaIniziale, interattiva = true,
+  punti, consigliato, scelto, utente, percorso, soste, vistaIniziale, interattiva = true, gruppi = true,
   onScegli, onMossa, comandi, className = '',
 }: Props) {
   const contenitore = useRef<HTMLDivElement>(null);
@@ -155,7 +161,7 @@ export function MappaCarburanti({
     });
 
     m.on('style.load', () => {
-      preparaStile(m);
+      preparaStile(m, gruppi);
       setPronta(false);
       // Il render che segue ripopola le sorgenti appena create.
       requestAnimationFrame(() => setPronta(true));
@@ -261,7 +267,7 @@ function imposta(m: MlMap | null, sorgente: string, dati: unknown): void {
 }
 
 /** Ripulisce lo stile di base e aggiunge sorgenti e strati dell'app. */
-function preparaStile(m: MlMap): void {
+function preparaStile(m: MlMap, gruppi: boolean): void {
   const stile = m.getStyle();
   for (const strato of stile.layers ?? []) {
     const sl = 'source-layer' in strato ? (strato['source-layer'] as string | undefined) : undefined;
@@ -284,7 +290,7 @@ function preparaStile(m: MlMap): void {
   m.addSource('mf-impianti', {
     type: 'geojson',
     data: VUOTA,
-    cluster: true,
+    cluster: gruppi,
     clusterMaxZoom: ZOOM_GRUPPI,
     clusterRadius: 48,
     clusterProperties: { minimo: ['min', ['get', 'minimo']] },

@@ -149,6 +149,7 @@ export function Viaggio({ m, onApriImpianto }: Props) {
                 percorso={calcolo.linea}
                 soste={soste}
                 vistaIniziale={vista ?? undefined}
+                gruppi={false}
                 onScegli={(id) => { if (id) onApriImpianto(id); }}
               />
             </div>
