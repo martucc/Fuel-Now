@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  serveAggiornare, descriviStatoDati, quando, confronta, generatoIl, attesePerTentativo,
+  serveAggiornare, descriviStatoDati, quando, confronta, generatoIl, attesePerTentativo, avvisoFonte,
   PAUSA_MINIMA_RIPRESA_MS, INTERVALLO_CONTROLLO_MS, DATI_VECCHI_MS,
 } from './aggiornamento';
 import type { RawDataset } from './raw';
@@ -133,5 +133,16 @@ describe('descriviStatoDati — prezzi inclusi', () => {
   it('dice di che giorno sono', () => {
     const d = descriviStatoDati('pronto', null, ADESSO, new Date(2026, 7, 30, 8, 0).getTime());
     expect(d.testo).toBe('Prezzi inclusi nell’app (del 30 agosto)');
+  });
+});
+
+describe('avvisoFonte', () => {
+  it('tace finche l’ultimo prezzo e di oggi o di stanotte', () => {
+    expect(avvisoFonte(ADESSO - 10 * 3600_000, ADESSO)).toBeNull();
+    expect(avvisoFonte(null, ADESSO)).toBeNull();
+  });
+  it('avvisa quando la fonte e ferma da piu di un giorno e mezzo', () => {
+    expect(avvisoFonte(ADESSO - 40 * 3600_000, ADESSO)).toBe('Il Ministero non pubblica prezzi nuovi da 2 giorni.');
+    expect(avvisoFonte(ADESSO - 37 * 3600_000, ADESSO)).toContain('Ministero');
   });
 });

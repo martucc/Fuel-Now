@@ -151,3 +151,22 @@ export function descriviStatoDati(
   }
   return { testo: `Aggiornato ${quando(verificatoIl, adesso)}`, avviso: adesso - verificatoIl > DATI_VECCHI_MS };
 }
+
+/** Oltre quest'eta del prezzo piu recente, e la fonte a essere ferma, non il telefono. */
+export const FONTE_FERMA_ORE = 36;
+
+/**
+ * Il telefono puo aver controllato un minuto fa e avere comunque prezzi
+ * vecchi: se il Ministero (o la pipeline su GitHub) non pubblica, il file
+ * resta quello. In quel caso va detto, altrimenti «Aggiornato alle 08:12»
+ * fa credere che i prezzi siano di stamattina.
+ */
+export function avvisoFonte(ultimoPrezzoIl: number | null, adesso: number): string | null {
+  if (ultimoPrezzoIl === null) return null;
+  const ore = (adesso - ultimoPrezzoIl) / 3_600_000;
+  if (ore <= FONTE_FERMA_ORE) return null;
+  const giorni = Math.round(ore / 24);
+  return giorni <= 1
+    ? 'Il Ministero non ha pubblicato prezzi nuovi da ieri.'
+    : `Il Ministero non pubblica prezzi nuovi da ${giorni} giorni.`;
+}

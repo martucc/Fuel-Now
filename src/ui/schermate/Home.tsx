@@ -8,7 +8,7 @@ import type { OrdineLista } from '../../app/impostazioni';
 import { aggiornaImpostazioni } from '../../app/impostazioni';
 import { aggiornaPosizione } from '../../app/posizione';
 import { datasetStore } from '../../data/dataset';
-import { descriviStatoDati } from '../../domain/aggiornamento';
+import { avvisoFonte, descriviStatoDati } from '../../domain/aggiornamento';
 import { FUEL_LABEL } from '../../domain/fuel';
 import type { FuelKey } from '../../domain/raw';
 import { FUEL_KEYS } from '../../domain/raw';
@@ -87,6 +87,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
   }, [idBest, utente?.lat, utente?.lng]);
 
   const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime(), datiDel(m));
+  const fonteFerma = m.dataset.origine === 'pacchetto' ? null : avvisoFonte(datiDel(m), m.adesso.getTime());
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-6" style={{ paddingTop: 'calc(var(--mf-safe-top) + 8px)' }}>
@@ -127,6 +128,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
         <span className={`mf-footnote ${stato.avviso ? 'text-mf-warn' : 'text-mf-ink-2'}`}>{stato.testo}</span>
         <RefreshCw size={13} className={`text-mf-ink-3 ${m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''}`} />
       </button>
+      {fonteFerma && <p className="mf-footnote mt-1 pl-4 text-mf-warn">{fonteFerma}</p>}
 
       {/* Il consiglio */}
       <section className="mt-4">
