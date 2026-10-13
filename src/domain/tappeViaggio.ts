@@ -10,7 +10,7 @@ import type { ImpiantoSulPercorso } from './lungoPercorso';
 import { SCOSTAMENTO_MAX_KM } from './lungoPercorso';
 import type { Piano, TappaCandidata } from './viaggio';
 import { MOTIVO_TESTO, pianificaViaggio } from './viaggio';
-import { numero } from '../lib/formato';
+import { litri, numero } from '../lib/formato';
 
 /**
  * Dagli impianti lungo la strada al piano del viaggio: quali si possono
@@ -129,12 +129,10 @@ export interface EsitoViaggio {
 /**
  * Il piano del viaggio, pronto da mostrare.
  *
- * Il piano confronta ogni distributore col prezzo di «quello che hai in
- * pancia». All'inizio e il prezzo a cui faresti il pieno sotto casa; se
- * vicino alla partenza non c'e niente, si usa la mediana della strada —
- * senza un riferimento il piano si fermerebbe al primo distributore
- * qualunque. In quel caso pero il confronto col «pieno prima di partire»
- * non si fa: sarebbe un confronto con una pompa che non esiste.
+ * Il piano sceglie da solo, col conto del costo minimo: il prezzo di
+ * partenza serve solo al confronto col «pieno prima di partire». Se
+ * vicino alla partenza non c'e un distributore quel confronto non si fa:
+ * sarebbe un confronto con una pompa che non esiste.
  */
 export function calcolaViaggio(d: DatiViaggio): EsitoViaggio {
   const candidate = tappeCandidate(d.impianti, d);
@@ -145,19 +143,20 @@ export function calcolaViaggio(d: DatiViaggio): EsitoViaggio {
     if (t.kmDaPartenza > KM_PARTENZA) break;
     if (prezzoPartenza === null || t.prezzo < prezzoPartenza) prezzoPartenza = t.prezzo;
   }
-  const riferimento = prezzoPartenza ?? mediana(candidate.map((t) => t.prezzo));
 
-  const grezzo = pianificaViaggio({
+  const piano = pianificaViaggio({
     distanzaKm: d.distanzaKm,
     kml: d.kml,
     serbatoioL: d.serbatoioL,
     litriAdesso,
     candidate,
-    prezzoPartenza: riferimento,
+    prezzoPartenza,
   });
-  const piano = prezzoPartenza === null ? { ...grezzo, spesaPienoPrima: null, risparmioEur: null } : grezzo;
 
+  // Il valore del carburante bruciato: al prezzo medio pagato nelle soste,
+  // o, senza soste, a quello di partenza o alla mediana della strada.
   const litriConsumati = d.kml > 0 ? d.distanzaKm / d.kml + piano.litriDeviazione : 0;
+  const riferimento = prezzoPartenza ?? mediana(candidate.map((t) => t.prezzo));
   const prezzoMedio = piano.litriComprati > 0 ? piano.spesaCarburante / piano.litriComprati : riferimento;
 
   return {
@@ -181,4 +180,13 @@ export function testoImpossibile(piano: Piano, strategia: Strategia): string {
       ? `Con il carburante che hai resti a secco${dove}, prima di un distributore lungo la strada.`
       : `${MOTIVO_TESTO['buco-troppo-lungo']} Il tratto scoperto inizia${dove}.`;
   return strategia === 'risparmio' ? base : `${base} Prova con Risparmio: conta anche i distributori più lontani dalla strada.`;
+}
+
+/**
+ * Quando ci si arriva ma sotto la riserva: nessun distributore raggiungibile
+ * lungo la strada permette di tenerla, il carburante pero basta.
+ */
+export function testoSottoRiserva(piano: Piano, strategia: Strategia): string {
+  const base = `Lungo la strada non c’è un distributore che ti eviti la riserva: arrivi con circa ${litri(piano.litriAllArrivo, 1)}. Fai benzina appena puoi.`;
+  return strategia === 'risparmio' ? base : `${base} Con Risparmio conti anche i distributori più lontani dalla strada.`;
 }

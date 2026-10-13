@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pianificaViaggio, RISERVA, type PianoInput, type TappaCandidata } from './viaggio';
+import { MOTIVO_TESTO, pianificaViaggio, RISERVA, type PianoInput, type TappaCandidata } from './viaggio';
 
 function tappa(over: Partial<TappaCandidata> & { id: string; kmDaPartenza: number; prezzo: number }): TappaCandidata {
   return {
@@ -308,18 +308,214 @@ describe('pianificaViaggio: non si compra piu del necessario', () => {
   });
 
   it('il pieno resta pieno quando la strada che resta lo richiede', () => {
+    // Da b (km 700) ai 1300 km servono 46 L: con un pieno ad a, che costa
+    // meno, a b se ne mettono il meno possibile.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 1300,
+        litriAdesso: 15,
+        prezzoPartenza: 1.5,
+        candidate: [
+          tappa({ id: 'a', kmDaPartenza: 80, prezzo: 2.1 }),
+          tappa({ id: 'b', kmDaPartenza: 700, prezzo: 2.2 }),
+        ],
+      })
+    );
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['a', 'b']);
+    expect(p.soste[0]!.pieno).toBe(true);
+    expect(p.soste[0]!.litriDopo).toBeCloseTo(50, 6);
+    expect(p.soste[1]!.litri).toBeCloseTo(600 / 15 + 6 - (50 - 620 / 15), 6);
+  });
+
+  it('quando non ci si arriva, dice fin dove portano le soste', () => {
+    // Da b (km 700) restano 900 km: con un pieno se ne fanno 660.
     const p = pianificaViaggio(
       input({
         distanzaKm: 1600,
         litriAdesso: 15,
-        prezzoPartenza: 1.5,
         candidate: [
           tappa({ id: 'a', kmDaPartenza: 80, prezzo: 2.2 }),
           tappa({ id: 'b', kmDaPartenza: 700, prezzo: 2.2 }),
         ],
       })
     );
-    expect(p.soste[0]!.pieno).toBe(true);
-    expect(p.soste[0]!.litriDopo).toBeCloseTo(50, 1);
+    expect(p.fattibile).toBe(false);
+    expect(p.motivo).toBe('buco-troppo-lungo');
+    expect(p.bloccoAlKm).toBeCloseTo(700 + 44 * 15, 6);
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['a', 'b']);
+    expect(p.soste[1]!.pieno).toBe(true);
+  });
+});
+
+/*
+ * I difetti trovati dalla revisione del 13 ottobre 2026 sul piano «goloso»:
+ * ognuno di questi casi falliva con la versione che guardava solo
+ * l'autonomia del momento e il prezzo «in pancia».
+ */
+describe('pianificaViaggio: costo minimo vero', () => {
+  it('non fa il pieno caro quando poco piu avanti costa meno e ci si arriva', () => {
+    // Si parte con 10 L: arrivati ad A (km 50) ne restano 6,7. A costa 2,10,
+    // B (km 200) 1,70. Il conto giusto: ad A solo quanto basta per arrivare a
+    // B con la riserva (9,3 L), il resto a B (26,7 L). Il piano goloso
+    // riempiva ad A 36 L a 2,10: 10,67 € buttati.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 600,
+        litriAdesso: 10,
+        prezzoPartenza: 1.8,
+        candidate: [tappa({ id: 'A', kmDaPartenza: 50, prezzo: 2.1 }), tappa({ id: 'B', kmDaPartenza: 200, prezzo: 1.7 })],
+      })
+    );
+    expect(p.fattibile).toBe(true);
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['A', 'B']);
+    expect(p.soste[0]!.litri).toBeCloseTo(150 / 15 + 6 - (10 - 50 / 15), 6);
+    expect(p.soste[1]!.litri).toBeCloseTo(400 / 15, 6);
+    expect(p.spesaCarburante).toBeCloseTo((150 / 15 + 6 - (10 - 50 / 15)) * 2.1 + (400 / 15) * 1.7, 6);
+  });
+
+  it('senza prezzo di partenza non si ferma alla prima pompa che capita', () => {
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 600,
+        litriAdesso: 12,
+        prezzoPartenza: null,
+        candidate: [tappa({ id: 'cara', kmDaPartenza: 30, prezzo: 2.3 }), tappa({ id: 'economica', kmDaPartenza: 60, prezzo: 1.9 })],
+      })
+    );
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['economica']);
+    // Si arriva alla economica con 8 L e se ne mettono 34: 64,60 €, non 78,20.
+    expect(p.spesaCarburante).toBeCloseTo(34 * 1.9, 6);
+  });
+
+  it('non fa soste da zero litri: una pompa dove non si compra niente non e una sosta', () => {
+    // Col pieno a 40 L il piano goloso andava ad A (piu economica di casa),
+    // ci metteva zero litri perche B costa ancora meno, e faceva due km di
+    // deviazione per niente.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 700,
+        litriAdesso: 40,
+        prezzoPartenza: 2.0,
+        candidate: [
+          tappa({ id: 'A', kmDaPartenza: 100, prezzo: 1.9, deviazioneKm: 1 }),
+          tappa({ id: 'B', kmDaPartenza: 200, prezzo: 1.8 }),
+        ],
+      })
+    );
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['B']);
+    expect(p.soste.every((s) => s.litri >= 0.1)).toBe(true);
+    expect(p.kmDeviazione).toBe(0);
+  });
+
+  it('chi parte in riserva si ferma e arriva con la riserva, se c e un distributore sulla strada', () => {
+    // 5 L su 50: la spia e accesa. Prima il piano diceva «ci arrivi senza
+    // fare benzina» e si arrivava con 2,3 L.
+    const p = pianificaViaggio(
+      input({ distanzaKm: 40, litriAdesso: 5, candidate: [tappa({ id: 'via', kmDaPartenza: 20, prezzo: 2.0 })] })
+    );
+    expect(p.fattibile).toBe(true);
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['via']);
+    expect(p.litriAllArrivo).toBeCloseTo(50 * RISERVA, 6);
+    expect(p.arrivoSottoRiserva).toBe(false);
+  });
+
+  it('se non c e nessun distributore ma il carburante basta, ci arrivi in riserva e lo dice', () => {
+    const inRiserva = pianificaViaggio(input({ distanzaKm: 40, litriAdesso: 5 }));
+    expect(inRiserva.fattibile).toBe(true);
+    expect(inRiserva.soste).toEqual([]);
+    expect(inRiserva.arrivoSottoRiserva).toBe(true);
+    expect(inRiserva.litriAllArrivo).toBeCloseTo(5 - 40 / 15, 6);
+
+    // 10 L: sopra la riserva, ma 120 km se la mangiano. Prima era «non ci
+    // arrivi», e invece ci si arriva con 2 L.
+    const sopra = pianificaViaggio(input({ distanzaKm: 120, litriAdesso: 10 }));
+    expect(sopra.fattibile).toBe(true);
+    expect(sopra.arrivoSottoRiserva).toBe(true);
+    expect(sopra.litriAllArrivo).toBeCloseTo(2, 6);
+  });
+});
+
+describe('pianificaViaggio: il pieno prima di partire deve stare nel serbatoio', () => {
+  it('non conta un pieno che non entra: 32,7 L da mettere con 10 L di spazio', () => {
+    // 1000 km a 15 km/l piu la riserva sono 72,7 L. Con 40 L dentro ne
+    // servirebbero 32,7, ma nel serbatoio da 50 ne entrano 10.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 1000,
+        litriAdesso: 40,
+        prezzoPartenza: 2.0,
+        candidate: [tappa({ id: 'a', kmDaPartenza: 500, prezzo: 1.9 })],
+      })
+    );
+    expect(p.spesaPienoPrima).toBeNull();
+    expect(p.risparmioEur).toBeNull();
+  });
+
+  it('non fa il confronto quando non serve comprare niente', () => {
+    const p = pianificaViaggio(
+      input({ distanzaKm: 300, litriAdesso: 50, prezzoPartenza: 2.0, candidate: [tappa({ id: 'a', kmDaPartenza: 100, prezzo: 1.5 })] })
+    );
+    expect(p.soste).toEqual([]);
+    expect(p.spesaPienoPrima).toBeNull();
+    expect(p.risparmioEur).toBeNull();
+  });
+});
+
+describe('pianificaViaggio: le scelte che si spiegano', () => {
+  it('a parita di costo sceglie il piano con meno soste', () => {
+    // Servono 16 L e costano 2,00 ovunque: metterne 8 e 8 costa uguale a
+    // metterne 16 in una volta, ma una sosta e meglio di due.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 600,
+        litriAdesso: 30,
+        candidate: [tappa({ id: 'a', kmDaPartenza: 150, prezzo: 2.0 }), tappa({ id: 'b', kmDaPartenza: 300, prezzo: 2.0 })],
+      })
+    );
+    expect(p.soste).toHaveLength(1);
+    expect(p.litriComprati).toBeCloseTo(16, 6);
+  });
+
+  it('non devia per un millesimo al litro', () => {
+    // Come sull A1 il 13 ottobre: 2,190 sulla strada, 2,189 a 1,2 km. I 2,4
+    // km in piu costano 35 centesimi, il millesimo ne fa risparmiare uno e
+    // mezzo. Il piano goloso ci andava.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 300,
+        litriAdesso: 12,
+        prezzoPartenza: 2.2,
+        candidate: [
+          tappa({ id: 'sulla-strada', kmDaPartenza: 50, prezzo: 2.19 }),
+          tappa({ id: 'fuori', kmDaPartenza: 60, prezzo: 2.189, deviazioneKm: 1.2 }),
+        ],
+      })
+    );
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['sulla-strada']);
+    expect(p.kmDeviazione).toBe(0);
+    expect(p.spesaCarburante).toBeCloseTo(14 * 2.19, 6);
+  });
+
+  it('fra due pompe nello stesso posto guarda anche la deviazione', () => {
+    // Stesso piazzale lungo la strada, ma la piu economica di un millesimo
+    // sta due km fuori: si va all altra. E mai a tutte e due.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 900,
+        litriAdesso: 30,
+        candidate: [
+          tappa({ id: 'vicina', kmDaPartenza: 300, prezzo: 2.19 }),
+          tappa({ id: 'lontana', kmDaPartenza: 300.2, prezzo: 2.189, deviazioneKm: 2 }),
+        ],
+      })
+    );
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['vicina']);
+  });
+});
+
+describe('MOTIVO_TESTO', () => {
+  it('manda a scegliere l auto nelle impostazioni: il Garage nella 2.0 non c e piu', () => {
+    expect(MOTIVO_TESTO['senza-consumo']).not.toContain('Garage');
+    expect(MOTIVO_TESTO['senza-consumo']).toContain('impostazioni');
   });
 });

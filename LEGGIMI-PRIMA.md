@@ -76,6 +76,7 @@ scripts/      seed.mjs, copia-worker-maplibre.mjs
 - **Prezzi sempre di oggi.** `data/dataset.ts` mostra subito l'ultima copia salvata e poi ricontrolla il file in rete all'avvio e a ogni ritorno in primo piano (`services/aggiornamentiAutomatici.ts`). La regola di quando ricontrollare è in `domain/aggiornamento.ts`.
 - **Il risparmio vero.** `domain/ranking.ts`: il risparmio si misura rispetto al distributore utilizzabile più vicino con un prezzo recente, meno il costo della strada in più (linea d'aria × 1,3), del tempo e dell'usura. I litri del pieno e il consumo vengono dall'auto scelta (`cars.json`), altrimenti dai valori medi di `domain/units.ts`.
 - **Colori dei prezzi.** Il livello (dal più economico al più caro) è lo z-score nella coorte di provincia, strada o autostrada (`domain/market.ts`, `domain/pricing.ts`). È lo stesso metro su mappa, lista e scheda.
+- **Il piano del viaggio.** `domain/viaggio.ts` sceglie le soste a costo minimo esatto (programmazione dinamica sui livelli del serbatoio che contano: riserva, pieno, partenza). Le regole del conto sono scritte in cima al file; un test di proprietà lo confronta con un risolutore indipendente (`domain/__fixtures__/pianoRiferimento.ts`) su centinaia di viaggi casuali.
 - **Gemini è facoltativo.** La chiave la mette l'utente nelle impostazioni e resta sul telefono.
 
 ## 5. Trappole che dal codice non si vedono

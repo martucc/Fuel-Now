@@ -7,6 +7,7 @@ import {
   serbatoioDi,
   tappeCandidate,
   testoImpossibile,
+  testoSottoRiserva,
   type DatiViaggio,
 } from './tappeViaggio';
 import type { ImpiantoSulPercorso } from './lungoPercorso';
@@ -210,6 +211,22 @@ describe('calcolaViaggio', () => {
     expect(e.costoStimato).toBeNull();
   });
 
+  it('in riserva ti manda al distributore e ti fa arrivare con la riserva', () => {
+    // 4,5 L su 45: la spia e accesa. Il viaggio da 50 km si farebbe anche
+    // cosi, ma arrivando quasi a secco: il piano fa fermare a quello buono.
+    const e = calcolaViaggio(
+      dati({
+        livello: 'riserva',
+        distanzaKm: 50,
+        impianti: [sulPercorso('caro', 1.82, 8), sulPercorso('buono', 1.68, 30)],
+      }),
+    );
+    expect(e.piano.fattibile).toBe(true);
+    expect(e.piano.arrivoSottoRiserva).toBe(false);
+    expect(e.piano.soste.map((s) => s.tappa.id)).toEqual(['buono']);
+    expect(e.piano.litriAllArrivo).toBeCloseTo(45 * 0.12, 6);
+  });
+
   it('dice quando con il carburante che hai non arrivi al primo distributore', () => {
     const e = calcolaViaggio(dati({ livello: 'riserva', distanzaKm: 600, impianti: [sulPercorso('lontano', 1.7, 300)] }));
     expect(e.piano.fattibile).toBe(false);
@@ -235,6 +252,7 @@ describe('testoImpossibile', () => {
     kmDeviazione: 0,
     litriDeviazione: 0,
     litriAllArrivo: 0,
+    arrivoSottoRiserva: false,
     spesaPienoPrima: null,
     risparmioEur: null,
   });
@@ -244,6 +262,14 @@ describe('testoImpossibile', () => {
     expect(t).toContain('resti a secco');
     expect(t).toContain(`km ${numero(1234)}`);
     expect(t).not.toContain('Prova con Risparmio');
+  });
+
+  it('quando si arriva in riserva lo dice, coi litri all arrivo', () => {
+    const p = { ...piano(0), fattibile: true, motivo: undefined, arrivoSottoRiserva: true, litriAllArrivo: 2.34 };
+    const t = testoSottoRiserva(p, 'bilanciato');
+    expect(t).toContain('arrivi con circa 2,3 L');
+    expect(t).toContain('Con Risparmio');
+    expect(testoSottoRiserva(p, 'risparmio')).not.toContain('Con Risparmio');
   });
 
   it('con una strategia stretta suggerisce di allargare', () => {

@@ -1,7 +1,7 @@
 import type { FuelKey } from '../../domain/raw';
 import { FUEL_LABEL } from '../../domain/fuel';
 import type { EsitoViaggio, Strategia } from '../../domain/tappeViaggio';
-import { testoImpossibile } from '../../domain/tappeViaggio';
+import { testoImpossibile, testoSottoRiserva } from '../../domain/tappeViaggio';
 import { chilometri, euro, litri, numero } from '../../lib/formato';
 import type { PercorsoViaggio } from '../../services/percorsoService';
 import { Segnaposto } from '../kit/Stato';
@@ -54,6 +54,11 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
               <>
                 <p className="mf-headline text-mf-warn">Così non ci arrivi</p>
                 <p className="mf-subhead mt-1 text-mf-ink-2">{testoImpossibile(p, strategia)}</p>
+              </>
+            ) : p.arrivoSottoRiserva ? (
+              <>
+                <p className="mf-headline text-mf-warn">Ci arrivi, ma in riserva</p>
+                <p className="mf-subhead mt-1 text-mf-ink-2">{testoSottoRiserva(p, strategia)}</p>
               </>
             ) : p.soste.length === 0 ? (
               <>
