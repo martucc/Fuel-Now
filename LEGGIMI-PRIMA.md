@@ -1,101 +1,103 @@
 # MartuccFuel — guida per chi ci lavora
 
-App dei prezzi dei carburanti per Android. È una web app (React 19 + TypeScript + Vite, PWA) impacchettata come app Android con Capacitor 8. Tutta l'interfaccia è in italiano.
+App dei prezzi dei carburanti per Android. È una web app (React 19 + TypeScript + Vite + Tailwind 4) impacchettata come app Android con Capacitor 8. Tutta l'interfaccia è in italiano.
 
-Stato al 13 ottobre 2026: ramo `estetica-21ago`, ultimo commit `514e1f4`, 333 test verdi su 30 file.
+Stato al 13 ottobre 2026: versione **2.0**, ramo `ccr-0d440925-0qmxsf` (PR #3). La spec delle decisioni è in `docs/superpowers/specs/2026-10-13-martuccfuel-2-0.md`.
 
-> Il `README.md` è vecchio (descrive la prima versione). Fa fede questo file.
+> Il `README.md` descrive la prima versione. Fa fede questo file.
 
 ---
 
 ## 1. Cosa serve sul computer
 
-| Strumento | Versione usata | A cosa serve |
+| Strumento | Versione | A cosa serve |
 |---|---|---|
-| Node.js | 24 | sviluppo, build, test |
+| Node.js | 22 o 24 | sviluppo, build, test |
 | JDK | 21 | build Android (Gradle) |
 | Android SDK | compileSdk / targetSdk 36, minSdk 24 | build Android |
-| Python 3.11 | facoltativo | solo per la vecchia pipeline dati (`fetch_stations.py`) |
+| Python 3.11 | facoltativo | solo per la pipeline dati (`fetch_stations.py`) |
 
-Per l'Android SDK basta Android Studio. Se Gradle non trova l'SDK, crea `android/local.properties` con:
-
-```
-sdk.dir=C\:\\Users\\<utente>\\AppData\\Local\\Android\\Sdk
-```
-
-(il file non è nello zip perché contiene il percorso della macchina).
+Se Gradle non trova l'SDK, crea `android/local.properties` con `sdk.dir=…` (non è nel repo perché contiene il percorso della macchina).
 
 ## 2. Primi passi
 
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # vitest, ~10 secondi
+npm test             # vitest, pochi secondi
 npm run build        # tsc + vite build in dist/
-npm run lint         # c'è debito vecchio: ~130 no-explicit-any, non bloccante
+npm run lint
 ```
 
-`predev` e `prebuild` copiano da soli il worker di MapLibre in `public/maplibre/`: non serve farlo a mano.
+`predev` e `prebuild` copiano da soli il worker di MapLibre in `public/maplibre/`.
 
-## 3. Fare l'APK da installare sul telefono
+## 3. Fare l'APK
 
 ```bash
-npm run seed && npm run build && npx cap sync android && cd android && ./gradlew assembleDebug
+npm run seed && npm run build && npx cap sync android && cd android && ./gradlew assembleRelease
 ```
 
-L'APK esce in `android/app/build/outputs/apk/debug/app-debug.apk` (circa 7 MB).
+L'APK esce in `android/app/build/outputs/apk/release/app-release.apk`.
 
-- **`npm run seed` sempre prima di una build che va su un telefono.** Scarica i prezzi aggiornati in `public/stations.json`, che è quello che l'app mostra al primo avvio senza rete. Se resta indietro l'app mostra prezzi vecchi come se fossero di oggi.
-- Se l'APK esce molto più grosso (14 MB invece di ~7) sono avanzi del merge degli asset: `./gradlew assembleDebug --rerun-tasks` lo rifà pulito.
-- Esiste solo la build di debug. Non c'è una firma di release configurata.
-
-Provarla dal telefono senza APK: `npm run dev -- --host` e apri `http://<ip-del-pc>:5173`. In HTTP puro però Chrome Android blocca il GPS: serve `chrome://flags` → *Insecure origins treated as secure* con quell'indirizzo.
+- **La firma.** La release si firma con la chiave indicata in `android/keystore.properties` (fuori da git, insieme a ogni `.p12`/`.jks`):
+  ```
+  storeFile=/percorso/martucc-fuel.p12
+  storePassword=…
+  keyAlias=martucc-fuel
+  keyPassword=…
+  ```
+  Senza quel file la release esce firmata con la chiave di debug del computer. **Per aggiornare l'app installata serve sempre la stessa chiave**: con un'altra Android rifiuta l'aggiornamento e bisogna disinstallare.
+- **`npm run seed` prima di una build che va su un telefono.** Mette in `public/stations.json` i prezzi di oggi: sono quelli che l'app mostra al primo avvio senza rete.
+- **Versione.** `versionCode`/`versionName` in `android/app/build.gradle`. `VERSIONE_APP` in `src/ui/schermate/FoglioImpostazioni.tsx` va tenuta uguale.
 
 ## 4. Com'è fatto
 
 ```
 src/
   domain/     logica pura, tutta testata (*.test.ts accanto a ogni modulo)
-  services/   rete, salvataggi locali, Gemini, notifiche, percorsi
-  components/ ui/   schermate e componenti React (resa sottile, poca logica)
-  design/     tokens.css (colori, tipografia), motion.ts (animazioni)
-  lib/        formato.ts (numeri e date all'italiana) e utilità
-android/app/src/main/java/com/martucc/fuel/   widget e sincronizzazione nativa
+  data/       dataset.ts (il negozio dei prezzi), archivio.ts (copia in IndexedDB)
+  app/        stato dell'app: impostazioni, posizione, dati, modello derivato, guscio e schede
+  services/   rete: Gemini, percorsi OSRM, ricerca luoghi, aggiornamenti automatici, navigatore
+  ui/
+    kit/      componenti di base (Pulsante, Gruppo/Riga, Segmentato, Foglio, Prezzo, LogoMarchio…)
+    mappa/    MappaCarburanti: l'unica mappa (MapLibre), usata da Home, Mappa e Viaggio
+    schermate/ Home, Mappa, Viaggio, Mercato (scheda «Prezzi») e i fogli
+  design/     tema.css: colori, caratteri, misure (unica fonte)
+  lib/        formato.ts (numeri all'italiana), haptics, maplibre
+android/app/src/main/java/com/martucc/fuel/   MainActivity e NavigazionePlugin («Portami lì»)
 scripts/      seed.mjs, copia-worker-maplibre.mjs
-docs/superpowers/   spec del redesign e piani delle fasi 1 e 2
 ```
 
-**Cinque schede**: Home, Mappa, Viaggio, Auto, Mercato.
+**Quattro schede**: Vicino (Home), Mappa, Viaggio, Prezzi.
 
-**Da dove vengono i prezzi.** `npm run seed` scarica `stations.json` dal repo `martucc/Fuel-Now`. In questo repo c'è anche la vecchia pipeline Python (`fetch_stations.py` e la GitHub Action `.github/workflows/update_stations.yml`, che gira sei volte al giorno) che aggiorna `public/stations.json` e `data/history.csv`.
+**Da dove vengono i prezzi.** La GitHub Action `.github/workflows/update_stations.yml` gira sei volte al giorno, lancia `fetch_stations.py` (dati del MIMIT) e committa `public/stations.json` e `data/history.csv` su `main`. L'app scarica `public/stations.json` da `raw.githubusercontent.com`.
 
 **Le idee principali**
-- **Direzione Casa.** La Home non cerca solo la pompa più vicina: sceglie il pieno lungo la strada di casa. `services/percorsoService.ts` chiede il percorso a OSRM, `domain/corridoio.ts` proietta ogni pompa sul percorso, e la deviazione vale il doppio della distanza laterale. Senza OSRM si ripiega sulla linea d'aria, **e la scheda lo dice** («circa», «stima in linea d'aria»). Il costo di una deviazione è tempo perso × `VALORE_TEMPO_EURO_ORA` (in `domain/ranking.ts`) più l'usura dell'auto, così si può dire all'utente «ti costa sei minuti».
-- **Il risparmio.** `services/adviceLog.ts` tiene il diario di cosa l'app ha consigliato ogni giorno; quando registri un pieno, `domain/risparmio.ts` calcola quanto hai pagato sotto la media di quel giorno.
-- **Gemini è facoltativo.** Senza chiave l'app usa il motore locale. La chiave la inserisce l'utente nelle impostazioni e resta sul telefono: nel repo non ci sono chiavi.
+- **Prezzi sempre di oggi.** `data/dataset.ts` mostra subito l'ultima copia salvata e poi ricontrolla il file in rete all'avvio e a ogni ritorno in primo piano (`services/aggiornamentiAutomatici.ts`). La regola di quando ricontrollare è in `domain/aggiornamento.ts`.
+- **Il risparmio vero.** `domain/ranking.ts`: il risparmio si misura rispetto al distributore utilizzabile più vicino con un prezzo recente, meno il costo della strada in più (linea d'aria × 1,3), del tempo e dell'usura. I litri del pieno e il consumo vengono dall'auto scelta (`cars.json`), altrimenti dai valori medi di `domain/units.ts`.
+- **Colori dei prezzi.** Il livello (dal più economico al più caro) è lo z-score nella coorte di provincia, strada o autostrada (`domain/market.ts`, `domain/pricing.ts`). È lo stesso metro su mappa, lista e scheda.
+- **Gemini è facoltativo.** La chiave la mette l'utente nelle impostazioni e resta sul telefono.
 
 ## 5. Trappole che dal codice non si vedono
 
-- **Test:** girano in ambiente `node` e prendono solo `src/**/*.test.ts`, mai `.tsx`. Per questo la logica sta nei moduli puri di `domain/` e i componenti fanno solo la resa. Niente jsdom.
-- **I test non devono fissare valori del dataset** (medie, affidabilità): cambiano a ogni `seed`.
-- **Token CSS con prefisso `--mf-`.** Tailwind v4 emette il suo `@theme` dopo `:root` e sovrascriverebbe in silenzio nomi come `--font-sans`.
-- **Il blu `--mf-recommended` è riservato al distributore consigliato** sulla mappa. Non va mai usato come livello di prezzo.
-- **Service worker solo sul web.** Dentro Capacitor serviva la build vecchia e l'app sembrava non aggiornarsi mai. In `vite.config.ts` c'è `injectRegister: false` e la decisione sta tutta in `main.tsx`. Non rimettere la registrazione automatica: registrava e `main.tsx` cancellava, con un esito diverso a ogni avvio.
-- **`dropMisgeocoded`** (`domain/parse.ts`) toglie le pompe con coordinate sbagliate dalle scelte ma non dalle statistiche di provincia, che devono restare allineate a `market.test.ts`.
-- **La media locale si passa a `priceLevel` solo per gli impianti in autostrada.** Se la applichi a tutti, una pompa dall'altra parte della regione viene giudicata col mercato del quartiere dell'utente.
-- **`isLikelyClosed` segnala, non esclude.** Se diventa un motivo per scartare una pompa si svuota il pannello «freschezza» del Mercato, che conta di proposito i prezzi vecchi.
-- **L'elenco dei modelli Gemini lo dà l'API** (`chiediModelli` in `services/geminiService.ts`). Non scriverlo a mano: prima conteneva modelli inesistenti.
-- **I widget Android non calcolano niente.** Leggono le chiavi `mf_w_*` che scrive `domain/widget.ts`; dall'altra parte c'è `MfNotte.java`, e i due vanno cambiati insieme. `mf_w_modo` dice se la Home sta ragionando sul rientro a casa: senza, il widget consiglierebbe una pompa diversa da quella della Home. Quando `FuelDataSyncManager` riscrive i dati da solo deve rimettere `mf_w_modo` a `zona`.
+- **Test:** girano in ambiente `node` e prendono solo `src/**/*.test.ts`, mai `.tsx`. La logica sta nei moduli puri; i componenti fanno solo la resa.
+- **I test non devono fissare valori del dataset**: cambiano a ogni `seed` (i test del ranking usano una coorte finta apposta).
+- **Il blu vuol dire «vai qui»** e nient'altro: distributore consigliato, soste del viaggio, «Portami lì». Mai schede, link, interruttori, la posizione dell'utente o i grafici.
+- **Stili di base dentro `@layer base`.** Una regola CSS fuori dai layer di Tailwind vince sulle classi di utilità: un `button { background: none }` sciolto spegneva tutti i bottoni blu.
+- **Niente service worker dentro l'APK.** Serviva la build vecchia e l'app sembrava non aggiornarsi. `main.tsx` toglie quelli rimasti.
+- **Il download dei prezzi:** indirizzo fisso e `cache: 'no-cache'`, così GitHub risponde 304 quando il file non è cambiato. Niente parametri per «rompere la cache» (la CDN li ignora) e niente intestazioni fatte a mano (il preflight CORS di raw.githubusercontent risponde 403).
+- **`dropMisgeocoded`** (`domain/parse.ts`) toglie le pompe con coordinate sbagliate dalle scelte ma non dalle statistiche di provincia.
+- **`isLikelyClosed` segnala, non esclude.**
+- **L'elenco dei modelli Gemini lo dà l'API** (`chiediModelli` in `services/geminiService.ts`). Non scriverlo a mano.
 - **`android/app/src/main/assets/` è generata** da `npx cap sync android`: non modificarla a mano.
+- **Margini sicuri:** Capacitor 8 (SystemBars) passa i margini alla pagina come `--safe-area-inset-*`; `tema.css` li usa con `env()` come ripiego.
 
 ## 6. Come si guarda l'app mentre ci lavori
 
-I difetti che contano si vedono solo con l'app che gira davvero, in formato telefono: viewport 390×844 con DPR 3, tocco attivo, geolocalizzazione su Roma (41.9028, 12.4964). Esempi trovati solo così: un pulsante principale rimasto in stile secondario, 140 px di vuoto dentro un foglio, la barra di navigazione che lampeggiava per 180 ms perché a un `motion.div` mancava `initial`.
-
-Per le cose che durano poco (splash, transizioni) conviene uno script che registra i valori in un array su `window` e poi leggerlo, invece di provare a beccare lo screenshot giusto.
+I difetti che contano si vedono solo con l'app che gira davvero, in formato telefono: viewport 390×844 con DPR 3, tocco attivo, geolocalizzazione (per esempio Lugo, 44.4167, 11.9167). Il GPS nel browser funziona solo su `localhost` o in https.
 
 ## 7. Regole del progetto
 
-- **Testi dell'interfaccia** in italiano normale, con gli accenti giusti e i numeri all'italiana (usa `src/lib/formato.ts`). Niente maiuscolo enfatico e niente gergo tecnico: «Sincronizzazione Nucleo Operativo» è stato bocciato. Vale anche per le etichette corte: «+1,4 km» va bene, «+1,4 km dev.» no.
+- **Testi dell'interfaccia** in italiano normale, con gli accenti giusti e i numeri all'italiana (usa `src/lib/formato.ts`). Niente maiuscolo enfatico e niente gergo tecnico.
 - **Commit** in italiano, in stile convenzionale: `feat(mappa): …`, `fix(consigli): …`.
-- **Unire a `main` o pubblicare** (`npm run deploy` va su gh-pages) lo decide Nico, dopo aver provato. Il ramo `redesign/fase-2-home-mappa` non è ancora unito a `main`.
+- **Unire a `main`** lo decide Nico, dopo aver provato.
