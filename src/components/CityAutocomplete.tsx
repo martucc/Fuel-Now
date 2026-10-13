@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Locate, X } from 'lucide-react';
-import { cn } from '../lib/utils';
 import { ITALIAN_CITIES } from '../data/italianCities';
 
 interface Props {
@@ -71,7 +70,14 @@ export function CityAutocomplete({
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => { setFocused(true); setOpen(true); }}
           placeholder={placeholder}
-          className="bg-transparent text-[16px] text-white placeholder:text-zinc-600 outline-none w-full font-semibold tracking-tight"
+          className="w-full border-none bg-transparent outline-none"
+          style={{
+            color: 'var(--mf-ink)',
+            fontFamily: 'var(--mf-font-sans)',
+            fontSize: 16,
+            fontWeight: 500,
+            letterSpacing: '-0.01em',
+          }}
           autoComplete="off"
           spellCheck={false}
         />
@@ -79,7 +85,8 @@ export function CityAutocomplete({
           <button
             onClick={() => { onChange(''); setOpen(false); }}
             aria-label="Cancella"
-            className="text-zinc-500 hover:text-white active:scale-90 transition-all flex-shrink-0"
+            className="flex-shrink-0 transition-transform active:scale-90"
+            style={{ color: 'var(--mf-muted)' }}
           >
             <X className="w-4 h-4" />
           </button>
@@ -89,13 +96,16 @@ export function CityAutocomplete({
             onClick={(e) => { e.preventDefault(); onUseLocation(); setOpen(false); }}
             disabled={isLocating}
             aria-label="Usa la mia posizione"
-            className={cn(
-              'flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all border',
-              isLocating
-                ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 animate-pulse'
-                : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 active:scale-90'
-            )}
             title="Usa la mia posizione"
+            className={`flex flex-shrink-0 items-center justify-center transition-transform active:scale-90 ${isLocating ? 'animate-pulse' : ''}`}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 'var(--mf-radius-pill)',
+              background: 'var(--mf-ground)',
+              border: '1px solid var(--mf-hairline)',
+              color: 'var(--mf-accent)',
+            }}
           >
             <Locate className="w-3.5 h-3.5" />
           </button>
@@ -103,15 +113,27 @@ export function CityAutocomplete({
       </div>
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-[#0a0f1d] border border-blue-500/30 rounded-2xl shadow-[0_0_40px_rgba(37,99,235,0.25)] overflow-hidden">
+        <div
+          className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden"
+          style={{
+            background: 'var(--mf-surface-raised)',
+            border: '1px solid var(--mf-hairline)',
+            borderRadius: 'var(--mf-radius-md)',
+            boxShadow: '0 18px 40px rgba(0,0,0,.45)',
+          }}
+        >
           {suggestions.map((s, i) => (
             <button
               key={s}
               onClick={() => { onChange(s); setOpen(false); setFocused(false); }}
-              className={cn(
-                'w-full px-4 py-3 text-left text-[14px] font-semibold text-white hover:bg-blue-500/10 transition-colors',
-                i !== suggestions.length - 1 ? 'border-b border-white/5' : ''
-              )}
+              className="w-full px-4 py-3 text-left"
+              style={{
+                borderTop: i === 0 ? 'none' : '1px solid var(--mf-hairline)',
+                color: 'var(--mf-ink)',
+                fontFamily: 'var(--mf-font-sans)',
+                fontSize: 14,
+                fontWeight: 500,
+              }}
             >
               <HighlightMatch text={s} query={value} />
             </button>
@@ -133,7 +155,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
   return (
     <>
       {before}
-      <span className="text-blue-400">{match}</span>
+      <span style={{ color: 'var(--mf-accent)' }}>{match}</span>
       {after}
     </>
   );

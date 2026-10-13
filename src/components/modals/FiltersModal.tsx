@@ -1,7 +1,9 @@
-import { motion, AnimatePresence } from 'motion/react';
-import { X } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { getBrandLogo } from '../../lib/brandLogos';
+import { AnimatePresence } from 'motion/react';
+import { Check } from 'lucide-react';
+import { Sheet } from '../../design/primitives/Sheet';
+import { Button } from '../../design/primitives/Button';
+import { Toggle } from '../../design/primitives/Toggle';
+import { BrandLogo } from '../../design/primitives/BrandLogo';
 
 interface Props {
   show: boolean; setShow: (v: boolean) => void;
@@ -14,82 +16,174 @@ interface Props {
   brands: string[];
 }
 
+const SERVIZI = ['Self-Service', 'Bar', 'Autolavaggio', 'Officina'];
+
 export function FiltersModal(p: Props) {
-  const btn = (active: boolean) => cn("px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border", active ? "bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-900/20" : "bg-white/5 text-[#8e8e93] border-white/5");
+  const attivi =
+    p.selectedBrands.length + p.selectedServices.length + (p.h24 ? 1 : 0) + (p.noHighway ? 1 : 0) + (p.hideAnomalies ? 1 : 0);
 
   return (
     <AnimatePresence>
       {p.show && (
-        <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed inset-0 z-[60] flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => p.setShow(false)} />
-          <div className="w-full max-w-md bg-[#1c1c1e] rounded-t-[3rem] border-t border-white/10 p-8 pt-4 space-y-8 relative z-10 max-h-[85vh] overflow-y-auto no-scrollbar">
-            <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto" />
-            <div className="flex justify-between items-center"><h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Filtri</h3><button onClick={() => p.setShow(false)} className="p-3 bg-white/5 rounded-full text-white"><X size={20} /></button></div>
-            
-            {/* Max Distance - Moved to Top */}
-            <section className="space-y-4 bg-white/5 p-6 rounded-[32px] border border-white/5">
-              <div className="px-1">
-                <label className="text-[11px] font-black text-[#8e8e93] uppercase tracking-[0.2em] flex justify-between items-center mb-4">
-                  Raggio d'azione
-                  <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">{p.radius} KM</span>
-                </label>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="100" 
-                  value={p.radius} 
-                  onChange={e => p.setRadius(parseInt(e.target.value))} 
-                  className="w-full h-1.5 bg-white/10 rounded-full appearance-none accent-blue-500 cursor-pointer" 
-                />
+        <Sheet title="Filtri" onClose={() => p.setShow(false)}>
+          <div className="space-y-7 pb-4">
+            {/* Raggio */}
+            <section>
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="mf-label" style={{ fontSize: 9 }}>fin dove cerchi</div>
+                <span className="mf-num" style={{ color: 'var(--mf-accent)', fontSize: 13 }}>{p.radius} km</span>
               </div>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={p.radius}
+                onChange={(e) => p.setRadius(parseInt(e.target.value))}
+                className="mt-3 w-full"
+                style={{ accentColor: 'var(--mf-accent)' }}
+              />
+              <p className="mt-2" style={{ color: 'var(--mf-ink-2)', fontSize: 11.5, lineHeight: 1.5 }}>
+                Più allarghi, più distributori entrano nel confronto — ma il carburante per arrivarci
+                pesa già nel calcolo, quindi allargare non sposta quasi mai il consiglio.
+              </p>
             </section>
 
-            <section className="space-y-4">
-              <h4 className="text-[11px] font-black text-[#8e8e93] uppercase tracking-[0.2em] px-1">Brand</h4>
+            {/* Marchi */}
+            {p.brands.length > 0 && (
+              <section>
+                <div className="mf-label mb-3" style={{ fontSize: 9 }}>solo questi marchi</div>
+                <div className="flex flex-wrap gap-2">
+                  {p.brands.map((b) => {
+                    const attivo = p.selectedBrands.includes(b);
+                    return (
+                      <button
+                        key={b}
+                        onClick={() =>
+                          p.setSelectedBrands(attivo ? p.selectedBrands.filter((x) => x !== b) : [...p.selectedBrands, b])
+                        }
+                        className="flex items-center gap-2 py-1.5 pl-1.5 pr-3.5"
+                        style={{
+                          borderRadius: 'var(--mf-radius-pill)',
+                          background: attivo ? 'var(--mf-accent)' : 'transparent',
+                          color: attivo ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                          border: `1px solid ${attivo ? 'var(--mf-accent)' : 'var(--mf-hairline)'}`,
+                          fontSize: 12.5,
+                          fontFamily: 'var(--mf-font-sans)',
+                          fontWeight: attivo ? 600 : 500,
+                        }}
+                      >
+                        <BrandLogo brand={b} size={22} />
+                        {b}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Servizi */}
+            <section>
+              <div className="mf-label mb-3" style={{ fontSize: 9 }}>deve avere</div>
               <div className="flex flex-wrap gap-2">
-                {p.brands.map(b => {
-                  const logo = getBrandLogo(b);
-                  const active = p.selectedBrands.includes(b);
+                {SERVIZI.map((s) => {
+                  const attivo = p.selectedServices.includes(s);
                   return (
-                    <button 
-                      key={b} 
-                      onClick={() => p.setSelectedBrands(active ? p.selectedBrands.filter(x => x !== b) : [...p.selectedBrands, b])} 
-                      className={cn(
-                        "flex items-center gap-2 pl-2 pr-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border",
-                        active ? "bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-900/20" : "bg-white/5 text-[#8e8e93] border-white/5"
-                      )}
+                    <button
+                      key={s}
+                      onClick={() =>
+                        p.setSelectedServices(attivo ? p.selectedServices.filter((x) => x !== s) : [...p.selectedServices, s])
+                      }
+                      className="flex items-center gap-1.5 px-3.5 py-2"
+                      style={{
+                        borderRadius: 'var(--mf-radius-pill)',
+                        background: attivo ? 'var(--mf-accent)' : 'transparent',
+                        color: attivo ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                        border: `1px solid ${attivo ? 'var(--mf-accent)' : 'var(--mf-hairline)'}`,
+                        fontSize: 12.5,
+                        fontFamily: 'var(--mf-font-sans)',
+                        fontWeight: attivo ? 600 : 500,
+                      }}
                     >
-                      <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center overflow-hidden shadow-inner">
-                        <img src={logo} alt={b} className="w-full h-full object-contain scale-[0.9]" />
-                      </div>
-                      {b}
+                      {attivo && <Check size={13} />}
+                      {s}
                     </button>
                   );
                 })}
               </div>
             </section>
 
+            {/* Interruttori */}
             <section className="space-y-4">
-              <h4 className="text-[11px] font-black text-[#8e8e93] uppercase tracking-[0.2em] px-1">Servizi</h4>
-              <div className="flex flex-wrap gap-2">{['Self-Service', 'Bar', 'Autolavaggio', 'Officina'].map(s => <button key={s} onClick={() => p.setSelectedServices(p.selectedServices.includes(s) ? p.selectedServices.filter(x => x !== s) : [...p.selectedServices, s])} className={btn(p.selectedServices.includes(s))}>{s}</button>)}</div>
+              <div className="mf-label" style={{ fontSize: 9 }}>escludi</div>
+
+              <Interruttore
+                titolo="Solo aperti 24 ore"
+                nota="Utile di notte, inutile di giorno: taglia parecchi distributori."
+                on={p.h24}
+                onChange={() => p.setH24(!p.h24)}
+              />
+              <Interruttore
+                titolo="Niente autostrada"
+                nota="In autostrada si paga il servizio, non il carburante."
+                on={p.noHighway}
+                onChange={() => p.setNoHighway(!p.noHighway)}
+              />
+              <Interruttore
+                titolo="Nascondi i prezzi sospetti"
+                nota="Quelli troppo bassi per essere veri: spesso sono errori di comunicazione."
+                on={p.hideAnomalies}
+                onChange={() => p.setHideAnomalies(!p.hideAnomalies)}
+              />
             </section>
 
-            <section className="space-y-4">
-              <h4 className="text-[11px] font-black text-[#8e8e93] uppercase tracking-[0.2em] px-1">Filtri Rapidi</h4>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => p.setH24(!p.h24)} className={btn(p.h24)}>H24</button>
-                <button onClick={() => p.setNoHighway(!p.noHighway)} className={btn(p.noHighway)}>No Autostrada</button>
-                <button onClick={() => p.setHideAnomalies(!p.hideAnomalies)} className={cn("px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border", p.hideAnomalies ? "bg-amber-500 text-white border-amber-400 shadow-lg shadow-amber-500/20" : "bg-white/5 text-[#8e8e93] border-white/5")}>Nascondi Anomalie</button>
+            <div className="flex gap-3 pt-1">
+              <Button
+                tone="quiet"
+                size="md"
+                disabled={attivi === 0 && p.radius === 20}
+                onClick={() => {
+                  p.setSelectedBrands([]);
+                  p.setSelectedServices([]);
+                  p.setH24(false);
+                  p.setNoHighway(false);
+                  p.setHideAnomalies(false);
+                  p.setRadius(20);
+                }}
+              >
+                Azzera
+              </Button>
+              <div className="flex-1">
+                <Button full size="md" onClick={() => p.setShow(false)}>
+                  {attivi > 0 ? `Applica ${attivi} filtri` : 'Chiudi'}
+                </Button>
               </div>
-            </section>
-
-            <div className="flex gap-4 pt-4 pb-10">
-              <button onClick={() => { p.setSelectedBrands([]); p.setSelectedServices([]); p.setH24(false); p.setNoHighway(false); p.setRadius(20); }} className="flex-1 py-4 bg-white/5 text-[#8e8e93] font-bold rounded-full text-[11px] uppercase tracking-widest border border-white/5">Reset</button>
-              <button onClick={() => p.setShow(false)} className="flex-[2] py-4 bg-white text-black font-bold rounded-full shadow-2xl active:scale-95 transition-all text-[11px] uppercase tracking-widest">Applica</button>
             </div>
           </div>
-        </motion.div>
+        </Sheet>
       )}
     </AnimatePresence>
+  );
+}
+
+function Interruttore({
+  titolo, nota, on, onChange,
+}: {
+  titolo: string;
+  nota: string;
+  on: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <div style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14, color: 'var(--mf-ink)' }}>
+          {titolo}
+        </div>
+        <p className="mt-0.5" style={{ color: 'var(--mf-ink-2)', fontSize: 11.5, lineHeight: 1.45 }}>
+          {nota}
+        </p>
+      </div>
+      <Toggle on={on} onChange={onChange} ariaLabel={titolo} />
+    </div>
   );
 }

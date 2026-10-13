@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nudo su Android 12+: solo i numeri, angoli quelli del lanciatore. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#5908090B" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

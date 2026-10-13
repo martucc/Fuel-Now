@@ -1,24 +1,35 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Preferences } from '@capacitor/preferences';
-import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator, Layers, MapPinned, Moon, Sun } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { MapPin, Bell, Settings, Home, BarChart3, Car, Target, Route, Calculator } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FuelStation, MarketAnalysis, FuelType, Alert } from './types';
-import { getStations } from './services/dataService';
-import { analyzeFuelMarket } from './services/geminiService';
+import type { RankedStation } from './domain/ranking';
+import { getStations, getRows, getRawDataset } from './services/dataService';
+import { analyzeFuelMarket, ErroreIa, MESSAGGIO_ERRORE } from './services/geminiService';
+import { buildAiContext } from './domain/aiContext';
+import { computeStats, fillupsForCar } from './services/fillupService';
+import { computeBudget } from './services/budgetService';
+import { registraConsiglio } from './services/adviceLog';
+import { pubblicaWidget } from './services/widget';
+import { descriviDati, describeAge } from './domain/freshness';
+import { pianificaViaggio, type Piano, type TappaCandidata } from './domain/viaggio';
+import { levelForZ, zScore } from './domain/pricing';
+import { cohortFor } from './domain/market';
 import { buildLocalMarketAnalysis, calculateMarketStats } from './services/localAnalysis';
+import { buildCohorts } from './domain/market';
+import { toFuelKey, toFuelType } from './domain/fuel';
+import { litersFor, kmlFor } from './domain/units';
+import { buildHomeModel } from './ui/home/homeModel';
+import type { Percorso } from './domain/corridoio';
+import { chiediPercorso, percorsoInCache } from './services/percorsoService';
+import { buildMarketModel } from './ui/market/marketModel';
+import { toFuelStation } from './data/adapter';
+import { BlockSheet } from './ui/sheets/BlockSheet';
 import { loadHistory } from './services/historyService';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-// @ts-ignore
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-// @ts-ignore
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import { MainMapLibre } from './components/MainMapLibre';
 
 import { HomeTab } from './components/tabs/HomeTab';
 import { TripTab } from './components/tabs/TripTab';
-import { VehicleTab } from './components/tabs/VehicleTab';
-import { PienoTab } from './components/tabs/PienoTab';
+import { AutoTab } from './components/tabs/AutoTab';
 import { checkPriceThresholds, checkDailyTrend, checkBestDeal, checkPienoReminder, checkDeadlines, checkBudget, checkAndRequestStartupPermission } from './services/notificationService';
 import { BudgetCalcModal } from './components/BudgetCalcModal';
 import { InstallPwaButton } from './components/InstallPwaButton';
@@ -28,15 +39,12 @@ import { AnalysisTab } from './components/tabs/AnalysisTab';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { FiltersModal } from './components/modals/FiltersModal';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { HomeAddressModal } from './components/modals/HomeAddressModal';
 import { SplashScreen } from './components/SplashScreen';
 import { BottomNav } from './components/BottomNav';
-import { getBrandLogo } from './lib/brandLogos';
-
-const DefaultIcon = L.icon({ iconUrl: markerIcon, shadowUrl: markerShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
 
 type TabType = 'home'|'map'|'veicolo'|'analysis'|'alerts'|'trip'|'pieno';
-const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'pieno', 'alerts'];
+const tabOrder: TabType[] = ['home', 'map', 'trip', 'veicolo', 'analysis', 'alerts'];
 
 const pageVariants = {
   initial: (direction: number) => ({
@@ -66,69 +74,11 @@ const pageVariants = {
   }),
 };
 
-function MapUpdater({ onMove, onZoom, onBoundsChange }: { onMove: (c: { lat: number; lng: number }) => void; onZoom?: (z: number) => void; onBoundsChange?: (b: L.LatLngBounds) => void }) {
-  const map = useMap();
-  useEffect(() => {
-    onBoundsChange?.(map.getBounds());
-  }, [map]);
-
-  useMapEvents({
-    moveend: (e: any) => { 
-      const c = e.target.getCenter(); 
-      onMove({ lat: c.lat, lng: c.lng }); 
-      onZoom?.(e.target.getZoom()); 
-      onBoundsChange?.(e.target.getBounds());
-    },
-    zoomend: (e: any) => { 
-      onZoom?.(e.target.getZoom()); 
-      onBoundsChange?.(e.target.getBounds());
-    },
-  });
-  return null;
-}
-function CenterBtn({ loc }: { loc: { lat: number; lng: number } | null }) {
-  const map = useMap();
-  if (!loc) return null;
-  return <button onClick={() => map.setView([loc.lat, loc.lng], 15)} className="absolute bottom-6 right-6 z-[500] p-4 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-95 transition-all outline-none"><Target size={24} /></button>;
-}
-
-function HeatmapToggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
-  return (
-    <button
-      onClick={onToggle}
-      className={`absolute top-4 right-4 z-[500] w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-all border ${
-        active
-          ? 'bg-blue-600 text-white border-blue-400/40 shadow-[0_0_24px_rgba(37,99,235,0.5)]'
-          : 'bg-black/85 text-white border-white/15 backdrop-blur-md'
-      }`}
-      title={active ? 'Vista pin' : 'Vista heatmap'}
-      aria-label="Toggle heatmap"
-    >
-      {active ? <MapPinned size={20} /> : <Layers size={20} />}
-    </button>
-  );
-}
-
-function MapStyleToggle({ style, onToggle }: { style: 'dark' | 'voyager'; onToggle: () => void }) {
-  return (
-    <button
-      onClick={onToggle}
-      className="absolute top-20 right-4 z-[500] w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-all border bg-black/85 text-white border-white/15 backdrop-blur-md hover:bg-black/95"
-      title={style === 'dark' ? 'Vista chiara' : 'Vista scura'}
-      aria-label="Toggle map style"
-    >
-      {style === 'dark' ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-blue-400" />}
-    </button>
-  );
-}
-
-function priceToHeatColor(price: number, avg: number): string {
-  if (!price || !avg || !isFinite(avg)) return 'hsl(200, 50%, 50%)';
-  const delta = (price - avg) / avg;
-  const t = Math.max(-1, Math.min(1, delta / 0.035));
-  const hue = 120 * (1 - (t + 1) / 2);
-  return `hsl(${Math.round(hue)}, 80%, 50%)`;
-}
+const mapPageVariants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.15, ease: "easeOut" as const } },
+  exit: { opacity: 0, transition: { duration: 0.12, ease: "easeIn" as const } }
+};
 
 function normalizeFuelNews(raw: any): any[] {
   if (Array.isArray(raw)) return raw;
@@ -146,176 +96,6 @@ function shortCarName(m: string): string {
   // Standalone digit at end (codici Audi/Mercedes "25", "180") - non tagliare se preceduto da "Serie"/"Classe"
   if (!/\b(Serie|Classe)\s+\w+$/i.test(s)) s = s.replace(/\s+\d{1,3}$/, '');
   return s.trim();
-}
-
-const WEATHER_MAP: Record<number, { icon: string; desc: string }> = {
-  0: { icon: "☀️", desc: "Soleggiato" },
-  1: { icon: "⛅", desc: "Poco Nuvoloso" },
-  2: { icon: "⛅", desc: "Poco Nuvoloso" },
-  3: { icon: "☁️", desc: "Coperto" },
-  45: { icon: "🌫️", desc: "Nebbia" },
-  48: { icon: "🌫️", desc: "Nebbia" },
-  51: { icon: "🌧️", desc: "Pioggerella" },
-  53: { icon: "🌧️", desc: "Pioggerella" },
-  55: { icon: "🌧️", desc: "Pioggerella" },
-  61: { icon: "🌧️", desc: "Pioggia" },
-  63: { icon: "🌧️", desc: "Pioggia" },
-  65: { icon: "🌧️", desc: "Forte Pioggia" },
-  71: { icon: "❄️", desc: "Neve" },
-  73: { icon: "❄️", desc: "Neve" },
-  75: { icon: "❄️", desc: "Fitta Neve" },
-  80: { icon: "🌧️", desc: "Rovesci" },
-  81: { icon: "🌧️", desc: "Rovesci" },
-  82: { icon: "🌧️", desc: "Rovesci" },
-  95: { icon: "⚡", desc: "Temporale" },
-  96: { icon: "⚡", desc: "Temporale" },
-  99: { icon: "⚡", desc: "Temporale" }
-};
-
-async function updateWidgetData(stations: FuelStation[], fuelType: FuelType, loc: { lat: number; lng: number } | null) {
-  try {
-    if (loc) {
-      await Preferences.set({ key: "mf_widget_user_lat", value: String(loc.lat) });
-      await Preferences.set({ key: "mf_widget_user_lng", value: String(loc.lng) });
-    }
-    await Preferences.set({ key: "mf_widget_fuel_type", value: fuelType });
-
-    // 1. Filter stations by location if available (limit to 20 km)
-    let localStations = stations;
-    if (loc) {
-      localStations = stations.filter(s => (s.distance ?? 999) <= 20);
-      // Fallback: if no stations within 20km, search up to 40km or use all
-      if (localStations.length === 0) {
-        localStations = stations.filter(s => (s.distance ?? 999) <= 40);
-      }
-      if (localStations.length === 0) {
-        localStations = stations;
-      }
-    }
-
-    let cheapest: FuelStation | null = null;
-    let minPrice = Infinity;
-    
-    for (const s of localStations) {
-      const p = s.prices.find(pr => pr.type === fuelType);
-      if (p && p.price && p.price < minPrice) {
-        minPrice = p.price;
-        cheapest = s;
-      }
-    }
-
-    if (cheapest) {
-      const brandName = cheapest.brand && cheapest.brand !== "Indipendente" ? cheapest.brand : cheapest.name;
-      const distText = cheapest.distance !== undefined ? ` · ${cheapest.distance.toFixed(1)} km` : "";
-      const stationText = `${brandName}${distText}`;
-      const priceText = `${minPrice.toFixed(3)} €/L`;
-      
-      await Preferences.set({ key: "mf_widget_cheapest_name", value: stationText });
-      await Preferences.set({ key: "mf_widget_cheapest_price", value: priceText });
-    } else {
-      await Preferences.set({ key: "mf_widget_cheapest_name", value: "Apri l'app..." });
-      await Preferences.set({ key: "mf_widget_cheapest_price", value: "--- €/L" });
-    }
-
-    let aiTip = "💡 Risparmia su Martucc Fuel";
-    if (localStations.length > 0 && cheapest) {
-      const allPrices = localStations.flatMap(s => s.prices.filter(p => p.type === fuelType).map(p => p.price)).filter(p => p > 0);
-      if (allPrices.length > 0) {
-        const avg = allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
-        const diff = avg - minPrice;
-        if (diff > 0.05) {
-          aiTip = `💡 Risparmio: -${Math.round(diff * 100)}¢ vs media!`;
-        } else {
-          aiTip = "💡 Prezzi stabili. Fai rifornimento.";
-        }
-      }
-    }
-    await Preferences.set({ key: "mf_widget_ai_tip", value: aiTip });
-
-    // CALCOLA IL DISTRIBUTORE PIU VICINO ENTRO 20 KM
-    let closest: FuelStation | null = null;
-    let minDistance = Infinity;
-
-    for (const s of localStations) {
-      const p = s.prices.find(pr => pr.type === fuelType);
-      if (p && p.price) {
-        const dist = s.distance ?? 999;
-        if (dist < minDistance) {
-          minDistance = dist;
-          closest = s;
-        }
-      }
-    }
-
-    if (closest) {
-      const brandName = closest.brand && closest.brand !== "Indipendente" ? closest.brand : closest.name;
-      const distText = closest.distance !== undefined ? ` · ${closest.distance.toFixed(1)} km` : "";
-      const stationText = `${brandName}${distText}`;
-      const closestPrice = closest.prices.find(pr => pr.type === fuelType)?.price || 0;
-      const priceText = `${closestPrice.toFixed(3)} €/L`;
-      
-      await Preferences.set({ key: "mf_widget_closest_name", value: stationText });
-      await Preferences.set({ key: "mf_widget_closest_price", value: priceText });
-
-      let closestAiTip = "💡 Più vicino a te";
-      if (cheapest && closest.id === cheapest.id) {
-        closestAiTip = "⭐ Più economico e vicino!";
-      } else if (cheapest) {
-        const diff = closestPrice - minPrice;
-        if (diff > 0) {
-          closestAiTip = `💡 +${Math.round(diff * 100)}¢ rispetto al min`;
-        }
-      }
-      await Preferences.set({ key: "mf_widget_closest_ai_tip", value: closestAiTip });
-    } else {
-      await Preferences.set({ key: "mf_widget_closest_name", value: "Apri l'app..." });
-      await Preferences.set({ key: "mf_widget_closest_price", value: "--- €/L" });
-      await Preferences.set({ key: "mf_widget_closest_ai_tip", value: "💡 Apri Martucc Fuel" });
-    }
-
-    // SALVA LE TOP 5 STAZIONI PIU VICINE PER IL MAP/RADAR WIDGET
-    const sortedByDist = [...localStations]
-      .filter(s => s.prices.some(pr => pr.type === fuelType && pr.price > 0))
-      .sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999))
-      .slice(0, 5);
-
-    const nearbyData = sortedByDist.map(s => {
-      const p = s.prices.find(pr => pr.type === fuelType)?.price || 0;
-      return {
-        id: s.id,
-        name: s.brand && s.brand !== "Indipendente" ? s.brand : s.name,
-        lat: s.location.lat,
-        lng: s.location.lng,
-        distance: s.distance ?? 0,
-        price: p
-      };
-    });
-
-    await Preferences.set({ key: "mf_widget_nearby_stations", value: JSON.stringify(nearbyData) });
-
-    if (loc) {
-      try {
-        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lng}&current_weather=true`);
-        if (res.ok) {
-          const wData = await res.json();
-          const cw = wData.current_weather;
-          if (cw) {
-            const tempText = `${Math.round(cw.temperature)}°C`;
-            const code = cw.weathercode ?? 0;
-            const wMapped = WEATHER_MAP[code] || { icon: "☀️", desc: "Soleggiato" };
-            
-            await Preferences.set({ key: "mf_widget_weather_icon", value: wMapped.icon });
-            await Preferences.set({ key: "mf_widget_weather_temp", value: tempText });
-            await Preferences.set({ key: "mf_widget_weather_desc", value: wMapped.desc });
-          }
-        }
-      } catch (err) {
-        console.error("Widget Weather Fetch error:", err);
-      }
-    }
-  } catch (err) {
-    console.error("Error updating widget preferences:", err);
-  }
 }
 
 export default function App() {
@@ -347,8 +127,23 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showBudget, setShowBudget] = useState(false);
   const [stationDetail, setStationDetail] = useState<FuelStation | null>(null);
+  const [blockTarget, setBlockTarget] = useState<FuelStation | null>(null);
   const [heatmapOn, setHeatmapOn] = useState<boolean>(() => localStorage.getItem('mf_heatmap') === '1');
   useEffect(() => { localStorage.setItem('mf_heatmap', heatmapOn ? '1' : '0'); }, [heatmapOn]);
+  const [homeAddress, setHomeAddress] = useState<string>(() => localStorage.getItem('mf_home_address') || '');
+  const [homeLoc, setHomeLoc] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const s = localStorage.getItem('mf_home_loc');
+      return s ? JSON.parse(s) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [homeMode, setHomeMode] = useState<boolean>(() => localStorage.getItem('mf_home_mode') === '1');
+  // Il percorso stradale verso casa. null finche il router non risponde, e
+  // resta null se non risponde affatto: la Home in quel caso stima e lo dice.
+  const [percorsoCasa, setPercorsoCasa] = useState<Percorso | null>(null);
+  const [showHomeAddressModal, setShowHomeAddressModal] = useState(false);
   const [brands, setBrands] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
   const [radius, setRadius] = useState(20);
@@ -357,7 +152,8 @@ export default function App() {
   const [hideAnom, setHideAnom] = useState(false);
   const [tripStart, setTripStart] = useState('Milano');
   const [tripEnd, setTripEnd] = useState('Roma');
-  const [tripDist, setTripDist] = useState(575);
+  // Zero finche non si calcola: il vecchio 575 era Milano-Roma travestito da stima.
+  const [tripDist, setTripDist] = useState(0);
   const [tripKml, setTripKml] = useState(15);
   const [tripUnit, setTripUnit] = useState<'kml'|'l100'>('kml');
   const [tripCurrentFuel, setTripCurrentFuel] = useState<number | null>(null);
@@ -366,15 +162,23 @@ export default function App() {
   const [tripRoute, setTripRoute] = useState<any>(null);
   const [tripStops, setTripStops] = useState<any[]>([]);
   const [tripNearby, setTripNearby] = useState<any[]>([]);
+  const [tripPiano, setTripPiano] = useState<Piano | null>(null);
   const [tripStatus, setTripStatus] = useState('');
   const [tripStrat, setTripStrat] = useState<'balanced'|'save'|'fast'>('balanced');
   const [tripCalc, setTripCalc] = useState(false);
   const [fuelNews, setFuelNews] = useState<any[]>([]);
+  // Lo storico lungo sta in un CSV a parte e arriva al 2020: il dataset
+  // ne porta solo l'ultimo anno, fitto. Serve per i confronti a un anno.
+  const [storicoLungo, setStoricoLungo] = useState<{ date: string; avg: number }[]>([]);
   const [cars, setCars] = useState<any[]>([]);
   const [selCar, setSelCar] = useState<any>(null);
   const [carQ, setCarQ] = useState('');
   const [apiKey, setApiKey] = useState(localStorage.getItem('martucc_fuel_api_key')||'');
   const [apiModel, setApiModel] = useState(localStorage.getItem('martucc_fuel_api_model')||'gemini-2.5-flash');
+  // Lo stato c'e e viene scritto, ma nessuna schermata lo mostra ancora:
+  // gli errori dei provider hanno casa nel pannello della fase 3.
+  // Se l'IA fallisce con una chiave impostata l'utente deve saperlo:
+  // prima il valore veniva scartato e il guasto era invisibile.
   const [aiErr, setAiErr] = useState<string|null>(null);
   const [userQ, setUserQ] = useState('');
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -396,20 +200,22 @@ export default function App() {
   const lastScrollY = useRef(0);
 
   const fuels: FuelType[] = ['Benzina', 'Diesel', 'GPL', 'Metano'];
-  const allAverages = fuels.reduce((acc, f) => {
-    const vp = stations.map(s => s.prices.find(p => p.type === f)?.price).filter(p => p && p > 0.5) as number[];
-    if (vp.length === 0) {
-      acc[f] = Infinity;
-    } else {
-      vp.sort((a, b) => a - b);
-      const trim = Math.floor(vp.length * 0.15);
-      const trimmed = vp.slice(trim, vp.length - trim || vp.length);
-      acc[f] = (trimmed.reduce((a, b) => a + b, 0) / trimmed.length) || (vp.reduce((a, b) => a + b, 0) / vp.length);
-    }
-    return acc;
-  }, {} as Record<FuelType, number>);
+  const allAverages = useMemo(() => {
+    return fuels.reduce((acc, f) => {
+      const vp = stations.map(s => s.prices.find(p => p.type === f)?.price).filter(p => p && p > 0.5) as number[];
+      if (vp.length === 0) {
+        acc[f] = Infinity;
+      } else {
+        vp.sort((a, b) => a - b);
+        const trim = Math.floor(vp.length * 0.15);
+        const trimmed = vp.slice(trim, vp.length - trim || vp.length);
+        acc[f] = (trimmed.reduce((a, b) => a + b, 0) / trimmed.length) || (vp.reduce((a, b) => a + b, 0) / vp.length);
+      }
+      return acc;
+    }, {} as Record<FuelType, number>);
+  }, [stations]);
 
-  const isPriceAnom = (s: FuelStation, f: FuelType) => {
+  const isPriceAnom = useCallback((s: FuelStation, f: FuelType) => {
     const p = s.prices.find(pp => pp.type === f)?.price || 0;
     const jsonKey = f.toLowerCase();
     const natAvg = nationalStats[jsonKey]?.avg;
@@ -420,7 +226,7 @@ export default function App() {
     if (p < 0.5 || p > 3.0) return true;
     if (avg !== Infinity && (p < avg * 0.93 || p > avg * 1.15)) return true;
     return false;
-  };
+  }, [nationalStats, allAverages]);
 
   const activeStations = useMemo(() => {
     return stations.filter(s => {
@@ -428,13 +234,23 @@ export default function App() {
       const anom = isPriceAnom(s, fuel);
       return !isBlocked && !anom;
     });
-  }, [stations, fuel, blockedIds, nationalStats]);
+  }, [stations, fuel, blockedIds, isPriceAnom]);
 
+  /**
+   * Lo splash resta finche i dati non ci sono, e non un istante di piu.
+   *
+   * Non carica niente per conto suo: e getStations a far aspettare, e quando
+   * i prezzi sono gia in cache l'attesa vera e quasi zero. Prima c'era un
+   * minimo di un secondo per non troncare l'animazione; adesso l'animazione
+   * dura meno di mezzo secondo e il minimo scende con lei. Restano 420 ms,
+   * quel tanto che basta perche non sia un lampo.
+   */
+  const splashStart = useRef(Date.now());
   useEffect(() => {
-    if (!loading) {
-      const timer = setTimeout(() => setShowSplash(false), 150);
-      return () => clearTimeout(timer);
-    }
+    if (loading) return;
+    const trascorso = Date.now() - splashStart.current;
+    const timer = setTimeout(() => setShowSplash(false), Math.max(60, 420 - trascorso));
+    return () => clearTimeout(timer);
   }, [loading]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -484,6 +300,7 @@ export default function App() {
     }
 
     setAnalysisLoading(true);
+    setAiErr(null);
     let activeSrc = src;
     try {
       if (force && !q) {
@@ -503,18 +320,64 @@ export default function App() {
       }
 
       const mStats = calculateMarketStats(activeSrc, f);
-      const lCtx = `Media: €${mStats.average}, Minimo: €${mStats.min}, Spread: €${mStats.spread}`;
 
       let analysis: MarketAnalysis;
       if (!hasKey) {
         analysis = buildLocalMarketAnalysis(f, activeSrc, q);
         setAiErr(null);
       } else {
-        // grounding: passa al modello la storia reale e le news fresche
-        const fuelKey = f.toLowerCase();
+        // Il dossier: la stessa cosa che vede l'utente, non una riga di medie.
+        const chiave = toFuelKey(f);
         const history = await loadHistory();
-        const recentHist = (history[fuelKey] || []).slice(-30).map(p => ({ date: p.date, price: p.avg }));
-        analysis = await analyzeFuelMarket(apiKey, apiModel, f, q, lCtx, recentHist, fuelNews);
+        const storico = (history[chiave] || []).slice(-30).map(pt => ({ date: pt.date, price: pt.avg }));
+
+        const consigliato = f === fuel && homeModel?.best
+          ? {
+              nome: homeModel.best.row.name || homeModel.best.row.brand || 'il distributore consigliato',
+              prezzo: homeModel.best.price,
+              km: homeModel.best.distanceKm,
+              risparmioEur: homeModel.best.net.net,
+            }
+          : null;
+
+        const statsPieni = selCar ? computeStats(fillupsForCar(selCar.model), selCar.kml) : null;
+        const vistaBudget = selCar ? computeBudget(selCar.model) : null;
+
+        const dossier = buildAiContext({
+          fuel: chiave,
+          zona: mStats.sampleSize > 0
+            ? { media: mStats.average, minimo: mStats.min, massimo: mStats.max, campione: mStats.sampleSize }
+            : null,
+          consigliato,
+          storico,
+          news: fuelNews,
+          auto: selCar
+            ? {
+                modello: selCar.model,
+                serbatoioL: selCar.liters,
+                kml: selCar.kml,
+                kmlReale: statsPieni?.realKml ?? undefined,
+              }
+            : null,
+          budget: vistaBudget
+            ? { mensile: vistaBudget.budget, speso: vistaBudget.spent, giorniRimasti: vistaBudget.daysLeft }
+            : null,
+          // I fatti di mercato valgono solo per il carburante che si sta
+          // guardando: il modello e costruito su quello.
+          mercato: f === fuel && marketModel
+            ? {
+                prov: marketModel.prov,
+                deltaZonaItaliaC: marketModel.deltaZonaItaliaC,
+                spreadC: marketModel.spreadC,
+                autostradaC: marketModel.autostradaC,
+                servitoC: marketModel.servitoC,
+                marchiEconomici: marketModel.marchi.slice(0, 3).map((b) => ({ brand: b.brand, avg: b.avg })),
+                frescoSuTotale: [marketModel.freschezza.recenti, marketModel.freschezza.totale],
+              }
+            : null,
+        });
+
+        analysis = await analyzeFuelMarket(apiKey, apiModel, f, q, dossier, storico, fuelNews);
       }
 
       if (q) {
@@ -529,11 +392,12 @@ export default function App() {
       localStorage.setItem(ck, JSON.stringify({ date: today, analysis: enriched }));
     } catch (e: any) {
       console.error('Analysis error:', e);
+      const spiegazione = e instanceof ErroreIa ? e.message : (e?.message || MESSAGGIO_ERRORE.UNKNOWN);
       if (q) {
-        setAiAnswer({ question: q, answer: `Errore: ${e.message || 'AI non disponibile'}. Riprova tra qualche secondo.`, ts: Date.now(), source: hasKey ? 'ai' : 'local' });
+        setAiAnswer({ question: q, answer: spiegazione, ts: Date.now(), source: hasKey ? 'ai' : 'local' });
       } else if (hasKey) {
-        // API key configurata: NON fare fallback locale. Mostra errore e lascia che l'utente ritenti.
-        setAiErr(e.message === 'MISSING_KEY' ? null : 'Gemini non disponibile. Riprova oppure controlla la API key.');
+        // Chiave configurata: niente ripiego silenzioso, l'utente deve sapere che l'IA non ha risposto.
+        setAiErr(e instanceof ErroreIa && e.codice === 'MISSING_KEY' ? null : spiegazione);
       } else {
         // No API key: usa l'analisi locale come prima
         const fallback = buildLocalMarketAnalysis(f, activeSrc, q);
@@ -544,6 +408,15 @@ export default function App() {
       setAnalysisLoading(false);
     }
   };
+
+  // Lo storico lungo si carica una volta e non cambia piu.
+  useEffect(() => {
+    loadHistory().then((h) => {
+      const chiave = toFuelKey(fuel);
+      const punti = (h[chiave] || []).map((p) => ({ date: p.date, avg: p.avg }));
+      setStoricoLungo(punti);
+    });
+  }, [fuel]);
 
   useEffect(() => { driveMode ? document.documentElement.dataset.drive='on' : delete document.documentElement.dataset.drive; }, [driveMode]);
   useEffect(() => { if (!userLoc || !initDone.current) return; fetchAnalysis(fuel, false, undefined, stations); }, [fuel, userLoc]);
@@ -636,11 +509,6 @@ export default function App() {
   }, [stations, alerts]);
 
   useEffect(() => {
-    if (!stations.length) return;
-    updateWidgetData(activeStations, fuel, userLoc);
-  }, [activeStations, fuel, userLoc]);
-
-  useEffect(() => {
     const a = marketAnalyses[fuel];
     if (!a) return;
     checkDailyTrend(fuel, a);
@@ -661,16 +529,60 @@ export default function App() {
     checkBudget(selCar.model);
   }, [selCar]);
 
-  const handleMapMove = async (c:{lat:number;lng:number}) => { const {stations: d, nationalStats: ns} = await getStations(c); setStations(d); setNationalStats(ns); if (!apiKey.trim()) setMarketAnalyses(pr=>({...pr, [fuel]: buildLocalMarketAnalysis(fuel, d)})); };
-  const toggleFav = (id:string) => setFavs(p => p.includes(id) ? p.filter(f=>f!==id) : [...p,id]);
-  const blockStation = (s: FuelStation) => {
-    const choice = confirm(`Cosa vuoi fare per "${s.city || s.name}"?\n\n[OK] Nascondi solo per me\n[ANNULLA] Segnala alla Community (per tutti)`);
+  // Prima ogni spostamento della mappa riscaricava e ripassava l'intero
+  // dataset per ricalcolare le distanze dal centro. Adesso le righe stanno
+  // gia tutte in memoria e i marker vengono da mapModel: spostarsi non
+  // deve ripassare 46.000 stazioni.
+  const handleMapMove = (_c: {lat:number;lng:number}) => {};
+  // Niente confirm(): nella WebView blocca il thread, e «[OK] nascondi /
+  // [ANNULLA] segnala» faceva passare due azioni diverse per una conferma.
+  const blockStation = (s: FuelStation) => setBlockTarget(s);
+
+  const hideForMe = (s: FuelStation) => {
     setBlockedIds(prev => prev.includes(s.id) ? prev : [...prev, s.id]);
-    if (!choice) {
-      const body = encodeURIComponent(`ID Stazione: ${s.id}\nNome: ${s.name}\nCittà: ${s.city}\nIndirizzo: ${s.address}\n\nMotivo: Segnalata come CHIUSA o ERRATA dal proprietario.`);
-      window.open(`https://github.com/martucc/Fuel-Now/issues/new?title=%5BBLOCCHIAMO%5D+Stazione+${s.id}&body=${body}`, '_blank');
-    }
   };
+
+  const reportToCommunity = (s: FuelStation) => {
+    hideForMe(s);
+    const body = encodeURIComponent(`ID Stazione: ${s.id}
+Nome: ${s.name}
+Città: ${s.city}
+Indirizzo: ${s.address}
+
+Motivo: Segnalata come CHIUSA o ERRATA dal proprietario.`);
+    window.open(`https://github.com/martucc/Fuel-Now/issues/new?title=%5BBLOCCHIAMO%5D+Stazione+${s.id}&body=${body}`, '_blank');
+  };
+
+  const handleSaveHome = (address: string, loc: { lat: number; lng: number }) => {
+    setHomeAddress(address);
+    setHomeLoc(loc);
+    localStorage.setItem('mf_home_address', address);
+    localStorage.setItem('mf_home_loc', JSON.stringify(loc));
+  };
+
+  const handleRemoveHome = () => {
+    setHomeAddress('');
+    setHomeLoc(null);
+    setHomeMode(false);
+    localStorage.removeItem('mf_home_address');
+    localStorage.removeItem('mf_home_loc');
+    localStorage.setItem('mf_home_mode', '0');
+  };
+
+  const handleSetHomeMode = (active: boolean) => {
+    setHomeMode(active);
+    localStorage.setItem('mf_home_mode', active ? '1' : '0');
+  };
+
+  const handleNavigateHome = useCallback((station: RankedStation) => {
+    if (!userLoc || !homeLoc) return;
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&origin=${userLoc.lat},${userLoc.lng}&destination=${homeLoc.lat},${homeLoc.lng}&waypoints=${station.row.lat},${station.row.lng}`,
+      '_blank',
+      'noreferrer'
+    );
+  }, [userLoc, homeLoc]);
+
   const handleSelectCar = (car:any) => { setSelCar(car); if(car.liters) setTankL(car.liters); if(car.kml) setTripKml(car.kml); localStorage.setItem('mf_car', car.model); };
 
   const geocode = async (q:string) => { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=it&accept-language=it`); const d = await r.json(); if (!d.length) throw new Error(`Non trovato: ${q}`); return {lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon),label:d[0].display_name}; };
@@ -686,12 +598,7 @@ export default function App() {
       setTripRoute(route); setTripDist(Math.round(route.distanceKm)); setTripStatus('');
 
       const kpl = tripUnit==='kml' ? tripKml : 100/tripKml;
-      const fullRange = tankL * kpl * 0.8;
       const startLiters = tripCurrentFuel == null ? tankL : Math.max(0, Math.min(tankL, tripCurrentFuel));
-      const initRange = Math.max(startLiters * kpl * 0.8, 5);
-      const remaining = route.distanceKm - initRange;
-      const nStops = remaining > 0 ? Math.ceil(remaining / fullRange) : 0;
-      const pRange = fullRange; // riusato sotto come step normale
 
       const stops: any[] = [];
       let enriched: { st: any; dist: number; progress: number; price: number }[] = [];
@@ -742,39 +649,50 @@ export default function App() {
         }
       }
 
-      if (nStops > 0 && enriched.length > 0) {
-        // Pesi per strategia
-        const w = tripStrat === 'save'
-          ? { price: 8, detour: 1.2, off: 0.5 }
-          : tripStrat === 'fast'
-          ? { price: 1.2, detour: 4, off: 1.8 }
-          : { price: 4, detour: 2.2, off: 0.9 }; // balanced
-
-        const used = new Set<string>();
-        for (let i = 1; i <= nStops; i++) {
-          const tgt = Math.min(initRange + pRange * (i - 1), route.distanceKm - 30);
-          const tgtMin = tgt - pRange * 0.35;
-          const tgtMax = tgt + pRange * 0.15;
-
-          let pool = enriched.filter(x => !used.has(x.st.id) && x.progress >= tgtMin && x.progress <= tgtMax);
-          if (pool.length === 0) pool = enriched.filter(x => !used.has(x.st.id));
-          if (pool.length === 0) break;
-
-          pool.sort((a, b) =>
-            (a.price * w.price + a.dist * w.detour + Math.abs(a.progress - tgt)/Math.max(pRange,1) * w.off) -
-            (b.price * w.price + b.dist * w.detour + Math.abs(b.progress - tgt)/Math.max(pRange,1) * w.off)
-          );
-          const pick = pool[0];
-          used.add(pick.st.id);
-          stops.push({ ...pick.st, routeProgressKm: pick.progress, routeDetourKm: pick.dist });
-        }
-      }
-      setTripStops(stops.sort((a, b) => a.routeProgressKm - b.routeProgressKm));
-
       const nearbyArr = enriched
         .map(x => ({ ...x.st, routeProgressKm: x.progress, routeDetourKm: x.dist }))
         .sort((a, b) => a.routeProgressKm - b.routeProgressKm);
       setTripNearby(nearbyArr);
+
+      // La strategia non pesa piu punteggi arbitrari: decide solo quanto sei
+      // disposto a uscire dal percorso. Dove fermarsi lo dice il piano.
+      const deviazioneMax = tripStrat === 'save' ? 3 : tripStrat === 'fast' ? 0.7 : 1.6;
+
+      const righeIndex = new Map(getRows().map((r) => [r.id, r]));
+      const candidate: TappaCandidata[] = enriched
+        .filter((x) => x.dist <= deviazioneMax)
+        .map((x) => {
+          const riga = righeIndex.get(x.st.id);
+          const coorte = riga ? cohortFor(riga, toFuelKey(fuel), cohorts) : null;
+          const livello = coorte ? levelForZ(zScore(x.price, coorte)) : 'normal';
+          return {
+            id: x.st.id,
+            nome: x.st.name || x.st.brand,
+            brand: x.st.brand || 'Indipendente',
+            prezzo: x.price,
+            level: livello,
+            kmDaPartenza: x.progress,
+            deviazioneKm: x.dist,
+          };
+        });
+
+      const piano = pianificaViaggio({
+        distanzaKm: route.distanceKm,
+        kml: kpl,
+        serbatoioL: tankL,
+        litriAdesso: startLiters,
+        candidate,
+        prezzoPartenza: Number.isFinite(cheapP) ? cheapP : null,
+      });
+      setTripPiano(piano);
+
+      // Le soste sulla mappa sono quelle del piano, non piu una lista a parte.
+      const perId = new Map(nearbyArr.map((x: any) => [x.id, x]));
+      for (const sosta of piano.soste) {
+        const st = perId.get(sosta.tappa.id);
+        if (st) stops.push(st);
+      }
+      setTripStops(stops);
 
       setTripCalc(true);
     } catch (e:any) { setTripStatus(e.message); }
@@ -782,49 +700,266 @@ export default function App() {
 
 
 
-  const avgP = allAverages[fuel];
-  
-  const filtered = stations.filter(s => {
-    const cp = s.prices.find(p => p.type === fuel)?.price || 0;
-    const brandMatch = brands.length === 0 || brands.includes(s.brand);
-    const serviceMatch = services.length === 0 || services.every(sv => s.services.includes(sv));
-    const distMatch = s.distance === undefined || s.distance <= radius;
-    const h24Match = !h24 || s.services.includes('H24');
-    const hwyMatch = !noHwy || !s.services.includes('Autostrada');
-    const isBlocked = blockedIds.includes(s.id);
-    const anomMatch = !isPriceAnom(s, fuel);
-    
-    return cp > 0 && !isBlocked && brandMatch && serviceMatch && distMatch && h24Match && hwyMatch && anomMatch;
-  }).sort((a, b) => (a.prices.find(p => p.type === fuel)?.price || Infinity) - (b.prices.find(p => p.type === fuel)?.price || Infinity));
+  // Le coorti si costruiscono sul dataset intero: una stazione di Bolzano
+  // serve a dire se un prezzo di Bolzano e caro, anche se l'utente e a Roma.
+  const cohorts = useMemo(() => buildCohorts(getRows()), [stations]);
 
-  const validPrices = filtered
-    .filter(s => !isPriceAnom(s, fuel))
-    .map(s => s.prices.find(p => p.type === fuel)?.price || Infinity)
-    .filter(p => p !== Infinity);
-  const cheapP = validPrices.length > 0 ? Math.min(...validPrices) : Infinity;
-  const mStats = calculateMarketStats(filtered, fuel);
+  // Il percorso si chiede solo in modalita rientro, e una volta sola per
+  // ogni coppia posizione-casa: la cache del servizio arrotonda a cento
+  // metri, cosi il tremolio del GPS non ribatte al router.
+  useEffect(() => {
+    if (!homeMode || !homeLoc || !userLoc) {
+      setPercorsoCasa(null);
+      return;
+    }
+    const gia = percorsoInCache(userLoc, homeLoc);
+    if (gia) {
+      setPercorsoCasa(gia);
+      return;
+    }
+    const ctrl = new AbortController();
+    chiediPercorso(userLoc, homeLoc, ctrl.signal).then((p) => {
+      if (!ctrl.signal.aborted) setPercorsoCasa(p);
+    });
+    return () => ctrl.abort();
+  }, [homeMode, homeLoc, userLoc]);
+
+  const homeModel = useMemo(() => {
+    const data = getRawDataset();
+    const rows = getRows();
+    if (!data || rows.length === 0 || !userLoc) return null;
+    return buildHomeModel({
+      rows,
+      cohorts,
+      dataset: data,
+      fuel: toFuelKey(fuel),
+      user: userLoc,
+      home: homeMode && homeLoc ? homeLoc : null,
+      homeAddress: homeAddress || null,
+      homeMode: homeMode && Boolean(homeLoc),
+      percorso: homeMode ? percorsoCasa : null,
+      now: new Date(),
+      liters: litersFor(selCar),
+      kml: kmlFor(selCar, toFuelKey(fuel), null),
+      blocked: new Set(blockedIds),
+      radiusKm: radius,
+      tankPct: null,
+    });
+  }, [cohorts, stations, fuel, userLoc, selCar, blockedIds, radius, homeMode, homeLoc, homeAddress, percorsoCasa]);
+
+  // Il migliore e quello col netto piu alto, non col prezzo piu basso.
+  const cheapP = homeModel?.best?.price ?? Infinity;
+
+  // Quanto sono vecchi i prezzi mostrati, presi alla fonte. Conta soprattutto
+  // al primo avvio senza rete, quando in mano c'e il seme impacchettato.
+  const freschezzaDati = useMemo(
+    () => descriviDati(getRawDataset(), new Date()),
+    [stations]
+  );
+
+  // Il diario del consiglio: senza, fra un mese non si sa piu cosa l'app
+  // aveva detto ne a quanto stava la media di quel giorno, e il risparmio
+  // vero diventa impossibile da misurare.
+  useEffect(() => {
+    const b = homeModel?.best;
+    if (!b) return;
+    registraConsiglio({
+      date: new Date().toISOString().slice(0, 10),
+      fuel: toFuelKey(fuel),
+      stationId: b.row.id,
+      stationName: b.row.name || b.row.brand,
+      price: b.price,
+      cohortAvg: b.cohort.avg,
+      netEur: b.net.net,
+    });
+  }, [homeModel, fuel]);
+
+  // Il widget sulla schermata home mostra questo, non un calcolo suo: e
+  // l'unico modo perche i due schermi indichino lo stesso distributore.
+  useEffect(() => {
+    pubblicaWidget(homeModel, toFuelKey(fuel), userLoc);
+  }, [homeModel, fuel, userLoc]);
+
+  const marketModel = useMemo(() => {
+    const data = getRawDataset();
+    const rows = getRows();
+    if (!data || rows.length === 0 || !userLoc) return null;
+    return buildMarketModel({
+      rows,
+      cohorts,
+      dataset: data,
+      fuel: toFuelKey(fuel),
+      user: userLoc,
+      now: new Date(),
+      liters: litersFor(selCar),
+      kml: kmlFor(selCar, toFuelKey(fuel), null),
+      blocked: new Set(blockedIds),
+      radiusKm: radius,
+      storicoLungo,
+    });
+  }, [cohorts, stations, fuel, userLoc, selCar, blockedIds, radius, storicoLungo]);
+
   const marketRef = marketAnalyses[fuel] || null;
   const isLocal = marketRef?.source !== 'ai';
-  const tTone = marketRef?.trend==='DOWN' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : marketRef?.trend==='UP' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-  const allBrands = [...new Set(stations.map(s=>s.brand))].filter(Boolean).sort();
-  // Declutter mappa: meno zoom -> meno marker, sempre i piu economici
-  const zoomLimit = mapZoom >= 15 ? 150 : mapZoom >= 13 ? 80 : mapZoom >= 11 ? 25 : mapZoom >= 9 ? 8 : mapZoom >= 7 ? 4 : mapZoom >= 5 ? 2 : 1;
   
-  const visibleStations = filtered.filter(s => {
-    if (!mapBounds) return true;
+  const allBrands = useMemo(() => {
+    return [...new Set(stations.map(s=>s.brand))].filter(Boolean).sort();
+  }, [stations]);
+
+  // Niente piu cap silenzioso: ogni impianto finisce in un gruppo, e il
+  // gruppo dichiara quanti ne contiene.
+  // La mappa mostra l'Italia intera, non il raggio della Home: stesso
+  // modello, senza limite di distanza.
+  const mapModel = useMemo(() => {
+    const data = getRawDataset();
+    const rows = getRows();
+    if (!data || rows.length === 0 || !userLoc) return null;
+    return buildHomeModel({
+      rows,
+      cohorts,
+      dataset: data,
+      fuel: toFuelKey(fuel),
+      user: userLoc,
+      now: new Date(),
+      liters: litersFor(selCar),
+      kml: kmlFor(selCar, toFuelKey(fuel), null),
+      blocked: new Set(blockedIds),
+      radiusKm: Number.POSITIVE_INFINITY,
+      tankPct: null,
+    });
+  }, [cohorts, stations, fuel, userLoc, selCar, blockedIds]);
+
+  /*
+    Quante targhette disegnare, secondo lo zoom. E la scaletta di giugno.
+
+    Non e un raggruppamento: e una selezione. La lista si ordina per prezzo e
+    si tengono le prime N — quindi allargando la vista non compaiono gruppi
+    con «+3» accanto, spariscono semplicemente i piu cari e restano i piu
+    economici. Guardando l'Italia intera resta una targhetta sola: la piu
+    conveniente che si vede.
+  */
+  const zoomLimit =
+    mapZoom >= 15 ? 150 :
+    mapZoom >= 13 ? 80 :
+    mapZoom >= 11 ? 25 :
+    mapZoom >= 9 ? 8 :
+    mapZoom >= 7 ? 4 :
+    mapZoom >= 5 ? 2 : 1;
+
+  const clusters = useMemo(() => {
+    // Solo impianti utilizzabili: chi supera i quattro scarti tipo e quasi
+    // sempre un dato sbagliato, e ordinando per prezzo finirebbe proprio
+    // lui in cima alla mappa.
+    const items = (mapModel?.list ?? []).filter((i) => i.eligible);
+    // Senza i confini della vista non si disegna niente: a zoom 13 su tutta
+    // Italia significherebbe diciassettemila targhette nel DOM. I confini
+    // arrivano al montaggio della mappa, un attimo dopo.
+    if (!mapBounds) return { list: [], totale: 0 };
     const sw = mapBounds.getSouthWest();
     const ne = mapBounds.getNorthEast();
-    
+    // Un decimo di margine oltre il bordo, cosi trascinando le targhette
+    // sono gia li invece di comparire dopo.
     const latPad = (ne.lat - sw.lat) * 0.1;
     const lngPad = (ne.lng - sw.lng) * 0.1;
-    
-    return s.location.lat >= sw.lat - latPad &&
-           s.location.lat <= ne.lat + latPad &&
-           s.location.lng >= sw.lng - lngPad &&
-           s.location.lng <= ne.lng + lngPad;
-  });
+    const inView = items.filter(
+      (i) =>
+        i.lat >= sw.lat - latPad && i.lat <= ne.lat + latPad &&
+        i.lng >= sw.lng - lngPad && i.lng <= ne.lng + lngPad
+    );
 
-  const mapSt = visibleStations.slice(0, zoomLimit);
+    const tenuti = [...inView].sort((a, b) => a.price - b.price).slice(0, zoomLimit);
+
+    return {
+      list: tenuti.map((i) => ({
+        bestId: i.id,
+        brand: i.brand,
+        name: i.name,
+        lat: i.lat,
+        lng: i.lng,
+        bestPrice: i.price,
+        bestNet: i.net,
+        level: i.level,
+        count: 1,
+        members: [i],
+      })),
+      totale: inView.length,
+    };
+  }, [mapModel, mapBounds, zoomLimit]);
+
+  const minPriceInView = useMemo(() => {
+    if (!clusters || clusters.list.length === 0) return null;
+    const valid = clusters.list.map((c) => c.bestPrice).filter((p) => p > 0);
+    return valid.length > 0 ? Math.min(...valid) : null;
+  }, [clusters]);
+
+  // Si cerca fra TUTTE le righe, non solo fra quelle vicine: sulla mappa
+  // si puo toccare un impianto dall'altra parte d'Italia.
+  // Il comune dell'impianto piu vicino: basta a dire dove siamo e non
+  // costa una chiamata di geocodifica inversa.
+  const userCity = useMemo(() => {
+    const vicini = homeModel?.list;
+    if (!vicini || vicini.length === 0) return null;
+    let best = vicini[0]!;
+    for (const v of vicini) if (v.distanceKm < best.distanceKm) best = v;
+    return best.city || null;
+  }, [homeModel]);
+
+  /**
+   * «Perche questo?» raccontato a parole.
+   *
+   * Le righe del foglio restano la verita — sono il conto, voce per voce.
+   * Questa e solo un'altra voce che le legge, e riceve esattamente quei
+   * numeri: cosi non puo raccontare una storia diversa da quella che
+   * l'utente ha davanti.
+   */
+  const spiegaScelta = useCallback(async (best: RankedStation): Promise<string> => {
+    const n = best.net;
+    const dettaglio = [
+      `Impianto scelto: ${best.row.brand || best.row.name}, ${best.row.city}, a ${best.distanceKm.toFixed(1)} km in linea d'aria.`,
+      `Prezzo qui ${best.price.toFixed(3)} euro al litro, media della sua coorte di confronto ${n.cohortAvg.toFixed(3)}.`,
+      `Sul pieno considerato di ${n.liters.toFixed(0)} litri il risparmio lordo e ${n.gross.toFixed(2)} euro.`,
+      `Andata e ritorno sono ${(n.distanceKm * 2).toFixed(1)} km e a ${n.kml.toFixed(1)} km/l costano ${n.roadCost.toFixed(2)} euro di carburante.`,
+      `Il prezzo e stato comunicato ${describeAge(best.ageH)}, quindi il risparmio lordo viene pesato al ${(n.confidence * 100).toFixed(0)}%.`,
+      `Netto che resta in tasca: ${n.net.toFixed(2)} euro.`,
+      `Livello del prezzo rispetto alla zona: ${best.level}.`,
+    ].join(' ');
+
+    const dossier = [
+      buildAiContext({
+        fuel: toFuelKey(fuel),
+        zona: null,
+        consigliato: {
+          nome: best.row.brand || best.row.name,
+          prezzo: best.price,
+          km: best.distanceKm,
+          risparmioEur: n.net,
+        },
+        storico: [],
+        news: [],
+        auto: selCar ? { modello: selCar.model, serbatoioL: selCar.liters, kml: selCar.kml } : null,
+        budget: null,
+      }),
+      'Dettaglio del calcolo, riga per riga, come lo vede l\'utente in questo momento:',
+      dettaglio,
+    ].join('\n');
+
+    const domanda =
+      'Spiegami perche l\'app mi manda proprio qui. Due o tre frasi, non paragrafi, ' +
+      'usando i numeri del dettaglio e non altri. Se il vantaggio e piccolo dillo, ' +
+      'e se il viaggio si mangia buona parte del risparmio dillo pure.';
+
+    const risposta = await analyzeFuelMarket(apiKey, apiModel, fuel, domanda, dossier);
+    const testo = (risposta.detailedReport || '').trim() || (risposta.reasoning || '').trim();
+    if (!testo) throw new ErroreIa('PARSE', MESSAGGIO_ERRORE.PARSE);
+    return testo;
+  }, [apiKey, apiModel, fuel, selCar]);
+
+  const openStationById = useCallback((id: string) => {
+    const vicina = stations.find((x) => x.id === id);
+    if (vicina) { setStationDetail(vicina); return; }
+    const riga = getRows().find((r) => r.id === id);
+    if (riga) setStationDetail(toFuelStation(riga, userLoc ?? undefined));
+  }, [stations, userLoc]);
 
   // @ts-ignore - tabs is intended for future menu expansions or logging
   const tabs: {id:TabType;icon:any;label:string}[] = [{id:'home',icon:Home,label:'Home'},{id:'map',icon:MapPin,label:'Mappa'},{id:'trip',icon:Route,label:'Trip'},{id:'veicolo',icon:Car,label:'Garage'},{id:'analysis',icon:BarChart3,label:'Intel'},{id:'pieno',icon:Target,label:'Pieno'}];
@@ -834,43 +969,89 @@ export default function App() {
       <AnimatePresence>
         {showSplash && <SplashScreen key="splash" />}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {blockTarget && (
+          <BlockSheet
+            stationName={blockTarget.city || blockTarget.name}
+            onHide={() => { hideForMe(blockTarget); setBlockTarget(null); }}
+            onReport={() => { reportToCommunity(blockTarget); setBlockTarget(null); }}
+            onClose={() => setBlockTarget(null)}
+          />
+        )}
+      </AnimatePresence>
       {/* Header / Top Bar */}
-      <header className="fixed top-0 left-0 right-0 z-[1000] bg-black/80 backdrop-blur-3xl px-6 pb-4 flex items-center justify-between border-b border-white/5 shadow-2xl" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
-        <div className="flex items-center gap-3">
-          <div className="flex items-baseline gap-1">
-            <h1 className="text-xl font-black italic tracking-tighter text-white uppercase">
-              Martucc<span className="text-blue-500">Fuel</span>
-            </h1>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse ml-1" />
-          </div>
+      <header
+        className="fixed top-0 left-0 right-0 z-[1000] px-5 pb-3 flex items-center justify-between gap-3"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top) + 12px)',
+          background: 'color-mix(in srgb, var(--mf-ground) 82%, transparent)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: '1px solid var(--mf-hairline)',
+        }}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h1
+            className="flex-shrink-0"
+            style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 800, fontSize: 18, letterSpacing: '-0.03em', color: 'var(--mf-ink)' }}
+          >
+            Martucc<span style={{ color: 'var(--mf-accent)' }}>Fuel</span>
+          </h1>
+          {/* La posizione: da lei dipende ogni numero della schermata, e
+              prima non era scritta da nessuna parte. */}
+          <span
+            className="flex min-w-0 items-center gap-1.5 px-2.5 py-1"
+            style={{
+              borderRadius: 'var(--mf-radius-pill)',
+              border: '1px solid var(--mf-hairline)',
+              color: 'var(--mf-ink-2)',
+              fontFamily: 'var(--mf-font-sans)',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            <MapPin size={11} className="flex-shrink-0" />
+            <span className="truncate" style={{ maxWidth: 96 }}>{userCity ?? 'posizione…'}</span>
+          </span>
         </div>
-        
-        <div className="flex items-center gap-2">
+
+        <div className="flex flex-shrink-0 items-center gap-0.5">
           <InstallPwaButton />
           <button
             onClick={() => setShowBudget(true)}
-            className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
+            className="p-2 transition-transform active:scale-90"
             aria-label="Calcolatore budget"
           >
-            <Calculator size={18} className="text-[#8e8e93]" />
+            <Calculator size={18} style={{ color: 'var(--mf-ink-2)' }} />
           </button>
           <button
             onClick={() => setTab('alerts')}
-            className="relative w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
+            className="relative p-2 transition-transform active:scale-90"
             aria-label="Allerte"
           >
-            <Bell size={18} className={alerts.filter(a => a.active).length > 0 ? "text-blue-400" : "text-[#8e8e93]"} />
+            <Bell size={18} style={{ color: alerts.filter(a => a.active).length > 0 ? 'var(--mf-accent)' : 'var(--mf-ink-2)' }} />
             {alerts.filter(a => a.active).length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500 text-white text-[9px] font-black flex items-center justify-center shadow-[0_0_8px_rgba(59,130,246,0.6)] border border-black">
+              <span
+                className="mf-num absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center px-1"
+                style={{
+                  borderRadius: 'var(--mf-radius-pill)',
+                  background: 'var(--mf-accent)',
+                  color: 'var(--mf-accent-ink)',
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
+              >
                 {alerts.filter(a => a.active).length}
               </span>
             )}
           </button>
           <button
             onClick={() => setShowSettings(true)}
-            className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all active:scale-95"
+            className="p-2 transition-transform active:scale-90"
+            aria-label="Impostazioni"
           >
-            <Settings size={20} className="text-[#8e8e93]" />
+            <Settings size={18} style={{ color: 'var(--mf-ink-2)' }} />
           </button>
         </div>
       </header>
@@ -881,92 +1062,48 @@ export default function App() {
           {tab === 'map' ? (
             <motion.div
               key="map"
-              custom={direction}
-              variants={pageVariants}
+              variants={mapPageVariants}
               initial="initial"
               animate="animate"
               exit="exit"
               className="fixed inset-0 z-[10]"
               style={{ top: 'calc(env(safe-area-inset-top) + 80px)', bottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}
             >
-              <MapContainer center={[userLoc?.lat||45.4642,userLoc?.lng||9.19]} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={true} preferCanvas={true}>
-                <TileLayer url={mapStyle === 'dark' ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
-                <MapUpdater onMove={handleMapMove} onZoom={setMapZoom} onBoundsChange={setMapBounds} />
-                <CenterBtn loc={userLoc} />
-                <HeatmapToggle active={heatmapOn} onToggle={() => setHeatmapOn(v => !v)} />
-                <MapStyleToggle style={mapStyle} onToggle={() => setMapStyle(s => s === 'dark' ? 'voyager' : 'dark')} />
-                {userLoc && (
-                  <>
-                    <Marker 
-                      position={[userLoc.lat, userLoc.lng]} 
-                      icon={L.divIcon({
-                        className: 'user-location-div-icon',
-                        html: '<div class="user-location-marker"><span></span></div>',
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15]
-                      })}
-                    >
-                      <Popup>Base Operativa</Popup>
-                    </Marker>
-                  </>
-                )}
-                {heatmapOn && mapSt.map(s => {
-                  const cp = s.prices.find(p => p.type === fuel)?.price || 0;
-                  if (!cp || isPriceAnom(s, fuel)) return null;
-                  const color = priceToHeatColor(cp, avgP === Infinity ? cp : avgP);
-                  const radius = mapZoom >= 14 ? 250 : mapZoom >= 12 ? 500 : mapZoom >= 10 ? 1000 : 1800;
-                  return (
-                    <Circle
-                      key={`heat-${s.id}`}
-                      center={[s.location.lat, s.location.lng]}
-                      radius={radius}
-                      pathOptions={{ color, fillColor: color, fillOpacity: 0.32, opacity: 0.4, weight: 1 }}
-                      eventHandlers={{ click: () => setStationDetail(s) }}
-                    />
-                  );
-                })}
-                {!heatmapOn && mapSt.map(s => {
-                  const cp = s.prices.find(p => p.type === fuel)?.price || 0;
-                  const best = cp === cheapP && cheapP !== Infinity;
-                  const anom = isPriceAnom(s, fuel);
-                  let bg = 'bg-[#1c1c1e]', bc = 'border-white/20', tc = 'text-white', gl = '', extra = ' ', arrowBorder = 'border-t-[#1c1c1e]';
-                  
-                  if (anom) {
-                    bg = 'bg-black/60'; bc = 'border-gray-600/50'; tc = 'text-gray-500'; extra = 'grayscale opacity-60'; arrowBorder = 'border-t-black/60';
-                  } else if (best) {
-                    bg = 'bg-blue-600'; bc = 'border-blue-400'; tc = 'text-white'; gl = 'alpha-glow'; extra = 'scale-110 z-50'; arrowBorder = 'border-t-blue-600';
-                  } else if (cp > 0 && avgP !== Infinity) {
-                    if (cp > avgP + 0.015) {
-                      bg = 'bg-red-500'; bc = 'border-red-400'; tc = 'text-white'; gl = 'shadow-[0_0_15px_rgba(239,68,68,0.6)]'; arrowBorder = 'border-t-red-500';
-                    } else if (cp < avgP - 0.015) {
-                      bg = 'bg-emerald-500'; bc = 'border-emerald-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(16,185,129,0.6)]'; arrowBorder = 'border-t-emerald-500';
-                    } else {
-                      bg = 'bg-amber-500'; bc = 'border-amber-300'; tc = 'text-black'; gl = 'shadow-[0_0_15px_rgba(245,158,11,0.6)]'; arrowBorder = 'border-t-amber-500';
-                    }
-                  }
-
-                  const logo = getBrandLogo(s.brand || s.name || '');
-                  const showLogo = mapZoom >= 15;
-                  const markerLogoHtml = showLogo 
-                    ? `<div class="absolute -top-6 -right-3 w-8 h-8 rounded-full bg-black border border-white/20 flex items-center justify-center overflow-hidden shadow-md z-[100] grayscale-0"><img src="${logo}" class="w-full h-full object-contain scale-[0.9]" loading="lazy" /></div>`
-                    : '';
-
-                  const shadowClass = best 
-                    ? 'shadow-[0_0_15px_rgba(59,130,246,0.6)]' 
-                    : 'shadow-md';
-
-                  const htmlStr = `<div class="marker-pop flex flex-col items-center justify-center relative cursor-pointer ${extra}">${markerLogoHtml}<div class="px-2 py-1 rounded-[10px] border-2 ${bc} text-[11px] font-black tracking-tight ${gl} ${tc} ${bg} whitespace-nowrap ${shadowClass}">€${cp.toFixed(3)}</div><div class="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-transparent ${arrowBorder} -mt-[1px]"></div></div>`;
-                  
-                  return (
-                    <Marker
-                      key={s.id}
-                      position={[s.location.lat, s.location.lng]}
-                      icon={L.divIcon({ className: 'custom-div-icon', html: htmlStr, iconSize: [60, 40], iconAnchor: [30, 40] })}
-                      eventHandlers={{ click: () => setStationDetail(s) }}
-                    />
-                  );
-                })}
-              </MapContainer>
+              {/* Quanti impianti la vista sta lasciando fuori. Il vecchio
+                  zoomLimit tagliava in silenzio e a zoom basso mostrava due
+                  pompe come se fossero tutte. */}
+              {!heatmapOn && clusters.totale > clusters.list.length && (
+                <div
+                  className="mf-num absolute left-1/2 top-4 z-[600] -translate-x-1/2 px-3 py-1.5"
+                  style={{
+                    background: 'color-mix(in srgb, var(--mf-surface-raised) 85%, transparent)',
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid var(--mf-hairline)',
+                    borderRadius: 'var(--mf-radius-pill)',
+                    color: 'var(--mf-ink-2)',
+                    fontSize: 11,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  i {clusters.list.length} più economici di {clusters.totale} · colori sulla media {fuel.toLowerCase()}
+                </div>
+              )}
+              <MainMapLibre
+                userLoc={userLoc}
+                clusters={clusters}
+                bestStationId={homeModel?.best?.row.id}
+                minPriceInView={minPriceInView}
+                mediaRiferimento={allAverages[fuel] === Infinity ? null : allAverages[fuel]}
+                mapZoom={mapZoom}
+                mapStyle={mapStyle}
+                heatmapOn={heatmapOn}
+                onMove={handleMapMove}
+                onZoom={setMapZoom}
+                onBoundsChange={setMapBounds}
+                onStationClick={openStationById}
+                onToggleStyle={() => setMapStyle((s) => (s === 'dark' ? 'voyager' : 'dark'))}
+                onToggleHeatmap={() => setHeatmapOn((v) => !v)}
+              />
             </motion.div>
           ) : (
             <motion.div
@@ -978,12 +1115,65 @@ export default function App() {
               exit="exit"
             >
               <main className="max-w-md mx-auto px-4 pt-4 relative overflow-hidden">
-                {tab==='home' && <HomeTab stations={stations} filteredStations={filtered} selectedFuel={fuel} setSelectedFuel={setFuel} favorites={favs} toggleFavorite={toggleFav} marketRef={marketRef} loading={loading} cheapestPrice={cheapP} averagePrice={avgP} tankLiters={tankL} fuelNews={fuelNews} aiError={aiErr} setShowSettings={setShowSettings} setShowFilters={setShowFilters} selectedBrands={brands} selectedServices={services} setSelectedBrands={setBrands} setSelectedServices={setServices} setAlerts={setAlerts} selectedCar={selCar} analysisLoading={analysisLoading} fetchAnalysis={fetchAnalysis} isPriceAnom={isPriceAnom} radius={radius} setRadius={setRadius} hasApiKey={apiKey.trim().length > 0} onStationClick={setStationDetail}/>}
-                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={activeStations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail} mapStyle={mapStyle}/>}
-                {tab==='veicolo' && <VehicleTab cars={cars} selectedCar={selCar} setSelectedCar={setSelCar} carSearchQuery={carQ} setCarSearchQuery={setCarQ} handleSelectCar={handleSelectCar}/>}
-                {tab==='analysis' && <AnalysisTab marketRef={marketRef} selectedFuel={fuel} setSelectedFuel={setFuel} filteredStations={filtered} marketStats={mStats} apiKey={apiKey} fuelNews={fuelNews} analysisLoading={analysisLoading} userQuestion={userQ} setUserQuestion={setUserQ} analysisIsLocal={isLocal} trendTone={tTone} fetchAnalysis={fetchAnalysis} setShowSettings={setShowSettings} tankLiters={tankL} aiAnswer={aiAnswer} clearAiAnswer={() => setAiAnswer(null)}/>}
+                {tab==='home' && (
+                  <HomeTab
+                    model={homeModel}
+                    loading={loading}
+                    fuel={toFuelKey(fuel)}
+                    setFuel={(k) => setFuel(toFuelType(k))}
+                    radius={radius}
+                    setRadius={setRadius}
+                    onOpenMap={() => setTab('map')}
+                    onOpenFilters={() => setShowFilters(true)}
+                    onStationClick={openStationById}
+                    aiNote={marketRef?.source === 'ai' ? marketRef.reasoning : null}
+                    onSpiega={apiKey.trim() ? spiegaScelta : undefined}
+                    onImpostazioni={() => setShowSettings(true)}
+                    datiStantii={freschezzaDati.stantio ? freschezzaDati.etichetta : null}
+                    homeMode={homeMode}
+                    setHomeMode={handleSetHomeMode}
+                    homeAddress={homeAddress}
+                    onOpenHomeAddressModal={() => setShowHomeAddressModal(true)}
+                    onNavigateHome={handleNavigateHome}
+                  />
+                )}
+                {tab==='trip' && <TripTab tripStart={tripStart} setTripStart={setTripStart} tripEnd={tripEnd} setTripEnd={setTripEnd} tripKml={tripKml} setTripKml={setTripKml} tripUnit={tripUnit} setTripUnit={setTripUnit} tankLiters={tankL} setTankLiters={setTankL} tripStrategy={tripStrat} setTripStrategy={setTripStrat} tripStatus={tripStatus} tripDist={tripDist} tripCalculated={tripCalc} tripRoute={tripRoute} tripStops={tripStops} selectedFuel={fuel} cheapestPrice={cheapP} calculateTripRoute={calcTrip} userLoc={userLoc} stations={activeStations} tripCurrentFuel={tripCurrentFuel} setTripCurrentFuel={setTripCurrentFuel} tripToll={tripToll} setTripToll={setTripToll} tripNearby={tripNearby} onStationClick={setStationDetail} mapStyle={mapStyle} piano={tripPiano}/>}
+                {tab==='veicolo' && (
+                  <AutoTab
+                    cars={cars}
+                    selectedCar={selCar}
+                    setSelectedCar={setSelCar}
+                    carSearchQuery={carQ}
+                    setCarSearchQuery={setCarQ}
+                    handleSelectCar={handleSelectCar}
+                    setTab={setTab}
+                    stations={activeStations}
+                    selectedFuel={fuel}
+                    userLoc={userLoc}
+                  />
+                )}
+                {tab==='analysis' && (
+                  <AnalysisTab
+                    model={marketModel}
+                    marketRef={marketRef}
+                    selectedFuel={fuel}
+                    setSelectedFuel={setFuel}
+                    apiKey={apiKey}
+                    analysisLoading={analysisLoading}
+                    userQuestion={userQ}
+                    setUserQuestion={setUserQ}
+                    analysisIsLocal={isLocal}
+                    fetchAnalysis={fetchAnalysis}
+                    setShowSettings={setShowSettings}
+                    tankLiters={litersFor(selCar)}
+                    aiAnswer={aiAnswer}
+                    clearAiAnswer={() => setAiAnswer(null)}
+                    aiError={aiErr}
+                    clearAiError={() => setAiErr(null)}
+                    freschezzaDati={freschezzaDati.etichetta}
+                  />
+                )}
                 {tab==='alerts' && <AlertsTab selectedFuel={fuel} alerts={alerts} setAlerts={setAlerts}/>}
-                {tab==='pieno' && <PienoTab selectedCar={selCar} setTab={setTab} stations={activeStations} selectedFuel={fuel} userLoc={userLoc}/>}
               </main>
             </motion.div>
           )}
@@ -991,11 +1181,15 @@ export default function App() {
       </div>
 
       {/* Tab Bar */}
-      <BottomNav activeTab={tab} onTabChange={handleTabChange} visible={showBottomNav} />
+      {/* La barra sta a z-index 1000 e lo splash a 100: senza questa
+          condizione le cinque schede restavano in vista sopra lo schermo di
+          apertura, cioe su una app che non si poteva ancora usare. */}
+      <BottomNav activeTab={tab} onTabChange={handleTabChange} visible={showBottomNav && !showSplash} />
 
       <FiltersModal show={showFilters} setShow={setShowFilters} selectedBrands={brands} setSelectedBrands={setBrands} selectedServices={services} setSelectedServices={setServices} h24={h24} setH24={setH24} noHighway={noHwy} setNoHighway={setNoHwy} hideAnomalies={hideAnom} setHideAnomalies={setHideAnom} radius={radius} setRadius={setRadius} brands={allBrands}/>
-      <SettingsModal show={showSettings} setShow={setShowSettings} apiKey={apiKey} setApiKey={setApiKey} apiModel={apiModel} setApiModel={setApiModel}/>
-      <BudgetCalcModal show={showBudget} onClose={() => setShowBudget(false)} fuel={fuel} defaultPrice={avgP === Infinity ? 0 : avgP} carKml={selCar?.kml} tankL={selCar?.liters || tankL}/>
+      <SettingsModal show={showSettings} setShow={setShowSettings} apiKey={apiKey} setApiKey={setApiKey} apiModel={apiModel} setApiModel={setApiModel} homeAddress={homeAddress} onOpenHomeAddressModal={() => setShowHomeAddressModal(true)}/>
+      <HomeAddressModal show={showHomeAddressModal} onClose={() => setShowHomeAddressModal(false)} currentAddress={homeAddress} currentLoc={homeLoc} userLoc={userLoc} onSave={handleSaveHome} onRemove={handleRemoveHome}/>
+      <BudgetCalcModal show={showBudget} onClose={() => setShowBudget(false)} fuel={fuel} defaultPrice={allAverages[fuel] === Infinity ? 0 : (allAverages[fuel] || 0)} carKml={selCar?.kml} tankL={selCar?.liters || tankL}/>
       <StationHistoryModal station={stationDetail} fuel={fuel} onClose={() => setStationDetail(null)} onBlock={blockStation}/>
     </div>
   );

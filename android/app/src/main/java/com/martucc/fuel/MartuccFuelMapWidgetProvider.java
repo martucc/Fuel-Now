@@ -38,22 +38,20 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
         String action = intent.getAction();
         Log.d(TAG, "Ricevuto broadcast intent con azione: " + action);
         
-        if ("com.martucc.fuel.UPDATE_WIDGET".equals(action)) {
+        if (MartuccFuelWidgetProvider.AZIONE_AGGIORNA.equals(action)) {
             AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
             int[] appWidgetIds = appWidgetManager.getAppWidgetIds(new ComponentName(context, MartuccFuelMapWidgetProvider.class));
             for (int appWidgetId : appWidgetIds) {
                 updateAppWidget(context, appWidgetManager, appWidgetId);
             }
-        } else if ("com.martucc.fuel.TOGGLE_STYLE".equals(action)) {
-            SharedPreferences prefs = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
-            int style = prefs.getInt("mf_widget_style", 0);
-            style = (style + 1) % 3; // OLED -> Glass -> Transparent
-            prefs.edit().putInt("mf_widget_style", style).apply();
-            
-            // Forza il ridisegno immediato di TUTTI i widget
-            Intent updateIntent = new Intent("com.martucc.fuel.UPDATE_WIDGET");
-            updateIntent.setPackage(context.getPackageName());
-            context.sendBroadcast(updateIntent);
+        } else if (MartuccFuelWidgetProvider.AZIONE_SFONDO.equals(action)) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
+                    AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) MfNotte.ruotaSfondo(context, id);
+            AppWidgetManager m = AppWidgetManager.getInstance(context);
+            for (int i : m.getAppWidgetIds(new ComponentName(context, MartuccFuelMapWidgetProvider.class))) {
+                updateAppWidget(context, m, i);
+            }
         }
     }
 
@@ -63,14 +61,10 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
         SharedPreferences prefs = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
         
         // 1. Applica lo stile dello sfondo ciclico (specifico per widget o globale come fallback)
+        views.setInt(R.id.widget_map_root, "setBackgroundResource", MfNotte.sfondo(prefs, appWidgetId));
+
+        // Serve anche al radar: la velatura del fondo segue lo stesso stile.
         int style = prefs.getInt("mf_widget_style_" + appWidgetId, prefs.getInt("mf_widget_style", 0));
-        int bgDrawable = R.drawable.widget_background; // OLED scuro
-        if (style == 1) {
-            bgDrawable = R.drawable.widget_background_semi; // Glassmorphism
-        } else if (style == 2) {
-            bgDrawable = R.drawable.widget_background_transparent; // Trasparente
-        }
-        views.setInt(R.id.widget_map_root, "setBackgroundResource", bgDrawable);
 
         // 2. Sincronizzazione automatica se i dati sono più vecchi di 4 ore
         String lastFetchStr = prefs.getString("mf_last_fetch_time", "0");
@@ -107,7 +101,7 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_map_s1_name, String.format(java.util.Locale.ITALIAN, "%s (%.1fkm)", s1.name, s1.distance));
             views.setTextViewText(R.id.widget_map_s1_price, String.format(java.util.Locale.ITALIAN, "%.3f", s1.price));
         } else {
-            views.setTextViewText(R.id.widget_map_s1_name, "Apri l'app...");
+            views.setTextViewText(R.id.widget_map_s1_name, "Apri l’app");
             views.setTextViewText(R.id.widget_map_s1_price, "---");
         }
 
@@ -148,11 +142,12 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
         views.setOnClickPendingIntent(R.id.widget_map_list_layout, appPI);
         views.setOnClickPendingIntent(R.id.widget_radar_image, appPI);
 
-        // Cliccare il pulsante "🎨" per cambiare lo stile visivo
-        Intent styleIntent = new Intent("com.martucc.fuel.TOGGLE_STYLE");
+        // Il cerchietto in alto a sinistra ruota lo sfondo.
+        Intent styleIntent = new Intent(MartuccFuelWidgetProvider.AZIONE_SFONDO);
         styleIntent.setPackage(context.getPackageName());
+        styleIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
         PendingIntent stylePI = PendingIntent.getBroadcast(
-                context, 21, styleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                context, 3500 + appWidgetId, styleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
         views.setOnClickPendingIntent(R.id.widget_map_style_btn, stylePI);
 
@@ -185,10 +180,10 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
                     overlayPaint.setStyle(Paint.Style.FILL);
                     if (style == 0) {
                         // OLED: Sovrapponi colore nero con alta opacità (85%) per far risaltare il radar neon e la mappa sottostante
-                        overlayPaint.setColor(Color.parseColor("#D5050607")); // OLED background `#050607` con opacità
+                        overlayPaint.setColor(Color.parseColor("#D508090B")); // OLED background `#050607` con opacità
                     } else if (style == 1) {
                         // Glassmorphism: Sovrapponi colore grigio-scuro semitrasparente (75%)
-                        overlayPaint.setColor(Color.parseColor("#BF101524")); // Semitrasparente scuro
+                        overlayPaint.setColor(Color.parseColor("#C608090B")); // Semitrasparente scuro
                     } else {
                         // Trasparente: Sovrapponi leggero scorrimento/velatura trasparente (60%)
                         overlayPaint.setColor(Color.parseColor("#99000000")); // Mappa visibile ma scura
@@ -206,17 +201,17 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
 
         // Vernici per il Radar
         Paint gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        gridPaint.setColor(Color.parseColor("#1E293B")); // Scuro di fondo
+        gridPaint.setColor(Color.parseColor("#222A31")); // Scuro di fondo
         gridPaint.setStyle(Paint.Style.STROKE);
         gridPaint.setStrokeWidth(1.5f);
 
         Paint sweepPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        sweepPaint.setColor(Color.parseColor("#3B82F6")); // Neon Blue principale
+        sweepPaint.setColor(Color.parseColor("#40DCE6")); // Neon Blue principale
         sweepPaint.setStyle(Paint.Style.STROKE);
         sweepPaint.setStrokeWidth(1.2f);
 
         Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        textPaint.setColor(Color.parseColor("#94A3B8"));
+        textPaint.setColor(Color.parseColor("#A5AEB4"));
         textPaint.setTextSize(9f);
         textPaint.setTextAlign(Paint.Align.CENTER);
 
@@ -234,7 +229,7 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
 
         // B. Disegna le rette a raggiera (mirino) tratteggiate
         Paint dashedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        dashedPaint.setColor(Color.parseColor("#222A3C"));
+        dashedPaint.setColor(Color.parseColor("#222A31"));
         dashedPaint.setStyle(Paint.Style.STROKE);
         dashedPaint.setStrokeWidth(1f);
         dashedPaint.setPathEffect(new DashPathEffect(new float[]{6, 6}, 0));
@@ -250,15 +245,15 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
         double radarRange = maxDist * 1.15; // 15% di margine extra per non toccare i bordi
 
         // Scrive la scala del radar sul bordo in alto
-        textPaint.setColor(Color.parseColor("#64748B"));
+        textPaint.setColor(Color.parseColor("#646E75"));
         canvas.drawText(String.format(java.util.Locale.ITALIAN, "%.1f km", radarRange), centerX, centerY - maxRadius + 14, textPaint);
 
         // D. Disegna la posizione dell'utente al centro (cerchietto blu neon pulsante)
-        dotPaint.setColor(Color.parseColor("#3B82F6"));
+        dotPaint.setColor(Color.parseColor("#40DCE6"));
         canvas.drawCircle(centerX, centerY, 5.5f, dotPaint);
         
         Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        glowPaint.setColor(Color.parseColor("#3B82F6"));
+        glowPaint.setColor(Color.parseColor("#40DCE6"));
         glowPaint.setStyle(Paint.Style.STROKE);
         glowPaint.setStrokeWidth(1f);
         glowPaint.setAlpha(80);
@@ -266,7 +261,7 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
 
         // E. Posiziona e disegna le stazioni
         if (stations.isEmpty()) {
-            textPaint.setColor(Color.parseColor("#94A3B8"));
+            textPaint.setColor(Color.parseColor("#A5AEB4"));
             textPaint.setTextSize(10f);
             canvas.drawText("Nessun radar", centerX, centerY + 20, textPaint);
             return bitmap;
@@ -300,13 +295,13 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
             float py = centerY - (float) (dy / radarRange) * maxRadius; // y invertito nel canvas
 
             // Colora il punto in base al prezzo rispetto alla media della zona
-            int color = Color.parseColor("#EAB308"); // Ambra default (prezzo medio)
+            int color = Color.parseColor("#F2D94E"); // Ambra default (prezzo medio)
             if (s.price <= minPrice) {
-                color = Color.parseColor("#22C55E"); // Verde neon (più conveniente)
+                color = Color.parseColor("#2FE0A8"); // Verde neon (più conveniente)
             } else if (s.price < avgPrice - 0.015) {
-                color = Color.parseColor("#10B981"); // Smeraldo conveniente
+                color = Color.parseColor("#9BE07B"); // Smeraldo conveniente
             } else if (s.price > avgPrice + 0.015) {
-                color = Color.parseColor("#EF4444"); // Rosso neon (caro)
+                color = Color.parseColor("#F2645A"); // Rosso neon (caro)
             }
 
             // Disegna il punto
@@ -324,7 +319,7 @@ public class MartuccFuelMapWidgetProvider extends AppWidgetProvider {
             // Scrive il prezzo sopra il punto (es: "1.72")
             String priceLabel = String.format(java.util.Locale.ITALIAN, "%.2f", s.price);
             Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            labelPaint.setColor(Color.WHITE);
+            labelPaint.setColor(Color.parseColor("#F2F5F4"));
             labelPaint.setTextSize(8f);
             labelPaint.setTextAlign(Paint.Align.CENTER);
             labelPaint.setFakeBoldText(true);

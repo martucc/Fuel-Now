@@ -82,9 +82,11 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
     return { path: pStr, areaPath: aStr, rangePath: rStr, maPath: mStr, points: pts, minV, maxV };
   }, [data, height, showRange, showMA]);
 
-  let accent = '#3b82f6';
-  if (trend === 'DOWN') accent = '#10b981';
-  if (trend === 'UP') accent = '#ef4444';
+  // Il colore della linea dice dove va il prezzo, non e decorazione:
+  // scende = verde della scala prezzo, sale = rosso, fermo = accento.
+  let accent = 'var(--mf-accent)';
+  if (trend === 'DOWN') accent = 'var(--mf-price-best)';
+  if (trend === 'UP') accent = 'var(--mf-price-worst)';
 
   useEffect(() => { onHover?.(hoverIdx != null && points[hoverIdx] ? points[hoverIdx].d : null); }, [hoverIdx]);
 
@@ -103,7 +105,14 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
   const hover = hoverIdx != null ? points[hoverIdx] : null;
 
   if (data.length < 2) {
-    return <div className="h-full w-full flex items-center justify-center text-[12px] text-zinc-600">Dati insufficienti</div>;
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center"
+        style={{ color: 'var(--mf-muted)', fontSize: 12 }}
+      >
+        Storico non disponibile
+      </div>
+    );
   }
 
   const tickIndices = data.length > 1
@@ -125,8 +134,8 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
       >
         <defs>
           <linearGradient id="chartArea" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.22" />
-            <stop offset="100%" stopColor={accent} stopOpacity="0" />
+            <stop offset="0%" style={{ stopColor: accent, stopOpacity: 0.22 }} />
+            <stop offset="100%" style={{ stopColor: accent, stopOpacity: 0 }} />
           </linearGradient>
         </defs>
 
@@ -144,8 +153,8 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
                 y={y + 3}
                 textAnchor="end"
                 fontSize="9"
-                fill="rgba(255,255,255,0.45)"
-                fontFamily="ui-sans-serif, system-ui"
+                fill="var(--mf-muted)"
+                style={{ fontFamily: 'var(--mf-font-mono)' }}
               >
                 €{v.toFixed(2)}
               </text>
@@ -155,7 +164,7 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
 
         {/* range band */}
         {showRange && rangePath && (
-          <path d={rangePath} fill={accent} fillOpacity="0.07" />
+          <path d={rangePath} style={{ fill: accent, fillOpacity: 0.07 }} />
         )}
 
         {/* area gradient */}
@@ -163,11 +172,11 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
 
         {/* MA line */}
         {showMA && maPath && (
-          <path d={maPath} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1" strokeDasharray="3 3" />
+          <path d={maPath} fill="none" stroke="var(--mf-muted)" strokeWidth="1" strokeDasharray="3 3" />
         )}
 
         {/* main line */}
-        <path d={path} fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={path} fill="none" style={{ stroke: accent }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
 
         {/* X-axis ticks */}
         {tickIndices.map((idx, k) => {
@@ -179,8 +188,8 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
               y={H - 6}
               textAnchor={k === 0 ? 'start' : k === tickIndices.length - 1 ? 'end' : 'middle'}
               fontSize="9"
-              fill="rgba(255,255,255,0.35)"
-              fontFamily="ui-sans-serif, system-ui"
+              fill="var(--mf-muted)"
+              style={{ fontFamily: 'var(--mf-font-mono)' }}
             >
               {fmtDate(pt.d.ts)}
             </text>
@@ -190,22 +199,27 @@ export function PriceChart({ data, trend, height = 200, showRange = true, showMA
         {/* Crosshair */}
         {hover && (
           <>
-            <line x1={hover.x} x2={hover.x} y1={padT} y2={H - padB} stroke="rgba(255,255,255,0.25)" strokeWidth="1" strokeDasharray="3 3" />
-            <circle cx={hover.x} cy={hover.y} r="4.5" fill={accent} stroke="white" strokeWidth="2" />
+            <line x1={hover.x} x2={hover.x} y1={padT} y2={H - padB} stroke="var(--mf-ink-2)" strokeWidth="1" strokeDasharray="3 3" />
+            <circle cx={hover.x} cy={hover.y} r="4.5" style={{ fill: accent }} stroke="var(--mf-ink)" strokeWidth="2" />
           </>
         )}
       </svg>
 
       {hover && (
         <div
-          className="absolute top-1 px-2.5 py-1.5 rounded-lg bg-black/85 backdrop-blur border border-white/10 text-[11px] text-white font-medium tabular-nums shadow-xl pointer-events-none whitespace-nowrap"
+          className="mf-num pointer-events-none absolute top-1 whitespace-nowrap px-2.5 py-1.5"
           style={{
             left: `${Math.min(Math.max((hover.x / W) * 100, 6), 76)}%`,
+            background: 'var(--mf-surface-raised)',
+            border: '1px solid var(--mf-hairline)',
+            borderRadius: 'var(--mf-radius-sm)',
+            color: 'var(--mf-ink)',
+            fontSize: 11,
           }}
         >
-          <div className="text-zinc-400 text-[10px]">{fmtDate(hover.d.ts)}</div>
-          <div className="font-semibold">€{hover.d.avg.toFixed(3)}</div>
-          <div className="text-zinc-500 text-[10px]">media nazionale</div>
+          <div style={{ color: 'var(--mf-muted)', fontSize: 10 }}>{fmtDate(hover.d.ts)}</div>
+          <div style={{ fontWeight: 500 }}>€{hover.d.avg.toFixed(3)}</div>
+          <div style={{ color: 'var(--mf-muted)', fontSize: 10 }}>media nazionale</div>
         </div>
       )}
     </div>

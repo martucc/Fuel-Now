@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notte, portato al nativo. Unica fonte di verita dei colori del widget:
+     rispecchia src/design/tokens.css e va cambiato solo insieme a quello. -->
+<resources>
+    <color name="mf_ground">#FF08090B</color>
+    <color name="mf_surface">#FF101418</color>
+    <color name="mf_surface_raised">#FF171C21</color>
+    <color name="mf_hairline">#FF222A31</color>
+    <color name="mf_ink">#FFF2F5F4</color>
+    <color name="mf_ink_2">#FFA5AEB4</color>
+    <color name="mf_muted">#FF646E75</color>
+    <color name="mf_accent">#FF40DCE6</color>
+    <color name="mf_accent_ink">#FF02171A</color>
+
+    <!-- Il blu e la scelta consigliata, non un livello di prezzo. -->
+    <color name="mf_recommended">#FF3B82F6</color>
+
+    <!-- Scala semantica del prezzo: solo per i prezzi. -->
+    <color name="mf_price_best">#FF2FE0A8</color>
+    <color name="mf_price_good">#FF9BE07B</color>
+    <color name="mf_price_normal">#FFF2D94E</color>
+    <color name="mf_price_high">#FFF2B33C</color>
+    <color name="mf_price_worst">#FFF2645A</color>
+
+    <!-- Le tacche spente dell'istogramma. -->
+    <color name="mf_tacca_spenta">#FF262E35</color>
+</resources>

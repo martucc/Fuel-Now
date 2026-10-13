@@ -165,50 +165,40 @@ public class FuelDataSyncManager {
 
                             SharedPreferences.Editor editor = prefs.edit();
 
-                            // Aggiorna le preferenze del widget per il distributore più economico
+                            // Le stesse chiavi che scrive l'app, cosi il widget non deve
+                            // sapere chi lo ha rifornito. Ma qui non ci sono le coorti di
+                            // provincia ne il costo del viaggio: senza quelli il livello
+                            // non si puo dichiarare, e infatti resta vuoto - il prezzo esce
+                            // bianco e le tacche spente. Meglio non dire niente che dare
+                            // un giudizio che non si e in grado di dare.
                             if (cheapest != null) {
-                                String brandName = !cheapest.brand.equals("Indipendente") ? cheapest.brand : cheapest.name;
-                                String stationText = brandName + String.format(java.util.Locale.ITALIAN, " · %.1f km", cheapest.distance);
-                                String priceText = String.format(java.util.Locale.ITALIAN, "%.3f €/L", cheapest.price);
-                                editor.putString("mf_widget_cheapest_name", stationText);
-                                editor.putString("mf_widget_cheapest_price", priceText);
-                                
-                                // Suggerimento risparmio
-                                double avg = 0;
-                                int count = 0;
-                                for (StationData s : filteredStations) {
-                                    avg += s.price;
-                                    count++;
-                                }
-                                if (count > 0) {
-                                    avg = avg / count;
-                                    double diff = avg - cheapest.price;
-                                    if (diff > 0.05) {
-                                        editor.putString("mf_widget_ai_tip", String.format(java.util.Locale.ITALIAN, "💡 Risparmio: -%d¢ vs media!", Math.round(diff * 100)));
-                                    } else {
-                                        editor.putString("mf_widget_ai_tip", "💡 Prezzi stabili. Fai rifornimento.");
-                                    }
-                                }
-                            }
+                                String marca = !cheapest.brand.equals("Indipendente") ? cheapest.brand : cheapest.name;
+                                editor.putString(MfNotte.K_PREZZO,
+                                        String.format(java.util.Locale.ITALIAN, "%.3f", cheapest.price));
+                                editor.putString(MfNotte.K_LIVELLO, "");
+                                editor.putString(MfNotte.K_DOVE, marca);
+                                editor.putString(MfNotte.K_SCARTO, "Il piu basso qui intorno");
+                                editor.putString(MfNotte.K_VERDETTO, "Apri per il consiglio");
+                                editor.putString(MfNotte.K_CONTESTO, String.format(java.util.Locale.ITALIAN,
+                                        "%s · %.1f km", nomeCarburante(fuelType), cheapest.distance));
+                                editor.putString(MfNotte.K_ETA, "");
+                                editor.putString(MfNotte.K_LAT, String.valueOf(cheapest.lat));
+                                editor.putString(MfNotte.K_LNG, String.valueOf(cheapest.lng));
+                                editor.putString(MfNotte.K_SCRITTO, String.valueOf(System.currentTimeMillis()));
 
-                            // Aggiorna le preferenze del widget per il distributore più vicino
-                            if (closest != null) {
-                                String brandName = !closest.brand.equals("Indipendente") ? closest.brand : closest.name;
-                                String stationText = brandName + String.format(java.util.Locale.ITALIAN, " · %.1f km", closest.distance);
-                                String priceText = String.format(java.util.Locale.ITALIAN, "%.3f €/L", closest.price);
-                                editor.putString("mf_widget_closest_name", stationText);
-                                editor.putString("mf_widget_closest_price", priceText);
-
-                                String closestAiTip = "💡 Più vicino a te";
-                                if (cheapest != null && closest.id.equals(cheapest.id)) {
-                                    closestAiTip = "⭐ Più economico e vicino!";
-                                } else if (cheapest != null) {
-                                    double diff = closest.price - cheapest.price;
-                                    if (diff > 0) {
-                                        closestAiTip = String.format(java.util.Locale.ITALIAN, "💡 +%d¢ rispetto al min", Math.round(diff * 100));
-                                    }
-                                }
-                                editor.putString("mf_widget_closest_ai_tip", closestAiTip);
+                                // Questo impianto e il piu basso qui intorno, non quello
+                                // scelto pesando la deviazione verso casa. Se restasse
+                                // scritto «casa» dall'ultima apertura dell'app, il tasto
+                                // manderebbe il navigatore a passare da una pompa scelta
+                                // con un altro criterio - proprio nel caso in cui l'utente
+                                // sta andando da un'altra parte.
+                                editor.putString(MfNotte.K_MODO, "zona");
+                                editor.putString(MfNotte.K_CASA_LAT, "");
+                                editor.putString(MfNotte.K_CASA_LNG, "");
+                                editor.putString(MfNotte.K_VOCE, String.format(java.util.Locale.ITALIAN,
+                                        "%s a %.3f euro al litro, %s, a %.1f chilometri da qui. "
+                                                + "Apri l’app per il consiglio completo.",
+                                        nomeCarburante(fuelType), cheapest.price, marca, cheapest.distance));
                             }
 
                             // Ordina le stazioni per distanza per il Radar Widget e salvale (top 5)
@@ -239,60 +229,12 @@ public class FuelDataSyncManager {
                         }
                     }
 
-                    // 2. Fetch meteo tramite Open-Meteo
-                    String weatherUrl = String.format(java.util.Locale.US, "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current_weather=true", userLat, userLng);
-                    String weatherJsonStr = fetchUrl(weatherUrl);
-                    if (weatherJsonStr != null && weatherJsonStr.length() > 0) {
-                        JSONObject wRoot = new JSONObject(weatherJsonStr);
-                        if (wRoot.has("current_weather")) {
-                            JSONObject cw = wRoot.getJSONObject("current_weather");
-                            double temp = cw.optDouble("temperature", 20.0);
-                            int code = cw.optInt("weathercode", 0);
-                            
-                            String tempText = String.format(java.util.Locale.ITALIAN, "%d°C", Math.round(temp));
-                            String icon = "☀️";
-                            String desc = "Soleggiato";
-
-                            // Mappatura codici meteo WMO
-                            switch (code) {
-                                case 0: icon = "☀️"; desc = "Soleggiato"; break;
-                                case 1:
-                                case 2: icon = "⛅"; desc = "Poco Nuvoloso"; break;
-                                case 3: icon = "☁️"; desc = "Coperto"; break;
-                                case 45:
-                                case 48: icon = "🌫️"; desc = "Nebbia"; break;
-                                case 51:
-                                case 53:
-                                case 55: icon = "🌧️"; desc = "Pioggerella"; break;
-                                case 61:
-                                case 63: icon = "🌧️"; desc = "Pioggia"; break;
-                                case 65: icon = "🌧️"; desc = "Forte Pioggia"; break;
-                                case 71:
-                                case 73: icon = "❄️"; desc = "Neve"; break;
-                                case 75: icon = "❄️"; desc = "Fitta Neve"; break;
-                                case 80:
-                                case 81:
-                                case 82: icon = "🌧️"; desc = "Rovesci"; break;
-                                case 95:
-                                case 96:
-                                case 99: icon = "⚡"; desc = "Temporale"; break;
-                            }
-
-                            SharedPreferences.Editor editor = prefs.edit();
-                            editor.putString("mf_widget_weather_icon", icon);
-                            editor.putString("mf_widget_weather_temp", tempText);
-                            editor.putString("mf_widget_weather_desc", desc);
-                            editor.apply();
-                            Log.d(TAG, "Meteo sincronizzato con successo in background!");
-                        }
-                    }
-
                     // Registra l'avvenuto fetch nativo salvando il timestamp
                     prefs.edit().putString("mf_last_fetch_time", String.valueOf(System.currentTimeMillis())).apply();
                     lastSyncTime = System.currentTimeMillis();
 
-                    // 3. Spedisce l'intent di broadcast per forzare l'aggiornamento grafico immediato di tutti i widget
-                    Intent updateIntent = new Intent("com.martucc.fuel.UPDATE_WIDGET");
+                    // Spedisce l'intent di broadcast per forzare l'aggiornamento grafico immediato di tutti i widget
+                    Intent updateIntent = new Intent(MartuccFuelWidgetProvider.AZIONE_AGGIORNA);
                     updateIntent.setPackage(context.getPackageName());
                     context.sendBroadcast(updateIntent);
 
@@ -381,6 +323,16 @@ public class FuelDataSyncManager {
                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    /** Come si chiama il carburante quando lo si scrive, non la sua chiave. */
+    private static String nomeCarburante(String chiave) {
+        if (chiave == null) return "";
+        String c = chiave.toLowerCase(java.util.Locale.ITALIAN);
+        if (c.startsWith("diesel") || c.startsWith("gasolio")) return "Diesel";
+        if (c.startsWith("gpl")) return "GPL";
+        if (c.startsWith("metano")) return "Metano";
+        return "Benzina";
     }
 
     private static class StationData {

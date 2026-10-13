@@ -6,18 +6,32 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig({
   base: '/',
+  // maplibre-gl decodifica le tessere vettoriali in un worker. Pre-ottimizzato
+  // da Vite quel worker parte ma non risponde mai: le tessere si scaricano,
+  // la sorgente resta a zero feature e la mappa e nera senza un solo errore.
+  optimizeDeps: { exclude: ['maplibre-gl'] },
+  // Il worker di maplibre e ESM. Vite lo impacchetta come iife per difetto e
+  // il worker parte ma non risponde: nessun errore, tessere scaricate,
+  // sorgente a zero feature, mappa nera. Vale per la build, non solo per dev.
+  worker: { format: 'es' },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // La registrazione la fa main.tsx, non lo script iniettato: dentro la
+      // WebView di Capacitor il service worker serviva la build vecchia e
+      // l'app sembrava non aggiornarsi mai. Lasciando iniettare registerSW
+      // qui, quello registrava e main.tsx cancellava, a ogni avvio, con esito
+      // diverso ogni volta.
+      injectRegister: false,
       includeAssets: ['favicon.png', 'favicon.svg', 'icon.svg', 'cars.json', 'news.json'],
       manifest: {
         name: 'Martucc Fuel',
         short_name: 'Martucc Fuel',
         description: 'Prezzi carburanti reali, mappa, viaggio, garage e analisi AI in una sola PWA',
-        theme_color: '#050607',
-        background_color: '#050607',
+        theme_color: '#08090b',
+        background_color: '#08090b',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -84,6 +98,16 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
         globIgnores: ['stations.json'],
+        /*
+          Il service worker dirotta ogni navigazione sull'index, perche l'app
+          e una pagina sola. Va bene per le sue rotte, non per i file che
+          stanno accanto al sito: chiedendo l'APK dal telefono si apriva
+          MartuccFuel invece di scaricarlo, e da fuori (curl, un'altra
+          origine) sembrava tutto a posto perche li il service worker non
+          c'e. Qualunque indirizzo che finisce con un'estensione non e una
+          rotta dell'app e va lasciato passare.
+        */
+        navigateFallbackDenylist: [/\.[^/]+$/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => !url.href.includes('raw.githubusercontent') && url.pathname.endsWith('/stations.json'),

@@ -1,1248 +1,761 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
-  TrendingDown, TrendingUp, ArrowUpRight, Send, ChevronRight,
-  MapPin, Calendar, Sparkles, Activity, Brain, Zap, Newspaper, Lightbulb,
-  Clock, History, ShieldCheck, RefreshCw, Target,
-  ArrowRight, X, MessageSquare, Database, Maximize2, BarChart2, Radio,
-  Mic, MicOff, Volume2, VolumeX
+  ArrowDownRight, ArrowUpRight, Minus, Send, Mic, Sparkles, ChevronDown,
+  KeyRound, RefreshCw, X, AlertCircle, Landmark, CalendarDays, Route, Fuel,
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import type { MarketAnalysis, FuelType, FuelStation } from '../../types';
-import type { MarketStats } from '../../services/localAnalysis';
-import {
-  loadHistory, getSeries, rangeStats, pctDelta,
-  type HistoryPoint, type Period,
-} from '../../services/historyService';
+import type { MarketAnalysis, FuelType } from '../../types';
+import type { MarketModel } from '../../ui/market/marketModel';
+import { LEVEL_LABEL, LEVEL_VAR, type PriceLevel } from '../../domain/pricing';
+import { loadHistory, getSeries, type HistoryPoint, type Period } from '../../services/historyService';
 import { PriceChart } from '../charts/PriceChart';
-import { TickerTape } from '../charts/TickerTape';
-import { PriceDistribution } from '../charts/PriceDistribution';
+import { Card, Section, Empty } from '../../design/primitives/Surface';
+import { Widget, WidgetGrid, BarraSegmenti } from '../../design/primitives/Widget';
+import { Button } from '../../design/primitives/Button';
+import { BrandLogo } from '../../design/primitives/BrandLogo';
+import { PageTitle } from '../../ui/chrome/PageTitle';
+import { FuelTabs } from '../../ui/home/FuelTabs';
+import { SCHERMATA, BLOCCO, useNumeroAnimato } from '../../design/motion';
+import { toFuelKey, toFuelType } from '../../domain/fuel';
+import { euro, numero, prezzoEuro, delta as pctDelta } from '../../lib/formato';
 
 interface Props {
+  model: MarketModel | null;
+  /** L'analisi del modello: commenta, non decide. */
   marketRef: MarketAnalysis | null;
   selectedFuel: FuelType;
-  filteredStations: FuelStation[];
-  marketStats: MarketStats;
+  setSelectedFuel?: (f: FuelType) => void;
   apiKey: string;
-  fuelNews: any[];
   analysisLoading: boolean;
   userQuestion: string;
   setUserQuestion: (q: string) => void;
   analysisIsLocal: boolean;
-  trendTone: string;
   fetchAnalysis: (f: FuelType, force?: boolean, q?: string) => void;
   setShowSettings: (s: boolean) => void;
-  setSelectedFuel?: (f: FuelType) => void;
   tankLiters: number;
   aiAnswer: { question: string; answer: string; ts: number; source: 'ai' | 'local' } | null;
   clearAiAnswer: () => void;
+  aiError?: string | null;
+  clearAiError?: () => void;
+  freschezzaDati?: string | null;
 }
 
-const PERIODS: Period[] = ['1M', '3M', '6M', '1Y', '5Y', 'MAX'];
+const PERIODI: Period[] = ['3M', '1Y', '5Y', 'MAX'];
 
-const adviceLabel = (a?: string) => {
-  switch (a) {
-    case 'FILL-FULL': return 'Fai il pieno';
-    case 'WAIT': return 'Aspetta';
-    case 'TEN-EURO': return 'Carico minimo';
-    case 'URGENT': return 'Azione urgente';
-    default: return 'In valutazione';
-  }
+const PERIODO_LABEL: Record<Period, string> = {
+  '1M': 'un mese', '3M': 'tre mesi', '6M': 'sei mesi', '1Y': 'un anno', '5Y': 'cinque anni', MAX: 'dal 2020',
 };
 
-const adviceTint = (a?: string) =>
-  a === 'FILL-FULL' ? 'text-emerald-400'
-  : a === 'WAIT' ? 'text-blue-400'
-  : a === 'TEN-EURO' ? 'text-amber-400'
-  : 'text-orange-400';
+function colore(level: PriceLevel): string {
+  return `var(${LEVEL_VAR[level]})`;
+}
 
-const fmtTimeAgo = (iso?: string) => {
-  if (!iso) return null;
-  const ts = new Date(iso).getTime();
-  if (!isFinite(ts)) return null;
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'ora';
-  if (m < 60) return `${m} min fa`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h fa`;
-  const d = Math.floor(h / 24);
-  return `${d}g fa`;
-};
+/** Verde quando il numero e una buona notizia per chi compra. */
+function coloreDelta(v: number, soglia = 0.4): string {
+  if (v <= -soglia) return 'var(--mf-price-best)';
+  if (v >= soglia) return 'var(--mf-price-worst)';
+  return 'var(--mf-ink-2)';
+}
+
+const cent = (v: number, dec = 1) => `${numero(Math.abs(v), dec)} cent`;
+const segno = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '');
 
 export function AnalysisTab(p: Props) {
   const [history, setHistory] = useState<Record<string, HistoryPoint[]>>({});
   const [period, setPeriod] = useState<Period>('1Y');
   const [hover, setHover] = useState<HistoryPoint | null>(null);
-
-  const [isListening, setIsListening] = useState(false);
+  const [tuttiMarchi, setTuttiMarchi] = useState(false);
+  const [apertaCategoria, setApertaCategoria] = useState<number | null>(null);
+  const [reportAperto, setReportAperto] = useState(false);
+  const [ascolto, setAscolto] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
-  const [voiceActive, setVoiceActive] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechSynth, setSpeechSynth] = useState<SpeechSynthesis | null>(null);
 
   useEffect(() => { loadHistory().then(setHistory); }, []);
 
-  // Initialize Speech Recognition & Synthesis
+  // Dettatura: comoda in auto, dove scrivere non si puo.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const rec = new SpeechRecognition();
-        rec.lang = 'it-IT';
-        rec.continuous = false;
-        rec.interimResults = false;
-        
-        rec.onstart = () => {
-          setIsListening(true);
-          setVoiceActive(true);
-          import('../../lib/haptics').then(m => m.triggerHaptic('light'));
-        };
-        
-        rec.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          if (transcript.trim()) {
-            p.setUserQuestion(transcript);
-            import('../../lib/haptics').then(m => m.triggerHaptic('success'));
-            p.fetchAnalysis(p.selectedFuel, false, transcript);
-          }
-          setIsListening(false);
-        };
-        
-        rec.onerror = (err: any) => {
-          console.warn('Speech recognition error:', err);
-          setIsListening(false);
-          import('../../lib/haptics').then(m => m.triggerHaptic('error'));
-        };
-        
-        rec.onend = () => {
-          setIsListening(false);
-        };
-        
-        setRecognition(rec);
+    if (typeof window === 'undefined') return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = 'it-IT';
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onstart = () => setAscolto(true);
+    rec.onend = () => setAscolto(false);
+    rec.onerror = () => setAscolto(false);
+    rec.onresult = (e: any) => {
+      const testo = e.results?.[0]?.[0]?.transcript ?? '';
+      if (testo.trim()) {
+        p.setUserQuestion(testo);
+        p.fetchAnalysis(p.selectedFuel, false, testo);
       }
-      
-      if (window.speechSynthesis) {
-        setSpeechSynth(window.speechSynthesis);
-      }
-    }
+      setAscolto(false);
+    };
+    setRecognition(rec);
+    return () => { try { rec.abort(); } catch { /* era gia chiusa */ } };
   }, [p.selectedFuel, p.fetchAnalysis, p.setUserQuestion]);
 
-  // Clean markdown text for smoother Italian reading
-  const cleanMarkdownForSpeech = (text: string) => {
-    return text
-      .replace(/\*\*([\s\S]*?)\*\*/g, '$1')
-      .replace(/\*([\s\S]*?)\*/g, '$1')
-      .replace(/#+\s+(.*?)\n/g, '$1. ')
-      .replace(/`([\s\S]*?)`/g, '$1')
-      .replace(/[-*+]\s+/g, '')
-      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-      .replace(/€/g, ' euro ')
-      .replace(/%/g, ' per cento ')
-      .replace(/\//g, ' su ');
+  const serie = useMemo(() => getSeries(history, p.selectedFuel, period), [history, p.selectedFuel, period]);
+
+  const m = p.model;
+  const litri = p.tankLiters > 0 ? p.tankLiters : 50;
+  const mediaZona = useNumeroAnimato(m?.zona?.avg ?? 0, !!m?.zona);
+
+  const chiedi = () => {
+    const q = p.userQuestion.trim();
+    if (!q || p.analysisLoading) return;
+    p.fetchAnalysis(p.selectedFuel, false, q);
   };
 
-  const speakResponse = (text: string) => {
-    if (!speechSynth) return;
-    
-    speechSynth.cancel();
-    const cleanText = cleanMarkdownForSpeech(text);
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'it-IT';
-    
-    const voices = speechSynth.getVoices();
-    const itVoice = voices.find(v => v.lang.startsWith('it-IT') && v.name.includes('Google')) ||
-                    voices.find(v => v.lang.startsWith('it-IT'));
-    if (itVoice) {
-      utterance.voice = itVoice;
-    }
-    
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-    };
-    
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setVoiceActive(false);
-    };
-    
-    speechSynth.speak(utterance);
-  };
+  const verso = m?.previsione?.direction ?? 'flat';
+  const Freccia = verso === 'down' ? ArrowDownRight : verso === 'up' ? ArrowUpRight : Minus;
+  const coloreVerso =
+    verso === 'down' ? 'var(--mf-price-best)' : verso === 'up' ? 'var(--mf-price-worst)' : 'var(--mf-ink-2)';
 
-  // Speak when answer changes and voice is active
-  useEffect(() => {
-    if (p.aiAnswer && voiceActive && speechSynth) {
-      speakResponse(p.aiAnswer.answer);
-    }
-  }, [p.aiAnswer, voiceActive, speechSynth]);
-
-  // Toggle speak manually
-  const handleToggleSpeak = () => {
-    if (!speechSynth) return;
-    if (isSpeaking) {
-      speechSynth.cancel();
-      setIsSpeaking(false);
-      setVoiceActive(false);
-    } else if (p.aiAnswer) {
-      setVoiceActive(true);
-      speakResponse(p.aiAnswer.answer);
-    }
-  };
-
-  // Cleanup synthesis on unmount
-  useEffect(() => {
-    return () => {
-      if (speechSynth) {
-        speechSynth.cancel();
-      }
-    };
-  }, [speechSynth]);
-
-  const series = useMemo(() => getSeries(history, p.selectedFuel, period), [history, p.selectedFuel, period]);
-  const stats = useMemo(() => rangeStats(series), [series]);
-  const delta = useMemo(() => pctDelta(series), [series]);
-  const last = series[series.length - 1];
-
-  const series52w = useMemo(() => getSeries(history, p.selectedFuel, '1Y'), [history, p.selectedFuel]);
-  const stats52w = useMemo(() => rangeStats(series52w), [series52w]);
-
-  const todayBest = useMemo(() => {
-    const prices = p.filteredStations
-      .map(s => s.prices.find(pp => pp.type === p.selectedFuel)?.price || 0)
-      .filter(v => v > 0.5);
-    return prices.length ? Math.min(...prices) : null;
-  }, [p.filteredStations, p.selectedFuel]);
-
-  // === AI PULSE — intuitive verdict cockpit ===
-  const aiPulse = useMemo(() => {
-    const fc = p.marketRef?.forecast || [];
-    if (fc.length < 2 && !todayBest) return null;
-    const fStart = fc[0]?.price ?? todayBest ?? p.marketStats.average;
-    const fEnd = fc[fc.length - 1]?.price ?? fStart;
-    const fcDelta = fStart > 0 ? ((fEnd - fStart) / fStart) * 100 : 0;
-    // Conviction tiered
-    const mag = Math.min(1, Math.abs(fcDelta) / 3);
-    const samp = Math.min(1, (p.marketStats.sampleSize || 0) / 80);
-    const cons = Math.sign(fcDelta) === Math.sign(delta) && delta !== 0 ? 1 : 0.4;
-    const score = (mag * 0.45 + samp * 0.25 + cons * 0.30) * 100;
-    const convictionTier: 'Alta' | 'Media' | 'Bassa' = score >= 65 ? 'Alta' : score >= 35 ? 'Media' : 'Bassa';
-    const convictionPct = Math.round(score);
-
-    // Verdict: clear instruction
-    let verdict: { label: string; action: string; tone: string; bg: string; icon: 'fill' | 'wait' | 'neutral' };
-    if (fcDelta < -0.8) {
-      verdict = { label: 'Aspetta', action: `il prezzo scende del ${Math.abs(fcDelta).toFixed(1)}% in 7 giorni`, tone: 'text-emerald-400', bg: 'bg-emerald-500/12 border-emerald-500/30', icon: 'wait' };
-    } else if (fcDelta > 0.8) {
-      verdict = { label: 'Fai pieno ora', action: `il prezzo sale del ${fcDelta.toFixed(1)}% in 7 giorni`, tone: 'text-red-400', bg: 'bg-red-500/12 border-red-500/30', icon: 'fill' };
-    } else if (fcDelta < -0.2) {
-      verdict = { label: 'Aspetta poco', action: 'lieve calo previsto', tone: 'text-emerald-300', bg: 'bg-emerald-500/8 border-emerald-500/20', icon: 'wait' };
-    } else if (fcDelta > 0.2) {
-      verdict = { label: 'Meglio adesso', action: 'lieve rialzo previsto', tone: 'text-red-300', bg: 'bg-red-500/8 border-red-500/20', icon: 'fill' };
-    } else {
-      verdict = { label: 'Indifferente', action: 'mercato stabile', tone: 'text-zinc-300', bg: 'bg-zinc-800/40 border-zinc-700', icon: 'neutral' };
-    }
-
-    const savings = (fStart - fEnd) * p.tankLiters;
-
-    return { fcDelta, convictionTier, convictionPct, verdict, savings, fStart, fEnd, tank: p.tankLiters };
-  }, [p.marketRef?.forecast, p.marketStats, delta, todayBest, p.tankLiters]);
-
-  // === HISTORICAL COMPARE — from history.csv ===
-  const historicalCompare = useMemo(() => {
-    if (!last) return null;
-    const all = history[p.selectedFuel.toLowerCase()] || [];
-    if (all.length < 30) return null;
-    const findClosest = (targetTs: number) => {
-      let best: HistoryPoint | null = null;
-      let bestDiff = Infinity;
-      for (const pt of all) {
-        const d = Math.abs(pt.ts - targetTs);
-        if (d < bestDiff) { bestDiff = d; best = pt; }
-      }
-      return best;
-    };
-    const now = last.ts;
-    const wk1 = findClosest(now - 7 * 86400000);
-    const mo1 = findClosest(now - 30 * 86400000);
-    const yr1 = findClosest(now - 365 * 86400000);
-    const yr3 = findClosest(now - 365 * 3 * 86400000);
-    const calc = (ref: HistoryPoint | null) => ref ? ((last.avg - ref.avg) / ref.avg) * 100 : null;
-    return [
-      { label: '1 settimana fa', price: wk1?.avg, delta: calc(wk1) },
-      { label: '1 mese fa', price: mo1?.avg, delta: calc(mo1) },
-      { label: '1 anno fa', price: yr1?.avg, delta: calc(yr1) },
-      { label: '3 anni fa', price: yr3?.avg, delta: calc(yr3) },
-    ].filter(x => x.price != null);
-  }, [history, p.selectedFuel, last]);
-
-  // === STRATEGY — best window (min point in forecast) ===
-  const strategy = useMemo(() => {
-    const fc = p.marketRef?.forecast || [];
-    if (fc.length < 3) return null;
-    let minIdx = 0;
-    for (let i = 1; i < fc.length; i++) if (fc[i].price < fc[minIdx].price) minIdx = i;
-    const minPt = fc[minIdx];
-    const todayInForecast = fc[0].price;
-    // forecast[0] = +1g (domani), forecast[6] = +7g
-    const daysAhead = minIdx + 1;
-    // Prova a parsare la data: ISO ('2026-05-17') oppure formato locale '+Ng'
-    let targetDate: Date;
-    const parsed = new Date(minPt.date);
-    if (!isNaN(parsed.getTime()) && minPt.date.includes('-')) {
-      targetDate = parsed;
-    } else {
-      targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() + daysAhead);
-    }
-    const saved = (todayInForecast - minPt.price) * p.tankLiters;
-    return {
-      day: minIdx === 0 ? 'domani' : `tra ${daysAhead} giorni`,
-      dayLabel: targetDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' }),
-      price: minPt.price,
-      saved,
-      worthIt: saved > 1,
-    };
-  }, [p.marketRef?.forecast, p.tankLiters]);
-
-  // === RISK FACTORS / TRUST ===
-  const risks = useMemo(() => {
-    type Item = { icon: any; label: string; status: 'good' | 'mid' | 'bad'; statusLabel: string; value: string; hint: string };
-    const items: Item[] = [];
-    const sample = p.marketStats.sampleSize;
-    items.push({
-      icon: Database,
-      label: 'Dati zona',
-      status: sample >= 50 ? 'good' : sample >= 15 ? 'mid' : 'bad',
-      statusLabel: sample >= 50 ? 'Affidabile' : sample >= 15 ? 'Limitato' : 'Insufficiente',
-      value: `${sample} stazioni`,
-      hint: sample >= 50 ? 'Campione robusto, prezzi rappresentativi.'
-        : sample >= 15 ? 'Pochi distributori, allarga il raggio per piu accuratezza.'
-        : 'Troppe poche stazioni, prezzi poco affidabili in zona.',
-    });
-    const spread = p.marketStats.spread;
-    items.push({
-      icon: Maximize2,
-      label: 'Spread',
-      status: spread < 0.15 ? 'good' : spread < 0.30 ? 'mid' : 'bad',
-      statusLabel: spread < 0.15 ? 'Compatto' : spread < 0.30 ? 'Ampio' : 'Estremo',
-      value: `€${spread.toFixed(3)}`,
-      hint: spread < 0.15 ? 'Differenze piccole, conviene la stazione vicina.'
-        : spread < 0.30 ? 'Vale la pena cercare: differenze sensibili tra distributori.'
-        : 'Forti anomalie zonali, controlla bene le stazioni piu economiche.',
-    });
-    items.push({
-      icon: BarChart2,
-      label: 'Volatilita',
-      status: stats.vol < 0.02 ? 'good' : stats.vol < 0.05 ? 'mid' : 'bad',
-      statusLabel: stats.vol < 0.02 ? 'Stabile' : stats.vol < 0.05 ? 'Mossa' : 'Turbolenta',
-      value: `±${(stats.vol * 100).toFixed(1)}c`,
-      hint: stats.vol < 0.02 ? 'Prezzi piatti nel periodo, forecast piu affidabile.'
-        : stats.vol < 0.05 ? 'Oscillazioni normali, possibili rimbalzi giornalieri.'
-        : 'Mercato agitato, forecast meno preciso del solito.',
-    });
-    const newsImpact = (p.fuelNews || []).filter(n => (n.impact || '').toLowerCase() === 'negative' || (n.impact || '').toLowerCase() === 'bad').length;
-    items.push({
-      icon: Radio,
-      label: 'News',
-      status: newsImpact === 0 ? 'good' : newsImpact === 1 ? 'mid' : 'bad',
-      statusLabel: newsImpact === 0 ? 'Calme' : newsImpact === 1 ? 'Una negativa' : `${newsImpact} negative`,
-      value: newsImpact === 0 ? 'Nessun rischio' : `${newsImpact} eventi`,
-      hint: newsImpact === 0 ? 'Nessuna notizia che spinga il prezzo al rialzo.'
-        : newsImpact === 1 ? 'Una notizia potenzialmente rialzista, monitora.'
-        : 'Piu eventi rialzisti in agenda, possibile aumento a breve.',
-    });
-    // Overall verdict
-    const goodCount = items.filter(i => i.status === 'good').length;
-    const badCount = items.filter(i => i.status === 'bad').length;
-    const overall = badCount >= 2 ? { status: 'bad' as const, label: 'Bassa', message: 'Dati limitati o turbolenza in corso — prendi le previsioni con cautela.' }
-      : badCount === 1 || goodCount <= 1 ? { status: 'mid' as const, label: 'Media', message: 'Indicatori misti — l\'analisi è indicativa ma non perfetta.' }
-      : { status: 'good' as const, label: 'Alta', message: 'Dati abbondanti e mercato stabile, l\'analisi è affidabile.' };
-    return { items, overall };
-  }, [p.marketStats, stats.vol, p.fuelNews]);
-
-  // === AI BRIEF — paragrafo riassuntivo ===
-  const aiBrief = useMemo(() => {
-    if (!p.marketRef) return null;
-    const m = p.marketRef;
-    const avg = p.marketStats.average;
-    const localFastFacts = [
-      todayBest && `prezzo minimo zona €${todayBest.toFixed(3)}`,
-      avg > 0 && `media €${avg.toFixed(3)}`,
-      historicalCompare?.[2] && `1 anno fa ${historicalCompare[2].delta! > 0 ? '+' : ''}${historicalCompare[2].delta!.toFixed(1)}% vs oggi`,
-    ].filter(Boolean).join(' · ');
-    const sentimentLine = aiPulse?.verdict.label === 'Aspetta' || aiPulse?.verdict.label === 'Aspetta poco'
-      ? "Trend favorevole all'acquirente."
-      : aiPulse?.verdict.label === 'Fai pieno ora' || aiPulse?.verdict.label === 'Meglio adesso'
-      ? 'Trend sfavorevole, conviene anticipare.'
-      : 'Mercato stabile.';
-    return {
-      sentiment: sentimentLine,
-      facts: localFastFacts,
-      reasoning: m.reasoning,
-    };
-  }, [p.marketRef, p.marketStats, todayBest, historicalCompare, aiPulse]);
-
-  const quickPrompts = useMemo(() => [
-    'Conviene fare il pieno oggi?',
-    `Storico ${p.selectedFuel.toLowerCase()} ultimi 3 mesi?`,
-    'Cosa influisce sul prezzo questa settimana?',
-    'Mi conviene aspettare lunedi?',
-  ], [p.selectedFuel]);
-
-  const news = useMemo(() => (p.fuelNews || []).slice(0, 3), [p.fuelNews]);
-
-  const trend: 'UP' | 'DOWN' | 'STABLE' = delta > 0.05 ? 'UP' : delta < -0.05 ? 'DOWN' : 'STABLE';
-  const trendUp = trend === 'UP';
-  const trendDown = trend === 'DOWN';
-  const tColor = trendDown ? 'text-emerald-400' : trendUp ? 'text-red-400' : 'text-zinc-400';
-  const tBg = trendDown ? 'bg-emerald-400/10' : trendUp ? 'bg-red-400/10' : 'bg-zinc-800/60';
-
-  const displayPrice = hover ? hover.avg : (last?.avg ?? p.marketStats.average);
-  const displayDate = hover ? new Date(hover.ts) : (last ? new Date(last.ts) : null);
-  const m = p.marketRef;
-  const cacheAge = fmtTimeAgo(m?.generatedAt);
+  const massimoLivello = m ? Math.max(1, ...m.distribuzione.map((s) => s.n)) : 1;
+  const marchiVisibili = m ? (tuttiMarchi ? m.marchi.slice(0, 12) : m.marchi.slice(0, 4)) : [];
 
   return (
     <motion.div
       key="analysis"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="pb-28 space-y-5"
+      variants={SCHERMATA}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="space-y-5 pb-32"
     >
-      {/* Header */}
-      <header className="pt-2 px-1 flex items-end justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-zinc-500 tracking-widest uppercase mb-1">Intel · IT</p>
-          <h1 className="text-[36px] sm:text-[42px] font-semibold tracking-tight text-white leading-none">Mercato</h1>
-        </div>
-        {p.analysisIsLocal && (
-          <span className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-semibold text-zinc-400 flex-shrink-0 uppercase tracking-wider">
-            Locale
-          </span>
-        )}
-      </header>
+      <motion.div variants={BLOCCO}>
+        <PageTitle eyebrow="mercato" title="Come sta il prezzo" />
+      </motion.div>
 
-      {/* Loading banner — Gemini generation */}
-      {p.analysisLoading && p.apiKey.trim().length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="px-4 py-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-3 shadow-[0_0_24px_rgba(59,130,246,0.18)]"
-        >
-          <div className="relative w-4 h-4 flex-shrink-0">
-            <div className="absolute inset-0 rounded-full border-2 border-blue-500/25" />
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 animate-spin" />
-          </div>
-          <p className="text-[11px] font-black text-blue-300 uppercase tracking-widest">
-            Gemini sta generando l'analisi...
-          </p>
+      <motion.div variants={BLOCCO} className="px-1">
+        <FuelTabs
+          value={toFuelKey(p.selectedFuel)}
+          onChange={(k) => p.setSelectedFuel?.(toFuelType(k))}
+        />
+      </motion.div>
+
+      {!m || m.campione === 0 || !m.zona ? (
+        <motion.div variants={BLOCCO}>
+          <Card pad="md">
+            <Empty
+              title="Ancora nessun confronto"
+              hint="Serve la posizione e qualche impianto raggiungibile per dire come sta il prezzo qui."
+            />
+          </Card>
         </motion.div>
-      )}
-
-      {/* Ticker tape */}
-      <TickerTape
-        history={history}
-        selected={p.selectedFuel}
-        onSelect={p.setSelectedFuel}
-      />
-
-      {/* Hero price card */}
-      <section className="relative bg-gradient-to-b from-zinc-900/70 to-black rounded-3xl border border-blue-500/25 overflow-hidden shadow-[0_0_60px_rgba(37,99,235,0.22)]">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-600/8 via-transparent to-transparent" />
-        <div className="pointer-events-none absolute -top-24 -right-24 w-64 h-64 bg-blue-500/15 blur-[80px] rounded-full" />
-        <div className="relative px-5 sm:px-6 pt-5 pb-3 flex items-end justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-zinc-500 font-medium mb-1 tracking-wide">
-              {p.selectedFuel} · {hover ? 'storico' : 'ultimo dato'}
-              {displayDate && <span className="text-zinc-600"> · {displayDate.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[48px] sm:text-[56px] font-semibold tracking-tight text-white tabular-nums leading-none">
-                {displayPrice ? displayPrice.toFixed(3) : '—'}
-              </span>
-              <span className="text-[13px] text-zinc-500 font-medium">€/L</span>
-            </div>
-          </div>
-          <div className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full flex-shrink-0 self-start", tBg)}>
-            {trendDown ? <TrendingDown className={cn("w-3.5 h-3.5", tColor)} /> : trendUp ? <TrendingUp className={cn("w-3.5 h-3.5", tColor)} /> : <Activity className={cn("w-3.5 h-3.5", tColor)} />}
-            <span className={cn("text-[12px] font-semibold tabular-nums", tColor)}>
-              {delta > 0 ? '+' : ''}{delta.toFixed(2)}%
-            </span>
-          </div>
-        </div>
-
-        <div className="relative px-2 sm:px-3">
-          <PriceChart data={series} trend={trend} height={210} onHover={setHover} />
-        </div>
-
-        <div className="relative px-3 sm:px-4 pb-3 pt-1">
-          <div className="grid grid-cols-6 bg-zinc-900/70 rounded-full p-0.5 border border-zinc-800/70">
-            {PERIODS.map(pr => (
-              <button
-                key={pr}
-                onClick={() => setPeriod(pr)}
-                className={cn(
-                  'rounded-full py-1.5 text-[11px] font-semibold tracking-wider transition-all tabular-nums',
-                  period === pr ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-                )}
-              >
-                {pr}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative px-5 sm:px-6 pb-5 pt-3 border-t border-zinc-800/70">
-          <div className="grid grid-cols-4 gap-2">
-            <StatTiny label="High" value={stats.hi > 0 ? `€${stats.hi.toFixed(3)}` : '—'} tone="text-red-400" />
-            <StatTiny label="Low" value={stats.lo < Infinity ? `€${stats.lo.toFixed(3)}` : '—'} tone="text-emerald-400" />
-            <StatTiny label="Avg" value={stats.avg > 0 ? `€${stats.avg.toFixed(3)}` : '—'} />
-            <StatTiny label="Vol" value={stats.vol > 0 ? `±${(stats.vol * 100).toFixed(1)}c` : '—'} mono />
-          </div>
-        </div>
-      </section>
-
-      {/* === AI PULSE — intuitive verdict cockpit === */}
-      {aiPulse && (
-        <section className="relative bg-gradient-to-b from-zinc-900/70 to-black rounded-3xl border border-blue-500/25 overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.18)]">
-          <div className="pointer-events-none absolute -top-20 -right-20 w-60 h-60 bg-blue-500/15 blur-[80px] rounded-full" />
-          <div className="relative p-5 sm:p-6">
-            {/* Header with cache freshness */}
-            <div className="flex items-center justify-between gap-3 mb-5">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-                  <Brain className="w-4 h-4 text-blue-400" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-[15px] font-semibold text-white truncate">Verdetto AI</h2>
-                  <p className="text-[11px] text-zinc-500 font-medium truncate flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {cacheAge ? `Aggiornato ${cacheAge}` : 'cache locale di oggi'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => p.fetchAnalysis(p.selectedFuel, true)}
-                disabled={p.analysisLoading}
-                aria-label="Rigenera"
-                className="w-8 h-8 rounded-full bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-95 flex-shrink-0 disabled:opacity-50"
-              >
-                <RefreshCw className={cn("w-3.5 h-3.5", p.analysisLoading && "animate-spin")} />
-              </button>
-            </div>
-
-            {/* BIG verdict */}
-            <div className={cn("rounded-2xl border p-4 mb-4", aiPulse.verdict.bg)}>
-              <div className="flex items-center gap-3 mb-1">
-                {aiPulse.verdict.icon === 'fill' ? <Zap className={cn("w-5 h-5", aiPulse.verdict.tone)} />
-                  : aiPulse.verdict.icon === 'wait' ? <Clock className={cn("w-5 h-5", aiPulse.verdict.tone)} />
-                  : <Activity className={cn("w-5 h-5", aiPulse.verdict.tone)} />}
-                <h3 className={cn("text-[26px] sm:text-[30px] font-semibold tracking-tight leading-none", aiPulse.verdict.tone)}>
-                  {aiPulse.verdict.label}
-                </h3>
-              </div>
-              <p className="text-[13px] text-zinc-300 ml-8 font-medium">{aiPulse.verdict.action}</p>
-            </div>
-
-            {/* Savings hero number */}
-            <div className="bg-black/40 rounded-2xl p-4 border border-zinc-800/60 mb-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider mb-1">
-                    {aiPulse.savings > 0 ? 'Risparmi se aspetti 7 giorni' : aiPulse.savings < 0 ? 'Perdi se aspetti 7 giorni' : 'Differenza in 7 giorni'}
-                  </p>
-                  <p className={cn("text-[34px] sm:text-[40px] font-semibold tabular-nums tracking-tight leading-none",
-                    Math.abs(aiPulse.savings) < 0.5 ? 'text-white'
-                    : aiPulse.savings > 0 ? 'text-emerald-400'
-                    : 'text-red-400'
-                  )}>
-                    {aiPulse.savings > 0 ? '+' : aiPulse.savings < 0 ? '-' : ''}€{Math.abs(aiPulse.savings).toFixed(2)}
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">su pieno</p>
-                  <p className="text-[16px] font-semibold text-white tabular-nums">{aiPulse.tank}L</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Today vs 7d projection */}
-            <div className="flex items-center gap-2 mb-4">
-              <div className="flex-1 bg-zinc-900/60 rounded-2xl border border-zinc-800/60 p-3 min-w-0">
-                <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-0.5">Oggi</p>
-                <p className="text-[18px] font-semibold text-white tabular-nums truncate">€{aiPulse.fStart.toFixed(3)}</p>
-              </div>
-              <ArrowRight className={cn("w-4 h-4 flex-shrink-0",
-                aiPulse.fcDelta < -0.2 ? 'text-emerald-400'
-                : aiPulse.fcDelta > 0.2 ? 'text-red-400'
-                : 'text-zinc-500'
-              )} />
-              <div className={cn("flex-1 rounded-2xl border p-3 min-w-0",
-                aiPulse.fcDelta < -0.2 ? 'bg-emerald-500/8 border-emerald-500/25'
-                : aiPulse.fcDelta > 0.2 ? 'bg-red-500/8 border-red-500/25'
-                : 'bg-zinc-900/60 border-zinc-800/60'
-              )}>
-                <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-0.5">+7 giorni</p>
-                <p className={cn("text-[18px] font-semibold tabular-nums truncate",
-                  aiPulse.fcDelta < -0.2 ? 'text-emerald-400'
-                  : aiPulse.fcDelta > 0.2 ? 'text-red-400'
-                  : 'text-white'
-                )}>€{aiPulse.fEnd.toFixed(3)}</p>
-              </div>
-            </div>
-
-            {/* Conviction (tier label, not abstract %) */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <ShieldCheck className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
-                <span className="text-[12px] text-zinc-500 font-medium">Affidabilita previsione</span>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex gap-0.5">
-                  {[1, 2, 3].map(i => {
-                    const tierIdx = aiPulse.convictionTier === 'Bassa' ? 1 : aiPulse.convictionTier === 'Media' ? 2 : 3;
-                    return <div key={i} className={cn("w-4 h-1.5 rounded-full",
-                      i <= tierIdx
-                        ? (tierIdx === 3 ? 'bg-emerald-400' : tierIdx === 2 ? 'bg-amber-400' : 'bg-zinc-500')
-                        : 'bg-zinc-800'
-                    )} />;
-                  })}
-                </div>
-                <span className={cn("text-[12px] font-semibold",
-                  aiPulse.convictionTier === 'Alta' ? 'text-emerald-400'
-                  : aiPulse.convictionTier === 'Media' ? 'text-amber-400'
-                  : 'text-zinc-400'
-                )}>{aiPulse.convictionTier}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* === ASK AI — moved up, right after AI Pulse === */}
-      <section className="relative bg-zinc-900/60 rounded-3xl p-5 sm:p-6 border border-blue-500/20 overflow-hidden">
-        <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full" />
-        <div className="relative">
-          <div className="flex items-center justify-between mb-4 gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-                <Brain className="w-4 h-4 text-blue-400" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-[15px] font-semibold text-white truncate">Chiedi all'AI</h2>
-                <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
-                  {p.apiKey ? 'Gemini · risposta personalizzata' : 'Motore locale — configura Gemini per AI'}
-                </p>
-              </div>
-            </div>
-            
-            {/* Pulsante Mic Neon */}
-            {recognition && (
-              <div className="relative flex-shrink-0">
-                {isListening && (
-                  <>
-                    <motion.div
-                      animate={{ scale: [1, 1.8], opacity: [0.6, 0] }}
-                      transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
-                      className="absolute inset-0 rounded-full bg-blue-500/30"
-                    />
-                    <motion.div
-                      animate={{ scale: [1, 2.4], opacity: [0.4, 0] }}
-                      transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut", delay: 0.4 }}
-                      className="absolute inset-0 rounded-full bg-indigo-500/20"
-                    />
-                  </>
-                )}
-                <button
-                  onClick={() => {
-                    if (isListening) {
-                      recognition.stop();
-                    } else {
-                      recognition.start();
-                    }
-                  }}
-                  className={cn(
-                    "relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer",
-                    isListening
-                      ? "bg-gradient-to-r from-red-500 to-pink-500 shadow-[0_0_20px_rgba(239,68,68,0.6)] active:scale-95"
-                      : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-[0_4px_12px_rgba(59,130,246,0.3)] hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] active:scale-95"
-                  )}
-                  aria-label={isListening ? "Ferma ascolto" : "Avvia assistente vocale"}
-                >
-                  {isListening ? (
-                    <motion.div
-                      animate={{ scale: [0.9, 1.1, 0.9] }}
-                      transition={{ repeat: Infinity, duration: 1 }}
-                    >
-                      <MicOff size={18} className="text-white" />
-                    </motion.div>
-                  ) : (
-                    <Mic size={18} className="text-white" />
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Listening State Ripple Radar Overlay */}
-          {isListening && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="mb-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-6 flex flex-col items-center justify-center space-y-4"
+      ) : (
+        <>
+          {/* ── Il verdetto: una frase e il numero che la regge ──── */}
+          <motion.div variants={BLOCCO}>
+            <div
+              className="px-6 py-6"
+              style={{
+                background: 'var(--mf-surface)',
+                border: '1px solid var(--mf-hairline)',
+                borderRadius: 'var(--mf-radius-lg)',
+                boxShadow: 'var(--mf-edge-light)',
+              }}
             >
-              <div className="relative w-16 h-16 flex items-center justify-center">
-                <motion.div
-                  animate={{ scale: [1, 2.3], opacity: [0.4, 0] }}
-                  transition={{ repeat: Infinity, duration: 1.6, ease: "easeOut" }}
-                  className="absolute inset-0 rounded-full bg-blue-500/25"
-                />
-                <motion.div
-                  animate={{ scale: [1, 3], opacity: [0.2, 0] }}
-                  transition={{ repeat: Infinity, duration: 1.6, ease: "easeOut", delay: 0.4 }}
-                  className="absolute inset-0 rounded-full bg-purple-500/15"
-                />
-                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-650 flex items-center justify-center shadow-lg relative z-10">
-                  <Mic size={20} className="text-white animate-pulse" />
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  {m.verdetto && (
+                    <>
+                      <span
+                        className="inline-flex items-center gap-2 px-3 py-1.5"
+                        style={{
+                          borderRadius: 'var(--mf-radius-pill)',
+                          background: `color-mix(in srgb, ${colore(m.verdetto.tono)} 16%, transparent)`,
+                          color: colore(m.verdetto.tono),
+                          fontFamily: 'var(--mf-font-sans)',
+                          fontWeight: 700,
+                          fontSize: 12.5,
+                        }}
+                      >
+                        {m.verdetto.titolo}
+                      </span>
+                      <p className="mt-4" style={{ color: 'var(--mf-ink)', fontSize: 15, lineHeight: 1.55 }}>
+                        {m.verdetto.frase}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {m.previsione && (
+                  <span
+                    className="flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5"
+                    style={{
+                      borderRadius: 'var(--mf-radius-pill)',
+                      background: 'var(--mf-ground)',
+                      border: '1px solid var(--mf-hairline)',
+                      color: coloreVerso,
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Freccia size={13} />
+                    {verso === 'down' ? 'in calo' : verso === 'up' ? 'in salita' : 'stabile'}
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-6 flex items-end justify-between gap-4 pt-5" style={{ borderTop: '1px solid var(--mf-hairline)' }}>
+                <div>
+                  <div className="mf-label" style={{ fontSize: 9 }}>media della zona</div>
+                  <div
+                    className="mf-num mt-1.5"
+                    style={{ fontSize: 38, fontWeight: 700, letterSpacing: '-0.045em', color: 'var(--mf-ink)', lineHeight: 1 }}
+                  >
+                    {prezzoEuro(mediaZona)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="mf-label" style={{ fontSize: 9 }}>media italiana</div>
+                  <div className="mf-num mt-1.5" style={{ fontSize: 20, color: 'var(--mf-ink-2)', fontWeight: 600 }}>
+                    {m.nazionale ? prezzoEuro(m.nazionale.avg) : '—'}
+                  </div>
                 </div>
               </div>
-              <div className="text-center">
-                <p className="text-[13px] font-bold text-white tracking-widest uppercase">Sto ascoltando...</p>
-                <p className="text-[11px] text-zinc-400 mt-1">Parla liberamente. Ti risponderò a voce appena finisci.</p>
-              </div>
+            </div>
+          </motion.div>
+
+          {/* ── Le tessere: sei fatti, un colpo d'occhio ─────────── */}
+          <WidgetGrid>
+            {m.migliore && (
+              <Widget
+                label="il meglio raggiungibile"
+                value={numero(m.migliore.price, 3)}
+                color={colore(m.migliore.level)}
+                icon={<Fuel size={11} />}
+                sub={`${m.migliore.brand} · ${numero(m.migliore.km, 1)} km`}
+              />
+            )}
+            <Widget
+              label="quanto puoi risparmiare"
+              value={m.risparmioMassimoEur !== null ? euro(m.risparmioMassimoEur) : null}
+              color="var(--mf-price-best)"
+              sub={m.spreadC !== null ? `${cent(m.spreadC, 0)} di forbice, su ${numero(litri)} litri` : undefined}
+            />
+            <Widget
+              label="contro l’Italia"
+              value={m.deltaZonaItaliaC !== null ? `${segno(m.deltaZonaItaliaC)}${cent(m.deltaZonaItaliaC)}` : null}
+              color={m.deltaZonaItaliaC !== null ? coloreDelta(m.deltaZonaItaliaC, 0.8) : undefined}
+              sub="al litro"
+            />
+            <Widget
+              label="prezzi freschi"
+              value={`${numero((m.freschezza.recenti / Math.max(1, m.freschezza.totale)) * 100, 0)}%`}
+              color={
+                m.freschezza.recenti / Math.max(1, m.freschezza.totale) > 0.5
+                  ? 'var(--mf-price-best)'
+                  : 'var(--mf-price-high)'
+              }
+              sub={`${m.freschezza.recenti} su ${m.freschezza.totale}, ultime 48 ore`}
+            />
+            {m.autostradaC !== null && (
+              <Widget
+                label="in autostrada"
+                value={`+${cent(m.autostradaC)}`}
+                color="var(--mf-price-worst)"
+                icon={<Route size={11} />}
+                sub={`${euro((m.autostradaC / 100) * litri)} a pieno`}
+              />
+            )}
+            {m.servitoC !== null && (
+              <Widget
+                label="col servito"
+                value={`+${cent(m.servitoC)}`}
+                color="var(--mf-price-high)"
+                sub={`${euro((m.servitoC / 100) * litri)} a pieno`}
+              />
+            )}
+          </WidgetGrid>
+
+          {/* ── Dove vanno i prezzi ──────────────────────────────── */}
+          {m.previsione && (
+            <motion.div variants={BLOCCO}>
+              <Widget
+                label={`previsione a ${m.previsione.daysAhead} giorni`}
+                wide
+                value={
+                  m.previsione.usable
+                    ? `${segno(m.previsione.deltaC)}${cent(m.previsione.deltaC)}`
+                    : 'non pervenuta'
+                }
+                color={m.previsione.usable ? coloreDelta(m.previsione.deltaC, 0.3) : 'var(--mf-muted)'}
+                sub={
+                  !m.previsione.usable
+                    ? 'Troppo incerta per metterci un numero sopra: meglio dirlo che inventarla.'
+                    : m.previsioneEur !== null && m.previsioneEur > 0.3
+                      ? <>Aspettare vale circa <b className="mf-num" style={{ color: 'var(--mf-price-best)' }}>{euro(m.previsioneEur)}</b> sul tuo pieno.</>
+                      : m.previsioneEur !== null && m.previsioneEur < -0.3
+                        ? <>Fare il pieno oggi vale circa <b className="mf-num" style={{ color: 'var(--mf-price-best)' }}>{euro(Math.abs(m.previsioneEur))}</b>.</>
+                        : 'Niente che sposti la spesa: decidi sul prezzo di oggi.'
+                }
+              />
             </motion.div>
           )}
 
-          {/* Quick prompts */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {quickPrompts.map((qp, i) => (
-              <button
-                key={i}
-                onClick={() => p.setUserQuestion(qp)}
-                className="px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/25 text-[11px] font-medium text-blue-300 hover:bg-blue-500/20 hover:border-blue-500/40 transition-all active:scale-95"
-              >
-                {qp}
-              </button>
-            ))}
-          </div>
-
-          {/* Input */}
-          <div className="relative">
-            <textarea
-              value={p.userQuestion}
-              onChange={(e) => p.setUserQuestion(e.target.value)}
-              placeholder="Es. Conviene fare il pieno oggi?"
-              className="w-full h-24 bg-black/40 rounded-2xl p-4 pr-14 text-[14px] text-white placeholder:text-zinc-600 focus:outline-none border border-zinc-800 focus:border-blue-500/50 transition-all resize-none"
-            />
-            <button
-              onClick={() => {
-                if (!p.userQuestion.trim()) return;
-                p.fetchAnalysis(p.selectedFuel, false, p.userQuestion);
-              }}
-              disabled={p.analysisLoading || !p.userQuestion.trim()}
-              aria-label="Invia"
-              className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white flex items-center justify-center active:scale-95 transition-all shadow-lg shadow-blue-500/40 disabled:shadow-none"
-            >
-              {p.analysisLoading
-                ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                : <Send className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {/* Answer card with Audio waves & Mute button */}
-          {p.aiAnswer && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-4 bg-blue-500/8 rounded-2xl p-4 border border-blue-500/30 relative"
-            >
-              <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                {speechSynth && (
-                  <button
-                    onClick={handleToggleSpeak}
-                    aria-label={isSpeaking ? "Silenzia assistente" : "Riproduci risposta a voce"}
-                    className={cn(
-                      "w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer",
-                      isSpeaking
-                        ? "bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)] active:scale-95"
-                        : "bg-black/30 hover:bg-black/50 text-zinc-400 hover:text-white"
-                    )}
+          {/* ── Dove finiscono i tuoi soldi ──────────────────────── */}
+          {m.scomposizione && (
+            <motion.div variants={BLOCCO}>
+              <Widget label="dove finiscono i tuoi soldi" wide icon={<Landmark size={11} />}>
+                <div className="mt-1">
+                  <div
+                    className="mf-num mb-4"
+                    style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--mf-price-worst)', lineHeight: 1.05 }}
                   >
-                    {isSpeaking ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-                <button
-                  onClick={p.clearAiAnswer}
-                  aria-label="Chiudi risposta"
-                  className="w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center text-zinc-400 hover:text-white transition-all cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              
-              <div className="flex items-center gap-2 mb-2 pr-16">
-                <MessageSquare className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                <p className="text-[11px] text-blue-300 font-semibold uppercase tracking-wider truncate">
-                  Risposta {p.aiAnswer.source === 'ai' ? 'Gemini' : 'locale'}
-                </p>
-                {isSpeaking && (
-                  <div className="flex items-end gap-[2px] h-3 ml-2 flex-shrink-0 animate-pulse">
-                    {[1, 2, 3, 4, 5].map(bar => (
-                      <motion.div
-                        key={bar}
-                        animate={{ height: [4, 12, 4] }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 0.6 + bar * 0.1,
-                          ease: "easeInOut",
-                          delay: bar * 0.05
+                    {numero(m.scomposizione.quotaTasse * 100, 0)}% tasse
+                  </div>
+                  <BarraSegmenti
+                    segmenti={[
+                      { quota: m.scomposizione.prodotto, colore: 'var(--mf-accent)', etichetta: `prodotto ${numero(m.scomposizione.prodotto, 3)}` },
+                      { quota: m.scomposizione.accisa, colore: 'var(--mf-price-worst)', etichetta: `accisa ${numero(m.scomposizione.accisa, 3)}` },
+                      { quota: m.scomposizione.iva, colore: 'var(--mf-price-high)', etichetta: `IVA ${numero(m.scomposizione.iva, 3)}` },
+                    ]}
+                  />
+                  <p className="mt-4" style={{ color: 'var(--mf-ink-2)', fontSize: 12, lineHeight: 1.55 }}>
+                    Di {prezzoEuro(m.scomposizione.prezzo)} al litro, <b className="mf-num">{prezzoEuro(m.scomposizione.tasse)}</b> sono
+                    accisa e IVA. È anche il motivo per cui il prezzo si muove meno del petrolio: la parte che
+                    oscilla è solo quella azzurra.
+                  </p>
+                </div>
+              </Widget>
+            </motion.div>
+          )}
+
+          {/* ── Il giorno della settimana ────────────────────────── */}
+          {m.ritmo.giorni.length === 7 && (
+            <motion.div variants={BLOCCO}>
+              <Widget label="c’è un giorno migliore?" wide icon={<CalendarDays size={11} />}>
+                <div className="mt-1">
+                  <div
+                    className="mf-num mb-4"
+                    style={{
+                      fontSize: 26,
+                      fontWeight: 700,
+                      letterSpacing: '-0.035em',
+                      lineHeight: 1.1,
+                      color: m.ritmo.significativo ? 'var(--mf-price-best)' : 'var(--mf-ink-2)',
+                      fontFamily: 'var(--mf-font-sans)',
+                    }}
+                  >
+                    {m.ritmo.significativo ? `Il ${m.ritmo.migliore!.nome}` : 'No, è una leggenda'}
+                  </div>
+
+                  <div className="flex items-end gap-1.5" style={{ height: 54 }}>
+                    {[1, 2, 3, 4, 5, 6, 0].map((g) => {
+                      const d = m.ritmo.giorni.find((x) => x.giorno === g);
+                      if (!d) return <div key={g} className="flex-1" />;
+                      const massimo = Math.max(...m.ritmo.giorni.map((x) => Math.abs(x.scartoC)), 0.1);
+                      const h = (Math.abs(d.scartoC) / massimo) * 100;
+                      const sotto = d.scartoC < 0;
+                      return (
+                        <div key={g} className="flex flex-1 flex-col items-center justify-end gap-1">
+                          <div
+                            title={`${d.nome}: ${segno(d.scartoC)}${numero(Math.abs(d.scartoC), 2)} cent`}
+                            style={{
+                              width: '100%',
+                              height: `${Math.max(6, h)}%`,
+                              borderRadius: 3,
+                              background: sotto ? 'var(--mf-price-best)' : 'var(--mf-price-worst)',
+                              opacity: m.ritmo.significativo ? 0.9 : 0.35,
+                            }}
+                          />
+                          <span className="mf-label" style={{ fontSize: 8 }}>
+                            {d.nome.slice(0, 2)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="mt-4" style={{ color: 'var(--mf-ink-2)', fontSize: 12, lineHeight: 1.55 }}>
+                    {m.ritmo.significativo ? (
+                      <>
+                        Sullo storico, il {m.ritmo.migliore!.nome} costa in media{' '}
+                        <b className="mf-num">{numero(Math.abs(m.ritmo.migliore!.scartoC), 2)} cent</b> meno della sua
+                        settimana, il {m.ritmo.peggiore!.nome} è il peggiore. Su un pieno sono{' '}
+                        {euro((m.ritmo.ampiezzaC / 100) * litri)}: poco, ma è gratis.
+                      </>
+                    ) : (
+                      <>
+                        Fra il giorno più economico e il più caro ballano{' '}
+                        <b className="mf-num">{numero(m.ritmo.ampiezzaC, 2)} cent</b> al litro — dentro il rumore.
+                        Aspettare il giorno giusto non serve: conta molto di più dove ti fermi.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </Widget>
+            </motion.div>
+          )}
+
+          {/* ── Com'e messa la zona ──────────────────────────────── */}
+          <motion.div variants={BLOCCO}>
+            <Widget label="com’è messa la zona" wide>
+              <div className="mt-3 space-y-2">
+                {m.distribuzione.map((s) => (
+                  <div key={s.level} className="flex items-center gap-3">
+                    <span
+                      className="flex-shrink-0"
+                      style={{ width: 80, fontSize: 12, color: s.n > 0 ? 'var(--mf-ink)' : 'var(--mf-muted)' }}
+                    >
+                      {LEVEL_LABEL[s.level]}
+                    </span>
+                    <div
+                      className="min-w-0 flex-1"
+                      style={{ height: 7, borderRadius: 'var(--mf-radius-pill)', background: 'var(--mf-ground)' }}
+                    >
+                      <div
+                        style={{
+                          width: `${(s.n / massimoLivello) * 100}%`,
+                          height: '100%',
+                          borderRadius: 'var(--mf-radius-pill)',
+                          background: colore(s.level),
+                          transition: 'width 340ms ease-out',
                         }}
-                        className="w-[2px] bg-blue-400 rounded-full"
-                        style={{ height: '4px' }}
                       />
+                    </div>
+                    <span
+                      className="mf-num flex-shrink-0 text-right"
+                      style={{ width: 30, fontSize: 12, color: s.n > 0 ? 'var(--mf-ink)' : 'var(--mf-muted)' }}
+                    >
+                      {s.n}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Widget>
+          </motion.div>
+
+          {/* ── Chi costa meno ───────────────────────────────────── */}
+          {m.marchi.length >= 2 && (
+            <motion.div variants={BLOCCO}>
+              <Section
+                title="Chi costa meno"
+                aside={
+                  m.marchi.length > 4 ? (
+                    <button
+                      onClick={() => setTuttiMarchi((v) => !v)}
+                      style={{ color: 'var(--mf-accent)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--mf-font-sans)' }}
+                    >
+                      {tuttiMarchi ? 'meno' : `tutti e ${m.marchi.length}`}
+                    </button>
+                  ) : undefined
+                }
+              >
+                <Card pad="none">
+                  {marchiVisibili.map((b, i) => (
+                    <div
+                      key={b.brand}
+                      className="flex items-center gap-3 px-4 py-3"
+                      style={{ borderTop: i === 0 ? 'none' : '1px solid var(--mf-hairline)' }}
+                    >
+                      <BrandLogo brand={b.brand} size={28} />
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 500, fontSize: 14, color: 'var(--mf-ink)' }}
+                      >
+                        {b.brand}
+                      </span>
+                      <span
+                        className="mf-num flex-shrink-0"
+                        style={{ fontSize: 11, color: 'var(--mf-muted)', width: 26, textAlign: 'right' }}
+                      >
+                        {b.n}
+                      </span>
+                      <span
+                        className="mf-num flex-shrink-0"
+                        style={{ fontSize: 11.5, color: coloreDelta(b.delta), width: 54, textAlign: 'right' }}
+                      >
+                        {segno(b.delta)}{numero(Math.abs(b.delta), 1)}
+                      </span>
+                      <span
+                        className="mf-num flex-shrink-0"
+                        style={{ fontSize: 14, fontWeight: 600, color: 'var(--mf-ink)', width: 48, textAlign: 'right' }}
+                      >
+                        {numero(b.avg, 3)}
+                      </span>
+                    </div>
+                  ))}
+                </Card>
+              </Section>
+            </motion.div>
+          )}
+
+          {/* ── Storico ──────────────────────────────────────────── */}
+          <motion.div variants={BLOCCO}>
+            <Section title="Storico">
+              <Card pad="md">
+                <div className="mb-4 flex gap-1.5">
+                  {PERIODI.map((per) => {
+                    const attivo = per === period;
+                    return (
+                      <button
+                        key={per}
+                        onClick={() => setPeriod(per)}
+                        className="mf-num flex-1 py-1.5 transition-colors"
+                        style={{
+                          borderRadius: 'var(--mf-radius-pill)',
+                          fontSize: 11,
+                          background: attivo ? 'var(--mf-accent)' : 'transparent',
+                          color: attivo ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                          border: `1px solid ${attivo ? 'var(--mf-accent)' : 'var(--mf-hairline)'}`,
+                        }}
+                      >
+                        {per}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <PriceChart data={serie} trend={p.marketRef?.trend ?? 'STABLE'} height={170} onHover={setHover} />
+
+                <p className="mt-3" style={{ color: 'var(--mf-ink-2)', fontSize: 11.5, lineHeight: 1.5 }}>
+                  {hover
+                    ? `${new Date(hover.ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })} — ${prezzoEuro(hover.avg)}`
+                    : `Media nazionale, ${PERIODO_LABEL[period]}.`}
+                </p>
+
+                {m.confronti.length > 0 && (
+                  <div className="mt-4 flex gap-2 pt-4" style={{ borderTop: '1px solid var(--mf-hairline)' }}>
+                    {m.confronti.map((c) => (
+                      <div key={c.giorni} className="flex-1">
+                        <div className="mf-label truncate" style={{ fontSize: 9 }}>{c.label}</div>
+                        <div
+                          className="mf-num mt-1"
+                          style={{ fontSize: 16, fontWeight: 600, color: coloreDelta(c.delta) }}
+                        >
+                          {pctDelta(c.delta)}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
-              </div>
-              <p className="text-[12px] text-zinc-500 italic mb-2 pr-16 line-clamp-2">
-                "{p.aiAnswer.question}"
-              </p>
-              <div className="text-[14px] text-white leading-relaxed whitespace-pre-wrap">
-                {p.aiAnswer.answer}
-              </div>
-              <p className="text-[10px] text-zinc-600 mt-3 font-medium">
-                Risposte alle domande non consumano la cache giornaliera.
-              </p>
-            </motion.div>
-          )}
-
-          {!p.apiKey && !p.aiAnswer && (
-            <button
-              onClick={() => p.setShowSettings(true)}
-              className="mt-3 inline-flex items-center gap-1 text-[12px] text-blue-400 font-medium hover:text-blue-300 transition-colors"
-            >
-              Configura chiave Gemini
-              <ArrowUpRight className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* === AI DAILY BRIEF === */}
-      {aiBrief && (
-        <section className="relative bg-zinc-900/60 rounded-3xl p-5 sm:p-6 border border-blue-500/15 overflow-hidden">
-          <div className="pointer-events-none absolute -bottom-16 -left-16 w-48 h-48 bg-blue-500/8 blur-[60px] rounded-full" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-blue-400" />
-              <h2 className="text-[12px] text-zinc-400 font-semibold uppercase tracking-wider">Brief mattutino</h2>
-              <span className="ml-auto text-[10px] text-zinc-500 font-medium">{p.analysisIsLocal ? 'Locale' : 'Gemini'}</span>
-            </div>
-            <p className="text-[15px] text-white font-medium leading-relaxed mb-2">{aiBrief.sentiment}</p>
-            {aiBrief.facts && <p className="text-[12px] text-zinc-400 mb-3 tabular-nums">{aiBrief.facts}</p>}
-            <p className="text-[14px] text-zinc-300 leading-relaxed">{aiBrief.reasoning}</p>
-          </div>
-        </section>
+              </Card>
+            </Section>
+          </motion.div>
+        </>
       )}
 
-      {/* === STRATEGY CARD — best window === */}
-      {strategy && strategy.worthIt && (
-        <section className="relative bg-gradient-to-br from-emerald-500/8 to-zinc-900/60 rounded-3xl p-5 sm:p-6 border border-emerald-500/25 overflow-hidden">
-          <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/12 blur-[60px] rounded-full" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-[12px] text-emerald-300 font-semibold uppercase tracking-wider">Finestra ottimale</h2>
-            </div>
-            <div className="flex items-end justify-between gap-3 mb-4">
+      {/* ── Guasto dell'IA ─────────────────────────────────────── */}
+      {p.aiError && (
+        <motion.div variants={BLOCCO}>
+          <Card pad="md" style={{ borderColor: 'var(--mf-price-high)' }}>
+            <div className="flex items-start gap-3">
+              <AlertCircle size={18} style={{ color: 'var(--mf-price-high)', flexShrink: 0, marginTop: 1 }} />
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider mb-1">Fai pieno {strategy.day}</p>
-                <h3 className="text-[22px] sm:text-[26px] font-semibold text-white tracking-tight capitalize truncate">{strategy.dayLabel}</h3>
+                <p style={{ color: 'var(--mf-ink)', fontSize: 13.5, lineHeight: 1.5 }}>{p.aiError}</p>
+                <p className="mt-1" style={{ color: 'var(--mf-ink-2)', fontSize: 12 }}>
+                  Tutto quello che vedi qui sopra è calcolato sul telefono, quindi resta valido.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" tone="ghost" onClick={() => p.setShowSettings(true)}>Impostazioni</Button>
+                  <Button size="sm" tone="quiet" onClick={() => p.fetchAnalysis(p.selectedFuel, true)}>Riprova</Button>
+                </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Prezzo</p>
-                <p className="text-[20px] font-semibold text-emerald-400 tabular-nums">€{strategy.price.toFixed(3)}</p>
-              </div>
+              {p.clearAiError && (
+                <button onClick={p.clearAiError} aria-label="Chiudi l’avviso" style={{ color: 'var(--mf-muted)' }}>
+                  <X size={16} />
+                </button>
+              )}
             </div>
-            <div className="bg-black/40 rounded-2xl p-3 border border-emerald-500/20">
-              <p className="text-[13px] text-zinc-300">
-                Risparmio stimato sul pieno da {p.tankLiters}L: <span className="text-emerald-400 font-semibold tabular-nums">€{strategy.saved.toFixed(2)}</span>
-              </p>
-            </div>
-          </div>
-        </section>
+          </Card>
+        </motion.div>
       )}
 
-      {/* === HISTORICAL COMPARE === */}
-      {historicalCompare && historicalCompare.length > 0 && last && (
-        <section className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 p-5 sm:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <History className="w-4 h-4 text-blue-400" />
-            <h2 className="text-[12px] text-zinc-400 font-semibold uppercase tracking-wider">Stesso giorno, anni fa</h2>
-          </div>
-          {/* Today reference */}
-          <div className="flex items-baseline justify-between gap-3 mb-3 pb-3 border-b border-zinc-800/70">
-            <div className="min-w-0">
-              <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider mb-0.5">Oggi</p>
-              <p className="text-[11px] text-zinc-500 font-medium">{new Date(last.ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            </div>
-            <p className="text-[22px] font-semibold text-white tabular-nums tracking-tight flex-shrink-0">€{last.avg.toFixed(3)}</p>
-          </div>
-          <div className="space-y-2">
-            {historicalCompare.map((h, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-white font-medium">{h.label}</p>
-                  <p className="text-[11px] text-zinc-500 tabular-nums">€{h.price!.toFixed(3)}</p>
-                </div>
-                <div className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full flex-shrink-0",
-                  h.delta! < 0 ? 'bg-emerald-500/10 text-emerald-400'
-                  : h.delta! > 0 ? 'bg-red-500/10 text-red-400'
-                  : 'bg-zinc-800/60 text-zinc-400'
-                )}>
-                  {h.delta! < 0
-                    ? <TrendingDown className="w-3 h-3" />
-                    : h.delta! > 0
-                    ? <TrendingUp className="w-3 h-3" />
-                    : <Activity className="w-3 h-3" />}
-                  <span className="text-[12px] font-semibold tabular-nums">
-                    {h.delta! > 0 ? '+' : ''}{h.delta!.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-[11px] text-zinc-500 mt-3 leading-snug">
-            <span className="text-emerald-400 font-medium">Verde</span> = oggi piu economico di allora · <span className="text-red-400 font-medium">Rosso</span> = oggi piu caro di allora.
-          </p>
-        </section>
-      )}
-
-      {/* === TRUST / RISK FACTORS === */}
-      <section className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 p-5 sm:p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <ShieldCheck className="w-4 h-4 text-blue-400" />
-          <h2 className="text-[12px] text-zinc-400 font-semibold uppercase tracking-wider">Affidabilita dell'analisi</h2>
-        </div>
-        <p className="text-[12px] text-zinc-500 mb-4">Quanto puoi fidarti di previsioni e suggerimenti qui sopra.</p>
-
-        {/* Overall verdict */}
-        <div className={cn("rounded-2xl p-4 mb-4 border",
-          risks.overall.status === 'good' ? 'bg-emerald-500/8 border-emerald-500/25'
-          : risks.overall.status === 'mid' ? 'bg-amber-500/8 border-amber-500/25'
-          : 'bg-red-500/8 border-red-500/25'
-        )}>
-          <div className="flex items-baseline justify-between gap-3 mb-1">
-            <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">Affidabilita complessiva</p>
-            <p className={cn("text-[18px] font-semibold tracking-tight",
-              risks.overall.status === 'good' ? 'text-emerald-400'
-              : risks.overall.status === 'mid' ? 'text-amber-400'
-              : 'text-red-400'
-            )}>{risks.overall.label}</p>
-          </div>
-          <p className="text-[13px] text-zinc-300 leading-snug">{risks.overall.message}</p>
-        </div>
-
-        {/* Indicators */}
-        <div className="space-y-2">
-          {risks.items.map((r, i) => {
-            const Icon = r.icon;
-            return (
-              <div key={i} className="bg-black/30 rounded-2xl p-3 sm:p-4 border border-zinc-800/40 flex items-start gap-3">
-                <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
-                  r.status === 'good' ? 'bg-emerald-500/15 text-emerald-400'
-                  : r.status === 'mid' ? 'bg-amber-500/15 text-amber-400'
-                  : 'bg-red-500/15 text-red-400'
-                )}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <span className="text-[13px] text-white font-semibold truncate">{r.label}</span>
-                    <span className={cn("text-[11px] font-semibold uppercase tracking-wider flex-shrink-0",
-                      r.status === 'good' ? 'text-emerald-400'
-                      : r.status === 'mid' ? 'text-amber-400'
-                      : 'text-red-400'
-                    )}>{r.statusLabel}</span>
-                  </div>
-                  <p className="text-[12px] text-zinc-500 tabular-nums mb-1">{r.value}</p>
-                  <p className="text-[12px] text-zinc-400 leading-snug">{r.hint}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* === 52w range bar === */}
-      {stats52w.count > 0 && last && (() => {
-        const span = stats52w.hi - stats52w.lo || 0.001;
-        const pos = ((last.avg - stats52w.lo) / span) * 100;
-        const verdict = pos < 25 ? { label: 'Buon momento per comprare', tone: 'text-emerald-400', explain: `Sei nel ${Math.round(pos)}% piu economico dell'ultimo anno.` }
-          : pos < 50 ? { label: 'Sotto la mediana', tone: 'text-emerald-300', explain: `Prezzo migliore della meta dei giorni dell'ultimo anno.` }
-          : pos < 75 ? { label: 'Sopra la mediana', tone: 'text-amber-400', explain: `Prezzo sopra la media degli ultimi 12 mesi.` }
-          : { label: 'Vicino al massimo', tone: 'text-red-400', explain: `Sei nel ${Math.round(100 - pos)}% piu caro dell'ultimo anno.` };
-        return (
-          <section className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <Target className="w-4 h-4 text-blue-400" />
-              <h2 className="text-[12px] text-zinc-400 font-semibold uppercase tracking-wider">Range 52 settimane</h2>
-            </div>
-            <p className="text-[12px] text-zinc-500 mb-4">Dove si trova il prezzo di oggi rispetto a minimo e massimo dell'ultimo anno.</p>
-            <div className="flex items-baseline justify-between gap-3 mb-4">
-              <p className={cn("text-[20px] sm:text-[22px] font-semibold tracking-tight", verdict.tone)}>{verdict.label}</p>
-              <p className="text-[11px] text-zinc-500 font-medium flex-shrink-0">{stats52w.count} osservazioni</p>
-            </div>
-            <RangeBar lo={stats52w.lo} hi={stats52w.hi} current={last.avg} />
-            <p className="text-[12px] text-zinc-400 mt-3 leading-snug">{verdict.explain}</p>
-          </section>
-        );
-      })()}
-
-      {/* === Live distribution === */}
-      {(() => {
-        const allPrices = p.filteredStations
-          .map(s => s.prices.find(pp => pp.type === p.selectedFuel)?.price || 0)
-          .filter(v => v > 0.5)
-          .sort((a, b) => a - b);
-        const total = allPrices.length;
-        let rank = 0, cheaperCount = 0, percentile = 0;
-        if (todayBest && total > 0) {
-          cheaperCount = allPrices.filter(v => v < todayBest).length;
-          rank = cheaperCount + 1;
-          percentile = (rank / total) * 100;
-        }
-        return (
-          <section className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <BarChart2 className="w-4 h-4 text-blue-400" />
-              <h2 className="text-[12px] text-zinc-400 font-semibold uppercase tracking-wider">Distribuzione zona</h2>
-            </div>
-            <p className="text-[12px] text-zinc-500 mb-4">Quante stazioni vendono a ogni fascia di prezzo nella tua zona. La barra verde e dove sei tu.</p>
-
-            {todayBest && total > 0 && (
-              <div className="flex items-baseline justify-between gap-3 mb-4">
-                <div className="min-w-0">
-                  <p className={cn("text-[20px] sm:text-[22px] font-semibold tracking-tight",
-                    percentile <= 10 ? 'text-emerald-400'
-                    : percentile <= 30 ? 'text-emerald-300'
-                    : percentile <= 60 ? 'text-amber-400'
-                    : 'text-red-400'
-                  )}>
-                    {rank === 1 ? 'Sei al primo posto' : `Sei tra le ${rank} piu economiche`}
-                  </p>
-                  <p className="text-[12px] text-zinc-500 mt-0.5">su {total} stazioni totali in zona</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Il tuo</p>
-                  <p className="text-[18px] font-semibold text-emerald-400 tabular-nums">€{todayBest.toFixed(3)}</p>
-                </div>
+      {/* ── Chiedi ─────────────────────────────────────────────── */}
+      <motion.div variants={BLOCCO}>
+        <Section title="Chiedi">
+          <Card pad="md">
+            {!p.apiKey && (
+              <div className="mb-2">
+                <Empty
+                  icon={<KeyRound size={20} />}
+                  title="Rispondo con i miei calcoli"
+                  hint="Con una chiave Gemini nelle impostazioni le risposte diventano più discorsive e tengono conto delle notizie."
+                  action={<Button size="sm" tone="ghost" onClick={() => p.setShowSettings(true)}>Impostazioni</Button>}
+                />
               </div>
             )}
 
-            <PriceDistribution stations={p.filteredStations} fuel={p.selectedFuel} current={todayBest ?? undefined} />
-
-            {todayBest && total > 0 && (
-              <p className="text-[12px] text-zinc-400 mt-3 leading-snug">
-                {percentile <= 10 ? 'Stai prendendo uno dei migliori prezzi della tua zona.'
-                  : percentile <= 30 ? 'Buon prezzo: meglio della maggioranza delle stazioni vicine.'
-                  : percentile <= 60 ? 'Prezzo nella media. Controlla se piu lontano c\'e di meglio.'
-                  : `Ci sono ${cheaperCount} stazioni piu economiche di te in zona — vale la pena cercare.`}
-              </p>
-            )}
-          </section>
-        );
-      })()}
-
-      {/* === Recommendation card === */}
-      {m && (
-        <section className="relative bg-zinc-900/60 rounded-3xl p-5 sm:p-6 border border-blue-500/15 overflow-hidden">
-          <div className="pointer-events-none absolute -bottom-16 -left-16 w-48 h-48 bg-blue-500/8 blur-[60px] rounded-full" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3 gap-3">
-              <p className="text-[12px] text-zinc-500 font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                <Zap className="w-3 h-3 text-blue-400" /> Suggerimento
-              </p>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-400/80">
-                {p.analysisIsLocal ? 'Motore locale' : 'Powered by AI'}
-              </span>
-            </div>
-            <h3 className={cn("text-[26px] font-semibold tracking-tight mb-3", adviceTint(m.advice))}>
-              {adviceLabel(m.advice)}
-            </h3>
-            <p className="text-[14px] text-zinc-300 leading-relaxed">{m.reasoning}</p>
-          </div>
-        </section>
-      )}
-
-      {/* === AI Tips === */}
-      {m?.tips && m.tips.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-[12px] text-zinc-500 font-semibold uppercase tracking-wider px-1 mb-2 flex items-center gap-1.5">
-            <Lightbulb className="w-3 h-3 text-amber-400" /> AI Tips
-          </h2>
-          <div className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 overflow-hidden divide-y divide-zinc-800/60">
-            {m.tips.map((t, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.04 * i }}
-                className="flex items-start gap-3 p-4 sm:p-5"
-              >
-                <div className={cn("w-1 self-stretch rounded-full flex-shrink-0",
-                  t.impact === 'HIGH' ? 'bg-red-500'
-                  : t.impact === 'MEDIUM' ? 'bg-amber-500'
-                  : 'bg-blue-500'
-                )} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="text-[14px] font-semibold text-white truncate">{t.title}</h4>
-                    <span className={cn("text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded flex-shrink-0",
-                      t.impact === 'HIGH' ? 'text-red-300 bg-red-500/15'
-                      : t.impact === 'MEDIUM' ? 'text-amber-300 bg-amber-500/15'
-                      : 'text-blue-300 bg-blue-500/15'
-                    )}>
-                      {t.impact === 'HIGH' ? 'Alto' : t.impact === 'MEDIUM' ? 'Medio' : 'Basso'}
-                    </span>
-                  </div>
-                  <p className="text-[13px] text-zinc-400 leading-snug break-words">{t.text}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* === Insights === */}
-      {m && m.categories?.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-[12px] text-zinc-500 font-semibold uppercase tracking-wider px-1 mb-2">Approfondimenti</h2>
-          <div className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 overflow-hidden divide-y divide-zinc-800/60">
-            {m.categories.map((mod, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.04 * i }}
-                className="flex items-start gap-3 p-4 sm:p-5"
-              >
-                <div className="w-9 h-9 rounded-xl bg-zinc-800/60 flex items-center justify-center flex-shrink-0">
-                  {mod.icon === 'MapPin' ? <MapPin className="w-4 h-4 text-blue-400" /> :
-                   mod.icon === 'Calendar' ? <Calendar className="w-4 h-4 text-indigo-400" /> :
-                   <Sparkles className="w-4 h-4 text-emerald-400" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-[14px] font-semibold text-white mb-0.5">{mod.title}</h4>
-                  <p className="text-[13px] text-zinc-400 leading-snug break-words">{mod.content}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* === AI News === */}
-      {news.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-[12px] text-zinc-500 font-semibold uppercase tracking-wider px-1 mb-2 flex items-center gap-1.5">
-            <Newspaper className="w-3 h-3 text-blue-400" /> AI News Feed
-          </h2>
-          <div className="bg-zinc-900/60 rounded-3xl border border-zinc-800/70 overflow-hidden divide-y divide-zinc-800/60">
-            {news.map((n, i) => {
-              const impact = (n.impact || 'neutral').toLowerCase();
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.04 * i }}
-                  className="flex items-start gap-3 p-4 sm:p-5"
+            <div className="flex items-center gap-2 px-1" style={{ opacity: p.analysisLoading ? 0.5 : 1 }}>
+              <input
+                value={p.userQuestion}
+                onChange={(e) => p.setUserQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') chiedi(); }}
+                placeholder="Conviene aspettare domani?"
+                className="w-full border-none bg-transparent outline-none"
+                style={{ color: 'var(--mf-ink)', fontFamily: 'var(--mf-font-sans)', fontSize: 15, padding: '10px 0' }}
+              />
+              {recognition && (
+                <button
+                  onClick={() => { try { if (ascolto) recognition.stop(); else recognition.start(); } catch { /* gia in corso */ } }}
+                  aria-label="Detta la domanda"
+                  className="flex flex-shrink-0 items-center justify-center"
+                  style={{
+                    width: 38, height: 38, borderRadius: 'var(--mf-radius-pill)',
+                    background: ascolto ? 'var(--mf-accent)' : 'var(--mf-ground)',
+                    color: ascolto ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                    border: '1px solid var(--mf-hairline)',
+                  }}
                 >
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
-                    impact === 'negative' || impact === 'bad' ? 'bg-red-500/12 text-red-400'
-                    : impact === 'positive' || impact === 'good' ? 'bg-emerald-500/12 text-emerald-400'
-                    : 'bg-blue-500/12 text-blue-400'
-                  )}>
-                    {impact === 'negative' || impact === 'bad' ? <TrendingUp className="w-4 h-4" />
-                    : impact === 'positive' || impact === 'good' ? <TrendingDown className="w-4 h-4" />
-                    : <Activity className="w-4 h-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="text-[14px] font-semibold text-white truncate flex-1">{n.title || 'Aggiornamento'}</h4>
-                      {n.source && <span className="text-[10px] text-zinc-500 font-medium flex-shrink-0">{n.source}</span>}
+                  <Mic size={16} />
+                </button>
+              )}
+              <button
+                onClick={chiedi}
+                disabled={!p.userQuestion.trim() || p.analysisLoading}
+                aria-label="Invia la domanda"
+                className="flex flex-shrink-0 items-center justify-center"
+                style={{
+                  width: 38, height: 38, borderRadius: 'var(--mf-radius-pill)',
+                  background: p.userQuestion.trim() ? 'var(--mf-accent)' : 'var(--mf-ground)',
+                  color: p.userQuestion.trim() ? 'var(--mf-accent-ink)' : 'var(--mf-muted)',
+                  border: '1px solid var(--mf-hairline)',
+                }}
+              >
+                {p.analysisLoading ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {p.aiAnswer && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--mf-hairline)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p style={{ color: 'var(--mf-ink-2)', fontSize: 12, fontStyle: 'italic' }}>
+                        {p.aiAnswer.question}
+                      </p>
+                      <button onClick={p.clearAiAnswer} aria-label="Chiudi la risposta" style={{ color: 'var(--mf-muted)' }}>
+                        <X size={16} />
+                      </button>
                     </div>
-                    <p className="text-[13px] text-zinc-400 leading-snug break-words line-clamp-2">{n.summary || n.content || ''}</p>
-                    {n.url && (
-                      <a href={n.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-1 text-[11px] text-blue-400 font-medium hover:text-blue-300">
-                        Leggi <ArrowUpRight className="w-3 h-3" />
-                      </a>
-                    )}
+                    <p className="mt-3 whitespace-pre-wrap" style={{ color: 'var(--mf-ink)', fontSize: 14, lineHeight: 1.6 }}>
+                      {p.aiAnswer.answer}
+                    </p>
+                    <p className="mf-label mt-3" style={{ fontSize: 9 }}>
+                      {p.aiAnswer.source === 'ai' ? 'risposta ia' : 'calcolata sul telefono'}
+                    </p>
                   </div>
                 </motion.div>
-              );
-            })}
-          </div>
-        </section>
+              )}
+            </AnimatePresence>
+          </Card>
+        </Section>
+      </motion.div>
+
+      {/* ── Il commento dell'analisi ───────────────────────────── */}
+      {p.marketRef && !p.analysisIsLocal && (p.marketRef.reasoning || p.marketRef.categories?.length) && (
+        <motion.div variants={BLOCCO}>
+          <Section title="Cosa dice l’analisi">
+            <Card pad="none">
+              {p.marketRef.reasoning && (
+                <div className="px-4 py-4">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <Sparkles size={12} style={{ color: 'var(--mf-accent)' }} />
+                    <span className="mf-label" style={{ fontSize: 9 }}>lettura del mercato</span>
+                  </div>
+                  <p style={{ color: 'var(--mf-ink)', fontSize: 13.5, lineHeight: 1.6 }}>{p.marketRef.reasoning}</p>
+                </div>
+              )}
+
+              {p.marketRef.categories?.map((c, i) => {
+                const aperta = apertaCategoria === i;
+                return (
+                  <div key={i} style={{ borderTop: '1px solid var(--mf-hairline)' }}>
+                    <button
+                      onClick={() => setApertaCategoria(aperta ? null : i)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                    >
+                      <span style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14, color: 'var(--mf-ink)' }}>
+                        {c.title}
+                      </span>
+                      <ChevronDown
+                        size={17}
+                        style={{
+                          color: 'var(--mf-muted)',
+                          flexShrink: 0,
+                          transform: aperta ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 160ms',
+                        }}
+                      />
+                    </button>
+                    <AnimatePresence>
+                      {aperta && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <p className="px-4 pb-4" style={{ color: 'var(--mf-ink-2)', fontSize: 13, lineHeight: 1.6 }}>
+                            {c.content}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+
+              {p.marketRef.detailedReport && (
+                <div style={{ borderTop: '1px solid var(--mf-hairline)' }}>
+                  <button
+                    onClick={() => setReportAperto((v) => !v)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                  >
+                    <span style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14, color: 'var(--mf-ink)' }}>
+                      Report completo
+                    </span>
+                    <ChevronDown
+                      size={17}
+                      style={{ color: 'var(--mf-muted)', transform: reportAperto ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {reportAperto && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <p className="whitespace-pre-wrap px-4 pb-4" style={{ color: 'var(--mf-ink-2)', fontSize: 13, lineHeight: 1.65 }}>
+                          {p.marketRef.detailedReport}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </Card>
+          </Section>
+        </motion.div>
       )}
 
-      {/* === Full report === */}
-      {m?.detailedReport && (
-        <details className="group bg-zinc-900/60 rounded-3xl border border-zinc-800/70 overflow-hidden">
-          <summary className="list-none cursor-pointer flex items-center justify-between gap-3 p-5 hover:bg-zinc-800/40 transition-colors">
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[14px] font-semibold text-white">Report completo</h3>
-              <p className="text-[12px] text-zinc-500 mt-0.5 truncate">Analisi dettagliata del mercato</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-zinc-500 group-open:rotate-90 transition-transform flex-shrink-0" />
-          </summary>
-          <div className="px-5 pb-5 space-y-3">
-            {m.detailedReport.split('\n').filter(l => l.trim()).map((line, i) => (
-              <p key={i} className="text-[13px] text-zinc-400 leading-relaxed">{line}</p>
-            ))}
-          </div>
-        </details>
-      )}
+      <motion.div variants={BLOCCO} className="px-1 pt-1">
+        <p className="mb-3 text-center" style={{ color: 'var(--mf-muted)', fontSize: 11 }}>
+          {p.freschezzaDati}
+        </p>
+        <Button
+          tone="ghost"
+          size="sm"
+          full
+          icon={<RefreshCw size={14} />}
+          disabled={p.analysisLoading}
+          onClick={() => p.fetchAnalysis(p.selectedFuel, true)}
+        >
+          {p.analysisLoading ? 'Sto rileggendo i prezzi…' : 'Rileggi i prezzi'}
+        </Button>
+      </motion.div>
     </motion.div>
-  );
-}
-
-function StatTiny({ label, value, tone, mono }: { label: string; value: string; tone?: string; mono?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider truncate mb-1">{label}</p>
-      <p className={cn("text-[13px] font-semibold tabular-nums truncate", tone || 'text-white', mono && 'font-mono')}>{value}</p>
-    </div>
-  );
-}
-
-function RangeBar({ lo, hi, current }: { lo: number; hi: number; current: number }) {
-  const span = hi - lo || 1;
-  const pct = Math.min(100, Math.max(0, ((current - lo) / span) * 100));
-  return (
-    <div>
-      <div className="relative h-2 rounded-full bg-zinc-800/70 overflow-hidden">
-        <div className="absolute inset-y-0 left-0 right-0 bg-gradient-to-r from-emerald-500/50 via-zinc-500/30 to-red-500/50 rounded-full" />
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white border-2 border-black shadow-lg"
-          style={{ left: `calc(${pct}% - 6px)` }}
-        />
-      </div>
-      <div className="flex justify-between mt-2 text-[11px] tabular-nums font-medium">
-        <div>
-          <span className="text-zinc-500">Low </span>
-          <span className="text-emerald-400">€{lo.toFixed(3)}</span>
-        </div>
-        <div className="text-zinc-300 font-semibold">€{current.toFixed(3)}</div>
-        <div>
-          <span className="text-red-400">€{hi.toFixed(3)}</span>
-          <span className="text-zinc-500"> High</span>
-        </div>
-      </div>
-    </div>
   );
 }

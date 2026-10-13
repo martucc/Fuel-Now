@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La Tacca (2x2). Il minimo indispensabile: quanto, dove, che livello. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mf_radice"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/mf_sfondo_pieno"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:id="@+id/mf_istogramma"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="bottom">
+
+        <ImageView android:id="@+id/mf_tacca_1" android:layout_width="3dp"
+            android:layout_height="7dp" android:src="@drawable/mf_tacca"
+            android:scaleType="fitXY" android:layout_marginRight="2dp"
+            android:contentDescription="@null" />
+        <ImageView android:id="@+id/mf_tacca_2" android:layout_width="3dp"
+            android:layout_height="11dp" android:src="@drawable/mf_tacca"
+            android:scaleType="fitXY" android:layout_marginRight="2dp"
+            android:contentDescription="@null" />
+        <ImageView android:id="@+id/mf_tacca_3" android:layout_width="3dp"
+            android:layout_height="9dp" android:src="@drawable/mf_tacca"
+            android:scaleType="fitXY" android:layout_marginRight="2dp"
+            android:contentDescription="@null" />
+        <ImageView android:id="@+id/mf_tacca_4" android:layout_width="3dp"
+            android:layout_height="14dp" android:src="@drawable/mf_tacca"
+            android:scaleType="fitXY" android:layout_marginRight="2dp"
+            android:contentDescription="@null" />
+        <ImageView android:id="@+id/mf_tacca_5" android:layout_width="3dp"
+            android:layout_height="6dp" android:src="@drawable/mf_tacca"
+            android:scaleType="fitXY" android:contentDescription="@null" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/mf_prezzo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="&#8212;"
+        android:textColor="@color/mf_ink"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:letterSpacing="-0.03"
+        android:includeFontPadding="false"
+        android:layout_marginTop="10dp" />
+
+    <TextView
+        android:id="@+id/mf_dove"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Apri l&#8217;app"
+        android:textColor="@color/mf_ink"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-medium"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:layout_marginTop="7dp" />
+
+    <TextView
+        android:id="@+id/mf_scarto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/mf_ink_2"
+        android:textSize="9sp"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.07"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:layout_marginTop="2dp" />
+
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/mf_contesto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BENZINA"
+        android:textColor="@color/mf_muted"
+        android:textSize="8sp"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.10"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+</LinearLayout>

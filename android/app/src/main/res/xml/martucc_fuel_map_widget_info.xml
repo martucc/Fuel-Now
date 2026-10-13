@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Il Radar. targetCellWidth/Height dicono al lanciatore di Android 12+
+     quante celle occupare: senza, il widget veniva piazzato alla dimensione
+     minima e la fila di pompe usciva schiacciata al primo inserimento. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="294dp"
     android:minHeight="110dp"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="100dp"
+    android:targetCellWidth="5"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/martucc_fuel_map_widget"
+    android:previewLayout="@layout/martucc_fuel_map_widget"
+    android:description="@string/mf_widget_radar_desc"
     android:resizeMode="horizontal|vertical"
-    android:widgetCategory="home_screen"
-    android:configure="com.martucc.fuel.MartuccWidgetConfigureActivity">
-</appwidget-provider>
+    android:widgetCategory="home_screen" />

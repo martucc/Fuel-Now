@@ -1,101 +1,103 @@
 import { motion } from 'motion/react';
-import { Zap } from 'lucide-react';
 
+/**
+ * Le cinque fasce della scala del prezzo, che salgono a turno.
+ *
+ * I ritardi sono corti apposta. Lo schermo di apertura non carica niente —
+ * i prezzi li scarica getStations, e l'attesa vera e quella — quindi ogni
+ * decimo speso qui e un decimo tolto all'app. La sequenza si chiude in
+ * meno di mezzo secondo: si vede che le barre salgono, e basta.
+ */
+const BARRE = [
+  { color: 'var(--mf-price-best)', h: 34, d: 0 },
+  { color: 'var(--mf-price-good)', h: 52, d: 0.05 },
+  { color: 'var(--mf-price-normal)', h: 40, d: 0.10 },
+  { color: 'var(--mf-price-high)', h: 62, d: 0.15 },
+  { color: 'var(--mf-price-worst)', h: 28, d: 0.20 },
+];
+
+/**
+ * Il caricamento non racconta una favola tecnologica: mostra la cosa che
+ * l'app fa, cioe mettere in fila dei prezzi e trovare il piu basso. La
+ * barra verde e l'unica che resta alta.
+ */
 export function SplashScreen() {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden"
+      exit={{ opacity: 0, filter: 'blur(8px)' }}
+      transition={{ duration: 0.26, ease: 'easeOut' }}
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden"
+      style={{ background: 'var(--mf-ground)' }}
     >
-      {/* Background Ambience */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/20 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-400/10 blur-[80px] rounded-full" />
-      </div>
+      {/* Alone dell'accento, appena percettibile */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{
+          width: 420,
+          height: 420,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, color-mix(in srgb, var(--mf-accent) 16%, transparent), transparent 68%)',
+          filter: 'blur(40px)',
+        }}
+      />
 
-      {/* Logo Section */}
       <div className="relative flex flex-col items-center">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ 
-            duration: 1,
-            ease: "easeOut",
-            scale: { type: "spring", damping: 15, stiffness: 100 }
-          }}
-          className="relative w-32 h-32 mb-8"
-        >
-          {/* Outer Glow Ring */}
-          <motion.div 
-            animate={{ rotate: 360 }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 rounded-[38px] border-2 border-blue-500/20 border-t-blue-500 shadow-[0_0_30px_rgba(37,99,235,0.2)]"
-          />
-          
-          {/* Inner Logo Shape */}
-          <div className="absolute inset-2 bg-gradient-to-br from-blue-600 to-blue-900 rounded-[32px] flex items-center justify-center shadow-2xl overflow-hidden group">
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" />
-            <motion.div
-              animate={{ 
-                scale: [1, 1.1, 1],
-                filter: ["drop-shadow(0 0 5px rgba(255,255,255,0.5))", "drop-shadow(0 0 15px rgba(255,255,255,0.8))", "drop-shadow(0 0 5px rgba(255,255,255,0.5))"]
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Zap size={56} className="text-white fill-white" />
-            </motion.div>
-            
-            {/* Scan Line Effect */}
-            <motion.div 
-              animate={{ top: ['-100%', '200%'] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              className="absolute left-0 right-0 h-10 bg-gradient-to-b from-transparent via-white/20 to-transparent pointer-events-none"
+        {/* L'istogramma dei prezzi che si forma */}
+        <div className="mb-9 flex items-end gap-2" style={{ height: 72 }}>
+          {BARRE.map((b, i) => (
+            <motion.span
+              key={i}
+              initial={{ height: 6, opacity: 0 }}
+              animate={{ height: b.h, opacity: 1 }}
+              transition={{ delay: b.d, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              style={{ width: 12, borderRadius: 6, background: b.color, display: 'block' }}
             />
-          </div>
-        </motion.div>
-
-        {/* Brand Name */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.8 }}
-          className="text-center"
-        >
-          <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase mb-1">
-            Martucc<span className="text-blue-500">Fuel</span>
-          </h1>
-          <div className="flex items-center justify-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            <p className="text-[10px] font-black text-blue-400/60 uppercase tracking-[0.5em] ml-1">
-              Neural Intelligence
-            </p>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Loading Progress */}
-      <div className="absolute bottom-20 left-12 right-12 max-w-xs mx-auto space-y-4">
-        <div className="h-[2px] w-full bg-white/5 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 0.5, ease: "easeInOut" }}
-            className="h-full bg-gradient-to-r from-blue-600 to-blue-400 shadow-[0_0_10px_rgba(37,99,235,0.5)]"
-          />
+          ))}
         </div>
-        <motion.p 
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          className="text-[9px] font-black text-[#8e8e93] text-center uppercase tracking-[0.3em]"
+
+        <motion.h1
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.16, duration: 0.26 }}
+          style={{
+            fontFamily: 'var(--mf-font-sans)',
+            fontWeight: 800,
+            fontSize: 30,
+            letterSpacing: '-0.045em',
+            color: 'var(--mf-ink)',
+          }}
         >
-          Sincronizzazione Nucleo Operativo...
+          Martucc<span style={{ color: 'var(--mf-accent)' }}>Fuel</span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.24, duration: 0.24 }}
+          className="mf-label mt-2"
+          style={{ fontSize: 10, letterSpacing: '0.24em' }}
+        >
+          dove conviene davvero
         </motion.p>
       </div>
 
-      {/* Background Grid */}
-      <div className="absolute inset-0 bg-[radial-gradient(#ffffff05_1px,transparent_1px)] [background-size:32px_32px] pointer-events-none" />
+      <div className="absolute inset-x-12 bottom-16 mx-auto max-w-[240px]">
+        <div
+          className="h-[2px] w-full overflow-hidden"
+          style={{ background: 'var(--mf-hairline)', borderRadius: 2 }}
+        >
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 0.85, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ height: '100%', width: '55%', background: 'var(--mf-accent)', borderRadius: 2 }}
+          />
+        </div>
+        <p className="mf-label mt-4 text-center" style={{ fontSize: 9 }}>
+          leggo i prezzi di oggi
+        </p>
+      </div>
     </motion.div>
   );
 }

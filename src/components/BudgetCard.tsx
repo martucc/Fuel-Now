@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wallet, Edit3, X, TrendingUp, Target } from 'lucide-react';
+import { Wallet, Pencil } from 'lucide-react';
 import { computeBudget, loadBudget, saveBudget, type BudgetView } from '../services/budgetService';
+import { Card, Stat, Empty } from '../design/primitives/Surface';
+import { Button } from '../design/primitives/Button';
+import { Sheet } from '../design/primitives/Sheet';
+import { Toggle } from '../design/primitives/Toggle';
+import { euro } from '../lib/formato';
 
 interface Props {
   carModel: string;
 }
-
-const fmtEUR = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const fmtEURFine = (n: number) => '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function BudgetCard({ carModel }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -20,7 +22,7 @@ export function BudgetCard({ carModel }: Props) {
   }, [carModel, refreshKey]);
 
   useEffect(() => {
-    const h = () => setRefreshKey(k => k + 1);
+    const h = () => setRefreshKey((k) => k + 1);
     window.addEventListener('mf-fillup-changed', h);
     window.addEventListener('mf-expenses-changed', h);
     window.addEventListener('mf-budget-changed', h);
@@ -34,240 +36,214 @@ export function BudgetCard({ carModel }: Props) {
   if (!view) {
     return (
       <>
-        <div className="bg-[#0a0f1d] p-6 rounded-[36px] border border-white/5 flex items-center justify-between gap-3 shadow-xl">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
-              <Target size={20} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[12px] font-black uppercase italic tracking-tight text-white">Budget mensile</div>
-              <div className="text-[10px] font-bold text-[#8e8e93] uppercase tracking-widest mt-0.5">Definisci una soglia di spesa</div>
-            </div>
-          </div>
-          <button
-            onClick={() => setEditing(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-full text-[10px] font-black uppercase tracking-widest text-white border border-blue-400/30 shadow-[0_0_16px_rgba(37,99,235,0.3)] transition-all flex-shrink-0"
-          >Imposta</button>
-        </div>
-        <AnimatePresence>
-          {editing && <BudgetSheet onClose={() => setEditing(false)} />}
-        </AnimatePresence>
+        <Card pad="md">
+          <Empty
+            icon={<Wallet size={20} />}
+            title="Nessun tetto di spesa"
+            hint="Dai un limite al mese e ti dico ogni giorno quanto ti resta."
+            action={<Button size="sm" onClick={() => setEditing(true)}>Imposta</Button>}
+          />
+        </Card>
+        <AnimatePresence>{editing && <FoglioBudget onClose={() => setEditing(false)} />}</AnimatePresence>
       </>
     );
   }
 
-  const accent = view.status === 'over' ? 'red' : view.status === 'warn' ? 'amber' : 'blue';
-  const accentMap = {
-    red: { text: 'text-red-400', bar: 'bg-red-500', glow: 'shadow-[0_0_24px_rgba(239,68,68,0.25)]', border: 'border-red-500/40' },
-    amber: { text: 'text-amber-400', bar: 'bg-amber-500', glow: 'shadow-[0_0_24px_rgba(245,158,11,0.2)]', border: 'border-amber-500/40' },
-    blue: { text: 'text-blue-400', bar: 'bg-blue-500', glow: 'shadow-[0_0_24px_rgba(37,99,235,0.18)]', border: 'border-blue-500/30' },
-  };
-  const a = accentMap[accent];
-  const pctCapped = Math.min(150, view.pct);
-  const overshoot = view.pct > 100 ? view.pct - 100 : 0;
-  const projDelta = view.projection > view.budget;
+  const colore =
+    view.status === 'over' ? 'var(--mf-price-worst)'
+      : view.status === 'warn' ? 'var(--mf-price-high)'
+        : 'var(--mf-price-best)';
+
+  const usato = Math.min(100, view.pct);
+  const sforo = view.pct > 100 ? Math.min(40, view.pct - 100) : 0;
+  const resta = view.budget - view.spent;
+  const proiezioneSopra = view.projection > view.budget;
+  const alGiorno = view.daysLeft > 0 ? resta / view.daysLeft : null;
 
   return (
     <>
-      <div className={`bg-[#0a0f1d] p-6 sm:p-8 rounded-[36px] sm:rounded-[48px] border ${a.border} space-y-5 relative overflow-hidden ${a.glow}`}>
-        <div className="absolute -top-20 -right-20 w-80 h-80 bg-blue-600/10 blur-[100px] pointer-events-none rounded-full" />
-
-        <div className="flex items-start justify-between gap-3 relative z-10">
-          <div className="min-w-0 flex-1">
-            <div className={`flex items-center gap-2 ${a.text} mb-2`}>
-              <Wallet size={14} />
-              <div className="text-[10px] font-black uppercase tracking-[0.3em]">Budget Mensile</div>
+      <Card pad="lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mf-label" style={{ fontSize: 9 }}>speso questo mese</div>
+            <div
+              className="mf-num mt-2"
+              style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.045em', color: 'var(--mf-ink)', lineHeight: 1 }}
+            >
+              {euro(view.spent)}
             </div>
-            <div className="text-3xl sm:text-4xl font-black italic tracking-tighter text-white tabular-nums">
-              {fmtEURFine(view.spent)}<span className="text-base text-[#8e8e93] ml-1">/ {fmtEUR(view.budget)}</span>
-            </div>
-            <div className="text-[11px] font-bold text-[#8e8e93] uppercase tracking-widest mt-1">
-              {view.includeOther ? `${fmtEURFine(view.spentFuel)} carb · ${fmtEURFine(view.spentOther)} altro` : 'Solo carburante'}
-            </div>
+            <p className="mf-num mt-1.5" style={{ color: 'var(--mf-ink-2)', fontSize: 12 }}>
+              su {euro(view.budget, 0)}
+              {view.includeOther && ` · ${euro(view.spentFuel)} di carburante`}
+            </p>
           </div>
           <button
             onClick={() => setEditing(true)}
-            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 active:scale-95 flex items-center justify-center text-[#8e8e93] border border-white/10 flex-shrink-0"
-            aria-label="Modifica budget"
-          ><Edit3 size={14} /></button>
+            aria-label="Modifica il budget"
+            className="flex flex-shrink-0 items-center justify-center"
+            style={{
+              width: 38, height: 38, borderRadius: 'var(--mf-radius-pill)',
+              background: 'var(--mf-ground)', border: '1px solid var(--mf-hairline)', color: 'var(--mf-ink-2)',
+            }}
+          >
+            <Pencil size={15} />
+          </button>
         </div>
 
-        <div className="relative z-10 space-y-2">
-          <div className="h-3 bg-black/50 rounded-full overflow-hidden border border-white/5 relative">
+        {/* La barra: piena fino a quanto hai speso, il rosso oltre e lo sforamento. */}
+        <div
+          className="relative mt-6 overflow-hidden"
+          style={{ height: 8, borderRadius: 'var(--mf-radius-pill)', background: 'var(--mf-ground)' }}
+        >
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${usato}%` }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+            style={{ height: '100%', background: colore, borderRadius: 'var(--mf-radius-pill)' }}
+          />
+          {sforo > 0 && (
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, pctCapped)}%` }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              className={`h-full ${a.bar} shadow-[0_0_12px_rgba(96,165,250,0.5)] rounded-full`}
+              animate={{ width: `${sforo}%` }}
+              transition={{ duration: 0.55, delay: 0.15, ease: 'easeOut' }}
+              className="absolute right-0 top-0"
+              style={{ height: '100%', background: 'var(--mf-price-worst)', opacity: 0.75 }}
             />
-            {overshoot > 0 && (
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.min(50, overshoot)}%` }}
-                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-                className="absolute top-0 right-0 h-full bg-red-600 rounded-r-full opacity-80"
-              />
-            )}
-          </div>
-          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-            <span className={a.text + ' tabular-nums'}>{Math.round(view.pct)}% usato</span>
-            <span className="text-[#8e8e93] tabular-nums">{view.daysLeft} giorni rimasti</span>
-          </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 relative z-10">
-          <div className="bg-black/40 p-4 rounded-[20px] border border-white/5">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <TrendingUp size={11} className={projDelta ? 'text-red-400' : 'text-emerald-400'} />
-              <span className="text-[9px] font-black text-[#8e8e93] uppercase tracking-[0.2em] truncate">Proiezione mese</span>
-            </div>
-            <div className={`text-[18px] font-black italic tracking-tighter tabular-nums truncate ${projDelta ? 'text-red-400' : 'text-emerald-400'}`}>
-              {fmtEURFine(view.projection)}
-            </div>
-            <div className="text-[9px] font-bold text-[#8e8e93] uppercase tracking-widest mt-1">
-              {projDelta ? `+${fmtEURFine(view.projection - view.budget)} sopra` : `${fmtEURFine(view.budget - view.projection)} margine`}
-            </div>
-          </div>
-          <div className="bg-black/40 p-4 rounded-[20px] border border-white/5">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Target size={11} className="text-blue-400" />
-              <span className="text-[9px] font-black text-[#8e8e93] uppercase tracking-[0.2em] truncate">Rimangono</span>
-            </div>
-            <div className={`text-[18px] font-black italic tracking-tighter tabular-nums truncate ${view.budget - view.spent < 0 ? 'text-red-400' : 'text-white'}`}>
-              {fmtEURFine(Math.max(0, view.budget - view.spent))}
-            </div>
-            <div className="text-[9px] font-bold text-[#8e8e93] uppercase tracking-widest mt-1">
-              ~{view.daysLeft > 0 ? fmtEURFine((view.budget - view.spent) / view.daysLeft) : '—'}/giorno
-            </div>
-          </div>
+        <div className="mf-num mt-2 flex justify-between" style={{ fontSize: 11 }}>
+          <span style={{ color: colore }}>{Math.round(view.pct)}% usato</span>
+          <span style={{ color: 'var(--mf-muted)' }}>{view.daysLeft} giorni al mese nuovo</span>
         </div>
-      </div>
 
-      <AnimatePresence>
-        {editing && <BudgetSheet onClose={() => setEditing(false)} />}
-      </AnimatePresence>
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <Stat
+            label="ti restano"
+            value={euro(Math.max(0, resta))}
+            color={resta < 0 ? 'var(--mf-price-worst)' : 'var(--mf-ink)'}
+            sub={alGiorno != null ? `${euro(Math.max(0, alGiorno))} al giorno` : undefined}
+          />
+          <Stat
+            label="a fine mese"
+            value={euro(view.projection)}
+            color={proiezioneSopra ? 'var(--mf-price-worst)' : 'var(--mf-price-best)'}
+            sub={
+              proiezioneSopra
+                ? `${euro(view.projection - view.budget)} oltre`
+                : `${euro(view.budget - view.projection)} di margine`
+            }
+          />
+        </div>
+
+        <p className="mt-5" style={{ color: 'var(--mf-ink-2)', fontSize: 11, lineHeight: 1.5 }}>
+          {proiezioneSopra
+            ? 'Al ritmo di adesso sfori. Un pieno in meno, o uno più economico, rientra.'
+            : 'Al ritmo di adesso chiudi il mese dentro il budget.'}
+        </p>
+      </Card>
+
+      <AnimatePresence>{editing && <FoglioBudget onClose={() => setEditing(false)} />}</AnimatePresence>
     </>
   );
 }
 
-function BudgetSheet({ onClose }: { onClose: () => void }) {
-  const current = loadBudget();
-  const [amount, setAmount] = useState(current.monthly > 0 ? String(current.monthly) : '');
-  const [includeOther, setIncludeOther] = useState(current.includeOther);
+const PRESET = [100, 150, 200, 300];
 
-  const amountN = parseFloat(amount.replace(',', '.')) || 0;
+function FoglioBudget({ onClose }: { onClose: () => void }) {
+  const corrente = loadBudget();
+  const [importo, setImporto] = useState(corrente.monthly > 0 ? String(corrente.monthly) : '');
+  const [altreSpese, setAltreSpese] = useState(corrente.includeOther);
 
-  const handleSave = () => {
-    saveBudget({ monthly: Math.max(0, amountN), includeOther });
-    onClose();
-  };
-
-  const handleDisable = () => {
-    saveBudget({ monthly: 0, includeOther: false });
-    onClose();
-  };
+  const valore = parseFloat(importo.replace(',', '.')) || 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-      className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
-    >
-      <motion.div
-        initial={{ y: '100%', opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
-        transition={{ type: 'spring', damping: 30, stiffness: 280 }}
-        onClick={e => e.stopPropagation()}
-        className="bg-[#0a0f1d] w-full sm:max-w-lg sm:rounded-[40px] rounded-t-[40px] border border-blue-500/30 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar relative"
-      >
-        <div className="absolute -top-20 -left-20 w-80 h-80 bg-blue-600/10 blur-[100px] pointer-events-none rounded-full" />
-
-        <div className="sticky top-0 z-10 bg-[#0a0f1d]/95 backdrop-blur-xl border-b border-white/5 px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-10 h-10 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
-              <Wallet size={18} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Budget</div>
-              <div className="text-xl font-black italic uppercase tracking-tighter text-white">Soglia mensile</div>
-            </div>
+    <Sheet title="Quanto vuoi spendere al mese" onClose={onClose}>
+      <div className="pb-2">
+        <div
+          className="px-5 py-5"
+          style={{ background: 'var(--mf-ground)', borderRadius: 'var(--mf-radius-md)', border: '1px solid var(--mf-hairline)' }}
+        >
+          <div className="mf-label" style={{ fontSize: 9 }}>tetto mensile</div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <input
+              inputMode="decimal"
+              value={importo}
+              onChange={(e) => setImporto(e.target.value)}
+              placeholder="200"
+              autoFocus
+              className="mf-num w-full min-w-0 border-none bg-transparent outline-none"
+              style={{ color: 'var(--mf-ink)', fontSize: 40, fontWeight: 700, letterSpacing: '-0.045em' }}
+            />
+            <span className="mf-num flex-shrink-0" style={{ color: 'var(--mf-ink-2)', fontSize: 24 }}>€</span>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#8e8e93] border border-white/10 flex-shrink-0">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5 relative">
-          <div className="bg-black/40 rounded-[24px] border border-blue-500/20 p-5 shadow-inner">
-            <div className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-3">Importo mensile</div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-blue-400 text-[28px] font-black">€</span>
-              <input
-                inputMode="decimal"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder="200"
-                className="flex-1 bg-transparent text-white text-[44px] font-black italic tracking-tighter outline-none tabular-nums placeholder:text-[#48484a] min-w-0"
-              />
-            </div>
-            <div className="flex gap-2 mt-4">
-              {[100, 150, 200, 300].map(v => (
+          <div className="mt-4 flex gap-2">
+            {PRESET.map((v) => {
+              const attivo = valore === v;
+              return (
                 <button
                   key={v}
-                  onClick={() => setAmount(String(v))}
-                  className={`flex-1 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
-                    amountN === v
-                      ? 'bg-blue-600 text-white border-blue-400/40 shadow-[0_0_16px_rgba(37,99,235,0.4)]'
-                      : 'bg-white/5 text-[#8e8e93] border-white/10 hover:text-white'
-                  }`}
-                >€{v}</button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIncludeOther(v => !v)}
-            className="w-full flex items-center justify-between p-4 bg-black/40 rounded-[20px] border border-white/5 hover:border-blue-500/30 transition-all"
-          >
-            <div className="text-left">
-              <div className="text-[13px] font-black text-white uppercase italic tracking-tight">Includi altre spese</div>
-              <div className="text-[10px] font-bold text-[#8e8e93] uppercase tracking-widest opacity-70 mt-0.5">Bollo, assicurazione, manutenzione, ecc.</div>
-            </div>
-            <div className={`relative w-12 h-7 rounded-full flex-shrink-0 transition-colors ${includeOther ? 'bg-blue-600' : 'bg-white/10'}`}>
-              <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-lg transition-all ${includeOther ? 'left-[22px]' : 'left-0.5'}`} />
-            </div>
-          </button>
-
-          <div className="flex items-start gap-3 p-4 bg-blue-500/10 border border-blue-500/30 rounded-[20px]">
-            <Wallet size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="text-[11px] font-bold text-blue-300 leading-relaxed">
-              Notifiche al 75%, 90% e al superamento del budget (se le notifiche sono attive).
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            {current.monthly > 0 && (
-              <button
-                onClick={handleDisable}
-                className="px-5 py-4 rounded-full text-[11px] font-black uppercase tracking-widest text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 transition-all"
-              >Disattiva</button>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={amountN <= 0}
-              className={`flex-1 py-4 rounded-full text-[12px] font-black uppercase tracking-widest transition-all border ${
-                amountN > 0
-                  ? 'bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white border-blue-400/40 shadow-[0_0_30px_rgba(37,99,235,0.4)]'
-                  : 'bg-white/5 text-[#48484a] border-white/5 cursor-not-allowed'
-              }`}
-            >Salva Budget</button>
+                  onClick={() => setImporto(String(v))}
+                  className="mf-num flex-1 py-2"
+                  style={{
+                    borderRadius: 'var(--mf-radius-pill)',
+                    fontSize: 12,
+                    background: attivo ? 'var(--mf-accent)' : 'transparent',
+                    color: attivo ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                    border: `1px solid ${attivo ? 'var(--mf-accent)' : 'var(--mf-hairline)'}`,
+                  }}
+                >
+                  {v} €
+                </button>
+              );
+            })}
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14, color: 'var(--mf-ink)' }}>
+              Conta anche bollo e officina
+            </div>
+            <p className="mt-0.5" style={{ color: 'var(--mf-ink-2)', fontSize: 12 }}>
+              Se spento, il budget vale solo per il carburante.
+            </p>
+          </div>
+          <Toggle on={altreSpese} onChange={() => setAltreSpese((v) => !v)} ariaLabel="Includi le altre spese" />
+        </div>
+
+        <p className="mt-5" style={{ color: 'var(--mf-muted)', fontSize: 11, lineHeight: 1.5 }}>
+          Ti avviso al 75%, al 90% e quando sfori — se hai lasciato attive le notifiche.
+        </p>
+
+        <div className="mt-6 flex gap-3">
+          {corrente.monthly > 0 && (
+            <Button
+              tone="danger"
+              size="md"
+              onClick={() => {
+                saveBudget({ monthly: 0, includeOther: false });
+                onClose();
+              }}
+            >
+              Togli
+            </Button>
+          )}
+          <div className="flex-1">
+            <Button
+              full
+              size="md"
+              disabled={valore <= 0}
+              onClick={() => {
+                saveBudget({ monthly: Math.max(0, valore), includeOther: altreSpese });
+                onClose();
+              }}
+            >
+              Salva
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Sheet>
   );
 }

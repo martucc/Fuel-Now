@@ -52,11 +52,19 @@ export function InstallPwaButton() {
   return (
     <button
       onClick={click}
-      className="w-10 h-10 flex items-center justify-center bg-blue-500/15 hover:bg-blue-500/25 rounded-full border border-blue-500/30 transition-all active:scale-95 shadow-[0_0_16px_rgba(37,99,235,0.25)]"
-      aria-label="Installa app"
+      className="flex items-center justify-center transition-transform active:scale-95"
+      style={{
+        width: 38,
+        height: 38,
+        borderRadius: 'var(--mf-radius-pill)',
+        background: 'var(--mf-ground)',
+        border: '1px solid var(--mf-hairline)',
+        color: 'var(--mf-accent)',
+      }}
+      aria-label="Installa l app"
       title="Installa MartuccFuel"
     >
-      <Download size={18} className="text-blue-400" />
+      <Download size={17} />
     </button>
   );
 }

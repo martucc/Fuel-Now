@@ -4,4 +4,7 @@
     <string name="title_activity_main">Martucc Fuel</string>
     <string name="package_name">com.martucc.fuel</string>
     <string name="custom_url_scheme">com.martucc.fuel</string>
+    <string name="mf_widget_tabellone_desc">Il prezzo migliore vicino a te, quanto ti resta in tasca e cosa conviene fare. Tocca per aprire l&#8217;app, tocca l&#8217;istogramma per cambiare sfondo.</string>
+    <string name="mf_widget_tacca_desc">Il prezzo migliore vicino a te, in piccolo.</string>
+    <string name="mf_widget_radar_desc">Le pompe intorno a te, in pianta, con il prezzo di ciascuna.</string>
 </resources>

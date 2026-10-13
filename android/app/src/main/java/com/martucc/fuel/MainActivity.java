@@ -15,6 +15,9 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        // Nessun ritocco alle WebSettings: DOM storage e database Capacitor
+        // li accende gia, mentre accesso ai file e contenuti misti erano solo
+        // superficie in piu per un'app che parla unicamente in https.
     }
 
     @Override

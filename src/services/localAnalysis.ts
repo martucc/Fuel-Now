@@ -1,4 +1,8 @@
 import type { FuelStation, FuelType, MarketAnalysis } from '../types';
+import { seriesFromDataset } from '../ui/home/series';
+import { readForecast } from '../domain/forecast';
+import { toFuelKey } from '../domain/fuel';
+import { getRawDataset } from './dataService';
 
 export interface MarketStats {
   average: number;
@@ -76,31 +80,31 @@ export function calculateMarketStats(stations: FuelStation[], fuelType: FuelType
   };
 }
 
-function buildSeries(basePrice: number, trend: MarketAnalysis['trend']) {
-  const trendStep = trend === 'DOWN' ? -0.006 : trend === 'UP' ? 0.007 : 0.001;
-  const historicalData = Array.from({ length: 7 }, (_, i) => {
-    const dayOffset = 6 - i;
-    const drift = trendStep * -dayOffset;
-    const wave = Math.sin(i + basePrice) * 0.004;
-    return {
-      date: dayOffset === 0 ? 'Oggi' : `-${dayOffset}g`,
-      price: round(Math.max(0.1, basePrice + drift + wave)),
-    };
-  });
-  const forecast = Array.from({ length: 7 }, (_, i) => ({
-    date: `+${i + 1}g`,
-    price: round(Math.max(0.1, basePrice + trendStep * (i + 1))),
-  }));
-  return { historicalData, forecast };
+/**
+ * Storico e previsione presi dal backend. Prima erano generati:
+ *  per lo storico e una pendenza scelta da
+ * euristiche sul prezzo medio per la previsione — quattordici punti che non
+ * erano mai esistiti, disegnati come misure. Senza dataset le serie restano
+ * vuote e i grafici spariscono, che e la risposta onesta.
+ */
+function buildSeries(fuelType: FuelType) {
+  const d = getRawDataset();
+  if (!d) return { historicalData: [], forecast: [] };
+  return seriesFromDataset(d, toFuelKey(fuelType));
 }
 
-function pickTrend(stats: MarketStats): MarketAnalysis['trend'] {
-  if (stats.sampleSize === 0) return 'STABLE';
-  // Heuristic: high spread often precedes a drop, high absolute price often precedes more rises in the current market
-  if (stats.spread >= 0.18) return 'DOWN';
-  if (stats.average >= 2.05) return 'UP';
-  if (stats.average <= 1.70) return 'DOWN';
-  return 'STABLE';
+/**
+ * Il trend viene dal forecast di backend, che e calcolato sulla serie
+ * storica nazionale. L'euristica di prima ("spread alto -> in calo, prezzo
+ * medio alto -> in salita") era un'invenzione travestita da previsione.
+ * Senza un forecast affidabile si dichiara STABLE invece di indovinare.
+ */
+function pickTrend(fuelType: FuelType): MarketAnalysis['trend'] {
+  const d = getRawDataset();
+  if (!d) return 'STABLE';
+  const f = readForecast(d, toFuelKey(fuelType));
+  if (!f || !f.usable) return 'STABLE';
+  return f.direction === 'up' ? 'UP' : f.direction === 'down' ? 'DOWN' : 'STABLE';
 }
 
 function pickAdvice(stats: MarketStats, trend: MarketAnalysis['trend']): MarketAnalysis['advice'] {
@@ -123,9 +127,9 @@ export function buildLocalMarketAnalysis(
   question?: string
 ): MarketAnalysis {
   const stats = calculateMarketStats(stations, fuelType);
-  const trend = pickTrend(stats);
+  const trend = pickTrend(fuelType);
   const advice = pickAdvice(stats, trend);
-  const { historicalData, forecast } = buildSeries(stats.average, trend);
+  const { historicalData, forecast } = buildSeries(fuelType);
   const bestStation = stats.cheapestStationName || 'la stazione più economica';
   const questionText = question?.trim()
     ? `\n\nRisposta: "${question.trim()}". Con i dati locali, la scelta migliore è confrontare il prezzo medio con il minimo in zona: se trovi ${fuelType} vicino a €${stats.min.toFixed(3)}/L, conviene fermarsi.`

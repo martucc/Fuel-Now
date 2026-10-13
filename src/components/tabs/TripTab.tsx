@@ -1,55 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowDownUp, Navigation2, MapPin, Fuel, Wallet, Milestone, Route } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { ArrowDownUp, Navigation2, Fuel } from 'lucide-react';
 import type { FuelStation, FuelType } from '../../types';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import type { LatLngBoundsExpression } from 'leaflet';
-import { getBrandLogo } from '../../lib/brandLogos';
 import { CityAutocomplete } from '../CityAutocomplete';
-
-const startIcon = L.divIcon({
-  className: 'trip-pin-wrap',
-  html: '<div class="trip-pin-start"></div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-});
-const endIcon = L.divIcon({
-  className: 'trip-pin-wrap',
-  html: '<div class="trip-pin-end"></div>',
-  iconSize: [28, 36],
-  iconAnchor: [14, 34],
-});
-const stopIcon = (n: number) =>
-  L.divIcon({
-    className: 'trip-pin-wrap',
-    html: `<div class="trip-pin-stop">${n}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-  });
-
-const nearbyIcon = (price: number, isCheapest: boolean) =>
-  L.divIcon({
-    className: 'trip-pin-wrap',
-    html: `<div class="trip-pin-nearby ${isCheapest ? 'is-cheap' : ''}"><span>€${price.toFixed(3)}</span></div>`,
-    iconSize: [56, 22],
-    iconAnchor: [28, 11],
-  });
-
-function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
-  const map = useMap();
-  useEffect(() => {
-    try { map.fitBounds(bounds, { padding: [40, 40] }); } catch { /* ignora */ }
-  }, [bounds, map]);
-  return null;
-}
+import { NativeLeafletTripMap } from '../NativeLeafletTripMap';
+import { Card, Section, Row, Empty } from '../../design/primitives/Surface';
+import { Widget, WidgetGrid } from '../../design/primitives/Widget';
+import type { Piano } from '../../domain/viaggio';
+import { MOTIVO_TESTO } from '../../domain/viaggio';
+import { euro as euroIt, numero, litri as litriIt, chilometri } from '../../lib/formato';
+import { Button } from '../../design/primitives/Button';
+import { Toggle } from '../../design/primitives/Toggle';
+import { BrandLogo } from '../../design/primitives/BrandLogo';
+import { PageTitle } from '../../ui/chrome/PageTitle';
 
 interface Props {
   tripStart: string; setTripStart: (v: string) => void;
   tripEnd: string; setTripEnd: (v: string) => void;
   tripKml: number; setTripKml: (v: number) => void;
-  tripUnit: 'kml'|'l100'; setTripUnit: (v: 'kml'|'l100') => void;
+  tripUnit: 'kml' | 'l100'; setTripUnit: (v: 'kml' | 'l100') => void;
   tankLiters: number; setTankLiters: (v: number) => void;
   tripStrategy: string; setTripStrategy: (v: any) => void;
   tripStatus: string;
@@ -69,34 +38,45 @@ interface Props {
   tripNearby?: any[];
   onStationClick?: (s: FuelStation) => void;
   mapStyle?: 'dark' | 'voyager';
+  /** Il piano di rifornimento: dove fermarsi e quanto metterci. */
+  piano?: Piano | null;
 }
 
 const STRATEGIES = [
   { id: 'balanced', label: 'Bilanciato' },
-  { id: 'save', label: 'Economico' },
+  { id: 'save', label: 'Risparmio' },
   { id: 'fast', label: 'Veloce' },
 ] as const;
 
 export function TripTab(p: Props) {
+  const kplSicuro = p.tripUnit === 'kml' ? p.tripKml : p.tripKml > 0 ? 100 / p.tripKml : 0;
+  const piano = p.piano ?? null;
+  // Quanto brucia il viaggio, comprese le deviazioni del piano.
+  const litriBruciati = kplSicuro > 0 ? p.tripDist / kplSicuro + (piano?.litriDeviazione ?? 0) : 0;
   const swap = () => { const a = p.tripStart; p.setTripStart(p.tripEnd); p.setTripEnd(a); };
-  const kpl = p.tripUnit === 'kml' ? p.tripKml : (p.tripKml > 0 ? 100 / p.tripKml : 0);
-  const liters = kpl > 0 ? p.tripDist / kpl : 0;
-  const cost = liters * (p.cheapestPrice !== Infinity ? p.cheapestPrice : 1.8);
+  const kpl = p.tripUnit === 'kml' ? p.tripKml : p.tripKml > 0 ? 100 / p.tripKml : 0;
 
-  // Stima pedaggio: % autostrada in base alla distanza × tariffa media IT
+  // Stima pedaggio: quota autostradale in base alla distanza x tariffa media IT
   const highwayShare = p.tripDist < 50 ? 0 : p.tripDist < 100 ? 0.3 : p.tripDist < 300 ? 0.55 : 0.7;
   const highwayKm = p.tripDist * highwayShare;
   const tollCost = p.tripToll ? highwayKm * 0.077 : 0;
-  const totalCost = cost + tollCost;
 
   const currentFuel = p.tripCurrentFuel == null ? p.tankLiters : Math.max(0, Math.min(p.tankLiters, p.tripCurrentFuel));
-  const litersAfterCurrent = Math.max(0, liters - currentFuel);
-  const stops = p.tankLiters > 0 ? Math.max(0, Math.ceil(litersAfterCurrent / p.tankLiters)) : 0;
   const filled = p.tripStart.trim().length > 0 && p.tripEnd.trim().length > 0;
 
   const [locating, setLocating] = useState(false);
   const autoFillRef = useRef(false);
-  const [nearbySort, setNearbySort] = useState<'price'|'detour'|'progress'>('price');
+  const [nearbySort, setNearbySort] = useState<'price' | 'detour' | 'progress'>('price');
+
+  const prezzoRiferimento = (() => {
+    if (!p.tripNearby || p.tripNearby.length === 0) return null;
+    let min = Infinity;
+    for (const s of p.tripNearby) {
+      const v = s.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price || 0;
+      if (v > 0 && v < min) min = v;
+    }
+    return min === Infinity ? null : min;
+  })();
 
   const nearbyMinPrice = (() => {
     if (!p.tripNearby || p.tripNearby.length === 0) return null;
@@ -110,7 +90,7 @@ export function TripTab(p: Props) {
 
   const sortedNearby = (() => {
     if (!p.tripNearby) return [];
-    const arr = p.tripNearby.map(s => ({
+    const arr = p.tripNearby.map((s) => ({
       ...s,
       _price: s.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price || 0,
     }));
@@ -121,7 +101,7 @@ export function TripTab(p: Props) {
   })();
 
   const extraCities = useMemo(
-    () => Array.from(new Set(p.stations.map(s => (s.city || '').trim()).filter(Boolean))),
+    () => Array.from(new Set(p.stations.map((s) => (s.city || '').trim()).filter(Boolean))),
     [p.stations]
   );
 
@@ -140,7 +120,6 @@ export function TripTab(p: Props) {
     finally { setLocating(false); }
   };
 
-  // Auto-fill partenza con citta utente al primo mount se vuota o default
   useEffect(() => {
     if (autoFillRef.current) return;
     if (!p.userLoc) return;
@@ -151,427 +130,450 @@ export function TripTab(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.userLoc]);
 
+  const campoNumerico = (
+    label: string,
+    value: number,
+    onChange: (v: number) => void,
+    unit: string,
+    step?: string
+  ) => (
+    <div
+      className="min-w-0 px-4 py-3"
+      style={{ background: 'var(--mf-ground)', border: '1px solid var(--mf-hairline)', borderRadius: 'var(--mf-radius-md)' }}
+    >
+      <div className="mf-label" style={{ fontSize: 9 }}>{label}</div>
+      <div className="flex items-baseline gap-1.5">
+        <input
+          type="number"
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value || '0'))}
+          className="mf-num min-w-0 flex-1 border-none bg-transparent outline-none"
+          style={{ color: 'var(--mf-ink)', fontSize: 22, fontWeight: 600, padding: '2px 0' }}
+        />
+        <span className="mf-label flex-shrink-0" style={{ fontSize: 10 }}>{unit}</span>
+      </div>
+    </div>
+  );
+
   return (
     <motion.div
       key="trip"
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      className="pb-32 space-y-6"
+      exit={{ opacity: 0, y: -12 }}
+      className="space-y-5 pb-32"
     >
-      {/* Header — glow blu in linea con Home */}
-      <header className="pt-2 px-1">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse" />
-          <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Itinerario</span>
-        </div>
-        <h1 className="text-[34px] sm:text-[40px] font-black tracking-tighter text-white leading-none italic uppercase">
-          Pianifica<br/>il viaggio
-        </h1>
-        <p className="text-[13px] text-zinc-400 mt-3 font-medium">Trova il percorso piu conveniente con soste mirate</p>
-      </header>
+      <PageTitle eyebrow="viaggio" title="Pianifica il pieno lungo la strada" />
 
-      {/* Directions card — glow blu quando hai entrambi i campi */}
-      <section
-        className={cn(
-          'relative z-40 rounded-[32px] bg-[#0a0f1d] backdrop-blur-xl transition-all duration-300',
-          filled
-            ? 'border border-blue-500/30 shadow-[0_0_60px_rgba(37,99,235,0.25)]'
-            : 'border border-white/5 shadow-2xl'
-        )}
-      >
-        <div className={cn('absolute inset-0 rounded-[32px] pointer-events-none', filled ? 'bg-gradient-to-br from-blue-600/5 to-transparent' : '')} />
-        <div className="relative z-10 flex items-stretch">
-          <div className="flex-1 min-w-0 divide-y divide-white/5">
+      {/* Partenza e arrivo */}
+      <Card pad="none" className="relative z-40">
+        <div className="flex items-stretch">
+          <div className="min-w-0 flex-1">
             <CityAutocomplete
               value={p.tripStart}
               onChange={p.setTripStart}
               placeholder="Partenza"
-              dot={<div className="w-2.5 h-2.5 rounded-full bg-zinc-500 flex-shrink-0 ring-2 ring-zinc-700/50" />}
+              dot={<span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--mf-muted)', flexShrink: 0 }} />}
               extraCities={extraCities}
               onUseLocation={reverseGeocode}
               isLocating={locating}
             />
+            <div style={{ borderTop: '1px solid var(--mf-hairline)' }} />
             <CityAutocomplete
               value={p.tripEnd}
               onChange={p.setTripEnd}
               placeholder="Arrivo"
-              dot={<div className="w-2.5 h-2.5 rounded-sm bg-blue-500 flex-shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />}
+              dot={<span style={{ width: 9, height: 9, borderRadius: 2, background: 'var(--mf-accent)', flexShrink: 0 }} />}
               extraCities={extraCities}
             />
           </div>
           <button
             onClick={swap}
             aria-label="Inverti partenza e arrivo"
-            className="px-4 border-l border-white/5 text-zinc-400 hover:text-blue-400 hover:bg-white/5 active:scale-95 transition-all flex-shrink-0"
+            className="flex flex-shrink-0 items-center px-4 transition-transform active:scale-90"
+            style={{ borderLeft: '1px solid var(--mf-hairline)', color: 'var(--mf-ink-2)' }}
           >
-            <ArrowDownUp className="w-5 h-5" />
+            <ArrowDownUp size={18} />
           </button>
         </div>
-      </section>
+      </Card>
 
-      {/* Vehicle card */}
-      <section className="bg-[#09090b]/50 backdrop-blur-xl rounded-[32px] border border-white/5 p-5 sm:p-6 shadow-2xl">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-            <h2 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Veicolo</h2>
-          </div>
-          <div className="inline-flex bg-white/5 rounded-full p-0.5 border border-white/5">
-            <button
-              onClick={() => p.setTripUnit('kml')}
-              className={cn(
-                'px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider transition-all',
-                p.tripUnit === 'kml' ? 'bg-blue-500/20 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.3)] border border-blue-500/30' : 'text-zinc-400'
-              )}
+      {/* Veicolo */}
+      <Section title="la tua auto">
+        <Card pad="md">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="mf-label" style={{ fontSize: 9 }}>unità del consumo</span>
+            <div
+              className="inline-flex p-0.5"
+              style={{ background: 'var(--mf-ground)', borderRadius: 'var(--mf-radius-pill)', border: '1px solid var(--mf-hairline)' }}
             >
-              KM/L
-            </button>
-            <button
-              onClick={() => p.setTripUnit('l100')}
-              className={cn(
-                'px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider transition-all',
-                p.tripUnit === 'l100' ? 'bg-blue-500/20 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.3)] border border-blue-500/30' : 'text-zinc-400'
-              )}
-            >
-              L/100
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="bg-white/[0.03] rounded-2xl p-4 min-w-0 overflow-hidden border border-white/5">
-            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-1">Consumo</p>
-            <div className="flex items-baseline gap-1.5">
-              <input
-                type="number"
-                step="0.1"
-                value={p.tripKml}
-                onChange={e => p.setTripKml(parseFloat(e.target.value || '0'))}
-                className="bg-transparent w-full text-[26px] font-black text-white tabular-nums outline-none tracking-tighter"
-              />
-              <span className="text-[11px] text-zinc-500 font-bold flex-shrink-0">{p.tripUnit === 'kml' ? 'km/L' : 'L/100'}</span>
+              {(['kml', 'l100'] as const).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => p.setTripUnit(u)}
+                  className="px-3 py-1 transition-colors"
+                  style={{
+                    borderRadius: 'var(--mf-radius-pill)',
+                    background: p.tripUnit === u ? 'var(--mf-accent)' : 'transparent',
+                    color: p.tripUnit === u ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                    fontFamily: 'var(--mf-font-mono)',
+                    fontSize: 11,
+                    fontWeight: 500,
+                  }}
+                >
+                  {u === 'kml' ? 'km/L' : 'L/100'}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="bg-white/[0.03] rounded-2xl p-4 min-w-0 overflow-hidden border border-white/5">
-            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-1">Serbatoio</p>
-            <div className="flex items-baseline gap-1.5">
-              <input
-                type="number"
-                value={p.tankLiters}
-                onChange={e => p.setTankLiters(parseInt(e.target.value || '0'))}
-                className="bg-transparent w-full text-[26px] font-black text-white tabular-nums outline-none tracking-tighter"
-              />
-              <span className="text-[11px] text-zinc-500 font-bold flex-shrink-0">L</span>
+
+          <div className="grid grid-cols-2 gap-3">
+            {campoNumerico('consumo', p.tripKml, p.setTripKml, p.tripUnit === 'kml' ? 'km/L' : 'L/100', '0.1')}
+            {campoNumerico('serbatoio', p.tankLiters, (v) => p.setTankLiters(Math.round(v)), 'L')}
+          </div>
+
+          <div
+            className="mt-3 px-4 py-3"
+            style={{ background: 'var(--mf-ground)', border: '1px solid var(--mf-hairline)', borderRadius: 'var(--mf-radius-md)' }}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="mf-label" style={{ fontSize: 9 }}>carburante adesso</span>
+              <span className="mf-num" style={{ color: 'var(--mf-ink-2)', fontSize: 11 }}>
+                <span style={{ color: 'var(--mf-accent)' }}>{currentFuel.toFixed(0)} L</span> di {p.tankLiters} L
+                {' · ~'}{Math.round(currentFuel * kpl * 0.8)} km
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={p.tankLiters || 1}
+              step={1}
+              value={currentFuel}
+              onChange={(e) => p.setTripCurrentFuel(parseInt(e.target.value))}
+              className="w-full"
+              style={{ accentColor: 'var(--mf-accent)' }}
+            />
+            <div className="mt-1 flex justify-between">
+              <span className="mf-label" style={{ fontSize: 9 }}>vuoto</span>
+              <button
+                onClick={() => p.setTripCurrentFuel(p.tankLiters)}
+                className="mf-label"
+                style={{ fontSize: 9, color: 'var(--mf-accent)' }}
+              >
+                pieno
+              </button>
             </div>
           </div>
-        </div>
+        </Card>
+      </Section>
 
-        {/* Autonomia attuale */}
-        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Carburante ora</p>
-            <div className="text-[11px] text-zinc-300 font-bold tabular-nums">
-              <span className="text-blue-300">{currentFuel.toFixed(0)}L</span>
-              <span className="text-zinc-500"> / {p.tankLiters}L</span>
-              <span className="text-zinc-500"> · ~{Math.round(currentFuel * kpl * 0.8)} km</span>
+      {/* Strategia */}
+      <Section title="come vuoi viaggiare">
+        <Card pad="md">
+          <div
+            className="mb-3 flex w-full p-0.5"
+            style={{ background: 'var(--mf-ground)', borderRadius: 'var(--mf-radius-pill)', border: '1px solid var(--mf-hairline)' }}
+          >
+            {STRATEGIES.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => p.setTripStrategy(s.id)}
+                className="flex-1 py-2 transition-colors"
+                style={{
+                  borderRadius: 'var(--mf-radius-pill)',
+                  background: p.tripStrategy === s.id ? 'var(--mf-accent)' : 'transparent',
+                  color: p.tripStrategy === s.id ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                  fontFamily: 'var(--mf-font-sans)',
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="min-w-0">
+              <div style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14, color: 'var(--mf-ink)' }}>
+                Conta il pedaggio
+              </div>
+              <div className="mf-num" style={{ color: 'var(--mf-ink-2)', fontSize: 11 }}>
+                stima su ~{Math.round(highwayKm)} km a 0,077 €/km
+              </div>
             </div>
+            <Toggle on={p.tripToll} onChange={() => p.setTripToll(!p.tripToll)} ariaLabel="Conta il pedaggio" />
           </div>
-          <input
-            type="range"
-            min={0}
-            max={p.tankLiters || 1}
-            step={1}
-            value={currentFuel}
-            onChange={e => p.setTripCurrentFuel(parseInt(e.target.value))}
-            className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
-          />
-          <div className="flex justify-between mt-1">
-            <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Vuoto</span>
-            <button
-              onClick={() => p.setTripCurrentFuel(p.tankLiters)}
-              className="text-[9px] text-blue-400 font-black uppercase tracking-widest hover:text-blue-300"
-            >
-              Pieno
-            </button>
-          </div>
-        </div>
-      </section>
+        </Card>
+      </Section>
 
-      {/* Strategy — chip blu glow su attivo */}
-      <section className="bg-[#09090b]/50 backdrop-blur-xl rounded-[32px] border border-white/5 p-5 sm:p-6 shadow-2xl">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-          <h2 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Strategia</h2>
-        </div>
-        <div className="inline-flex w-full bg-white/5 rounded-full p-0.5 border border-white/5 mb-4">
-          {STRATEGIES.map(s => (
-            <button
-              key={s.id}
-              onClick={() => p.setTripStrategy(s.id)}
-              className={cn(
-                'flex-1 py-2 rounded-full text-[12px] font-black uppercase tracking-wider transition-all',
-                p.tripStrategy === s.id
-                  ? 'bg-blue-500/20 text-blue-300 shadow-[0_0_18px_rgba(59,130,246,0.35)] border border-blue-500/30'
-                  : 'text-zinc-400 hover:text-white'
-              )}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Toggle pedaggio */}
-        <button
-          onClick={() => p.setTripToll(!p.tripToll)}
-          className="w-full flex items-center justify-between gap-3 bg-white/[0.03] rounded-2xl p-3 border border-white/5 hover:border-white/10 transition-all"
-        >
-          <div className="text-left">
-            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Pedaggio autostrada</p>
-            <p className="text-[10px] text-zinc-500 font-medium mt-0.5">Stima: ~{Math.round(highwayKm)} km a €0.077/km</p>
-          </div>
-          <div className={cn('relative w-11 h-6 rounded-full transition-all flex-shrink-0', p.tripToll ? 'bg-blue-500' : 'bg-white/10')}>
-            <div className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all shadow', p.tripToll ? 'left-[22px]' : 'left-0.5')} />
-          </div>
-        </button>
-      </section>
-
-      {/* Live estimate preview */}
-      {p.tripDist > 0 && (
-        <section className="bg-[#09090b]/50 backdrop-blur-xl rounded-[32px] border border-white/5 p-5 sm:p-6 shadow-2xl">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            <p className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Stima rapida</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Stat label="Distanza" value={`${p.tripDist} km`} />
-            <Stat label="Carburante" value={`€${cost.toFixed(2)}`} />
-            <Stat label={p.tripToll ? 'Totale' : 'Litri'} value={p.tripToll ? `€${totalCost.toFixed(2)}` : `${liters.toFixed(1)} L`} />
-          </div>
-        </section>
-      )}
-
-      {/* Calculate button — primary blue glow potente */}
-      <button
-        onClick={p.calculateTripRoute}
-        disabled={!filled}
-        className={cn(
-          'w-full py-4 active:scale-[0.98] transition-all rounded-full font-black text-[15px] uppercase tracking-widest flex items-center justify-center gap-2.5',
-          filled
-            ? 'bg-blue-500 hover:bg-blue-400 text-white shadow-[0_0_40px_rgba(37,99,235,0.45)]'
-            : 'bg-white/5 text-zinc-500 cursor-not-allowed'
-        )}
-      >
-        <Navigation2 className="w-5 h-5" />
-        Calcola percorso
-      </button>
+      <Button full size="lg" tone="primary" disabled={!filled} onClick={p.calculateTripRoute} icon={<Navigation2 size={18} />}>
+        Calcola il percorso
+      </Button>
 
       {p.tripStatus && (
-        <p className="text-center text-[12px] text-zinc-400 font-medium tracking-wide">{p.tripStatus}</p>
+        <p className="text-center" style={{ color: 'var(--mf-ink-2)', fontSize: 12 }}>
+          {p.tripStatus}
+        </p>
       )}
 
-      {/* Result */}
       {p.tripCalculated && p.tripRoute && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="space-y-4"
-        >
-          <div className="relative h-80 sm:h-96 w-full rounded-[32px] overflow-hidden border border-blue-500/30 shadow-[0_0_60px_rgba(37,99,235,0.25)]">
-            {(() => {
-              const coords: [number, number][] = p.tripRoute.coords.map((c: number[]) => [c[1], c[0]]);
-              const lats = coords.map(c => c[0]).concat(p.tripRoute.start.lat, p.tripRoute.end.lat);
-              const lngs = coords.map(c => c[1]).concat(p.tripRoute.start.lng, p.tripRoute.end.lng);
-              const bounds: LatLngBoundsExpression = [
-                [Math.min(...lats), Math.min(...lngs)],
-                [Math.max(...lats), Math.max(...lngs)],
-              ];
-              return (
-                <MapContainer
-                  center={[p.tripRoute.start.lat, p.tripRoute.start.lng]}
-                  zoom={6}
-                  className="h-full w-full"
-                  zoomControl={false}
-                  scrollWheelZoom={true}
-                  preferCanvas={true}
-                >
-                  <TileLayer
-                    url={p.mapStyle === 'voyager' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"}
-                    attribution=""
-                  />
-                  <FitBounds bounds={bounds} />
-
-                  {/* Route shadow (halo scuro) */}
-                  <Polyline
-                    positions={coords}
-                    pathOptions={{ color: '#000000', weight: 12, opacity: 0.45, lineCap: 'round', lineJoin: 'round' }}
-                  />
-                  {/* Route glow esterno */}
-                  <Polyline
-                    positions={coords}
-                    pathOptions={{ color: '#3b82f6', weight: 10, opacity: 0.25, lineCap: 'round', lineJoin: 'round' }}
-                  />
-                  {/* Route main */}
-                  <Polyline
-                    positions={coords}
-                    pathOptions={{ color: '#60a5fa', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
-                  />
-                  {/* Inner highlight */}
-                  <Polyline
-                    positions={coords}
-                    pathOptions={{ color: '#dbeafe', weight: 1.5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }}
-                  />
-
-                  <Marker position={[p.tripRoute.start.lat, p.tripRoute.start.lng]} icon={startIcon}>
-                    <Popup className="trip-popup">PARTENZA</Popup>
-                  </Marker>
-                  <Marker position={[p.tripRoute.end.lat, p.tripRoute.end.lng]} icon={endIcon}>
-                    <Popup className="trip-popup">ARRIVO</Popup>
-                  </Marker>
-                  {(p.tripNearby || []).map((st: any) => {
-                    if (p.tripStops.some(s => s.id === st.id)) return null;
-                    const price = st.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price || 0;
-                    const isCheap = nearbyMinPrice !== null && price === nearbyMinPrice;
-                    return (
-                      <Marker
-                        key={`near-${st.id}`}
-                        position={[st.location.lat, st.location.lng]}
-                        icon={nearbyIcon(price, isCheap)}
-                        eventHandlers={p.onStationClick ? { click: () => p.onStationClick!(st) } : undefined}
-                      />
-                    );
-                  })}
-                  {p.tripStops.map((s: any, i: number) => (
-                    <Marker
-                      key={i}
-                      position={[s.location.lat, s.location.lng]}
-                      icon={stopIcon(i + 1)}
-                      eventHandlers={p.onStationClick ? { click: () => p.onStationClick!(s) } : undefined}
-                    >
-                      <Popup className="trip-popup">Sosta {i + 1} · {s.brand}</Popup>
-                    </Marker>
-                  ))}
-                </MapContainer>
-              );
-            })()}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+          <div
+            className="relative w-full overflow-hidden"
+            style={{ height: 320, borderRadius: 'var(--mf-radius-lg)', border: '1px solid var(--mf-hairline)' }}
+          >
+            <NativeLeafletTripMap
+              tripRoute={p.tripRoute}
+              tripStops={p.tripStops}
+              tripNearby={p.tripNearby}
+              selectedFuel={p.selectedFuel}
+              mapStyle={p.mapStyle}
+              onStationClick={p.onStationClick}
+            />
           </div>
 
-          <section className="relative bg-[#0a0f1d] rounded-[32px] border border-blue-500/30 shadow-[0_0_60px_rgba(37,99,235,0.25)] p-5 sm:p-6 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-transparent pointer-events-none" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-4">
-                <Route className="w-4 h-4 text-blue-400" />
-                <h2 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Risultato</h2>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <BigStat icon={<Milestone className="w-3.5 h-3.5 text-zinc-400" />} label="Distanza" value={`${p.tripDist} km`} />
-                <BigStat icon={<Fuel className="w-3.5 h-3.5 text-blue-400" />} label="Litri" value={`${liters.toFixed(1)} L`} />
-                <BigStat icon={<Wallet className="w-3.5 h-3.5 text-emerald-400" />} label="Carburante" value={`€${cost.toFixed(2)}`} valueClass="text-emerald-400" />
-                {p.tripToll && (
-                  <BigStat icon={<Wallet className="w-3.5 h-3.5 text-amber-400" />} label="Pedaggio (stima)" value={`€${tollCost.toFixed(2)}`} valueClass="text-amber-400" />
-                )}
-                <BigStat icon={<MapPin className="w-3.5 h-3.5 text-orange-400" />} label="Soste" value={`${stops}`} />
-                <BigStat icon={<Wallet className="w-3.5 h-3.5 text-emerald-400" />} label="Totale" value={`€${totalCost.toFixed(2)}`} valueClass="text-emerald-400" />
-              </div>
-            </div>
-          </section>
+          {piano && !piano.fattibile && (
+            <Card pad="md">
+              <Empty
+                icon={<Fuel size={20} />}
+                title="Non riesco a pianificare"
+                hint={piano.motivo ? MOTIVO_TESTO[piano.motivo] : 'Manca qualcosa per fare il conto.'}
+              />
+            </Card>
+          )}
 
-          {p.tripStops.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 px-1 mb-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                <h2 className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Soste consigliate</h2>
-              </div>
-              <div className="bg-[#09090b]/50 backdrop-blur-xl rounded-[32px] border border-white/5 overflow-hidden divide-y divide-white/5 shadow-2xl">
-                {p.tripStops.map((st: any, i: number) => {
-                  const logo = getBrandLogo(st.brand || st.name || '');
-                  const price = st.prices?.find((pp: any) => pp.type === p.selectedFuel)?.price;
-                  return (
-                    <div key={i} className="flex items-center gap-3 p-4 sm:p-5">
-                      <div className="w-11 h-11 rounded-full bg-black border border-white/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        <img src={logo} alt={st.brand} className="w-full h-full object-contain scale-[0.9]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[14px] font-bold text-white truncate">{st.brand || st.name}</p>
-                        <p className="text-[12px] text-zinc-500 truncate font-medium">{st.address?.split(',')[0]}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-[15px] font-black text-emerald-400 tabular-nums">
-                          €{price ? price.toFixed(3) : '—'}
-                        </p>
-                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">sosta {i+1}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+          {piano && piano.fattibile && (
+            <>
+              <Card pad="lg">
+                <div className="mf-label" style={{ fontSize: 9 }}>
+                  {piano.litriComprati > 0
+                    ? 'quanto tiri fuori'
+                    : tollCost > 0
+                      ? 'ci arrivi col pieno che hai, resta il pedaggio'
+                      : 'ci arrivi col pieno che hai'}
+                </div>
+                <div
+                  className="mf-num mt-2"
+                  style={{ fontSize: 42, fontWeight: 700, letterSpacing: '-0.045em', color: 'var(--mf-ink)', lineHeight: 1 }}
+                >
+                  {euroIt(piano.spesaCarburante + tollCost)}
+                </div>
+                <p className="mt-2" style={{ color: 'var(--mf-ink-2)', fontSize: 12.5, lineHeight: 1.5 }}>
+                  {piano.litriComprati > 0 ? (
+                    <>
+                      {litriIt(piano.litriComprati)} da comprare
+                      {p.tripToll && tollCost > 0 && <> · {euroIt(tollCost)} di pedaggio</>}
+                      {piano.soste.length > 0 && <> · {piano.soste.length} {piano.soste.length === 1 ? 'sosta' : 'soste'}</>}
+                    </>
+                  ) : (
+                    <>Non ti serve fermarti: {litriIt(litriBruciati)} escono dal serbatoio che hai già.</>
+                  )}
+                </p>
+
+                {/* Il viaggio consuma comunque: dirlo solo quando non si compra
+                    niente, altrimenti sarebbe un secondo numero che confonde. */}
+                {piano.litriComprati === 0 && prezzoRiferimento !== null && (
+                  <p className="mt-3" style={{ color: 'var(--mf-muted)', fontSize: 11.5, lineHeight: 1.5 }}>
+                    Rimettere quei litri costa circa{' '}
+                    <span className="mf-num">{euroIt(litriBruciati * prezzoRiferimento)}</span> al miglior prezzo
+                    trovato lungo la strada.
+                  </p>
+                )}
+
+                {piano.risparmioEur !== null && Math.abs(piano.risparmioEur) > 0.5 && (
+                  <div className="mt-5 pt-5" style={{ borderTop: '1px solid var(--mf-hairline)' }}>
+                    <p style={{ color: 'var(--mf-ink)', fontSize: 13.5, lineHeight: 1.6 }}>
+                      {piano.risparmioEur > 0 ? (
+                        <>
+                          Fermandoti dove dico risparmi{' '}
+                          <b className="mf-num" style={{ color: 'var(--mf-price-best)' }}>{euroIt(piano.risparmioEur)}</b>{' '}
+                          rispetto a fare il pieno prima di partire ({euroIt(piano.spesaPienoPrima!)}).
+                        </>
+                      ) : (
+                        <>
+                          Qui conviene il pieno prima di partire: costerebbe{' '}
+                          <b className="mf-num" style={{ color: 'var(--mf-price-best)' }}>{euroIt(piano.spesaPienoPrima!)}</b>,
+                          {' '}cioè {euroIt(Math.abs(piano.risparmioEur))} in meno.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </Card>
+
+              <WidgetGrid>
+                <Widget
+                  label="distanza"
+                  value={chilometri(p.tripDist)}
+                  sub={p.tripRoute?.durationMin ? `circa ${Math.round(p.tripRoute.durationMin / 60)} h di guida` : undefined}
+                />
+                <Widget
+                  label="arrivi con"
+                  value={litriIt(piano.litriAllArrivo)}
+                  color={piano.litriAllArrivo < p.tankLiters * 0.1 ? 'var(--mf-price-high)' : 'var(--mf-price-best)'}
+                  sub={`${chilometri(piano.litriAllArrivo * kpl)} di autonomia`}
+                />
+                {piano.kmDeviazione > 0.2 && (
+                  <Widget
+                    label="deviazioni"
+                    value={chilometri(piano.kmDeviazione, 1)}
+                    sub={`${litriIt(piano.litriDeviazione)} bruciati per arrivarci`}
+                  />
+                )}
+                <Widget
+                  label="al chilometro"
+                  value={p.tripDist > 0 ? `${numero((piano.spesaCarburante + tollCost) / p.tripDist, 3)} €` : null}
+                  sub="tutto compreso"
+                />
+              </WidgetGrid>
+            </>
+          )}
+
+          {piano && piano.fattibile && piano.soste.length > 0 && (
+            <Section title="La scaletta" aside={`${piano.soste.length} ${piano.soste.length === 1 ? 'sosta' : 'soste'}`}>
+              <Card pad="md">
+                <div className="relative">
+                  {/* Il filo che tiene insieme le soste: si legge come un viaggio. */}
+                  <span
+                    className="absolute"
+                    style={{ left: 17, top: 12, bottom: 12, width: 2, background: 'var(--mf-hairline)' }}
+                  />
+                  {piano.soste.map((sosta, i) => {
+                    const st = (p.tripNearby || []).find((x: any) => x.id === sosta.tappa.id);
+                    return (
+                      <button
+                        key={sosta.tappa.id}
+                        onClick={() => st && p.onStationClick?.(st)}
+                        className="relative flex w-full items-start gap-3 py-3 text-left"
+                      >
+                        <span
+                          className="mf-num relative z-10 flex flex-shrink-0 items-center justify-center"
+                          style={{
+                            width: 36, height: 36, borderRadius: '50%',
+                            background: 'var(--mf-accent)', color: 'var(--mf-accent-ink)',
+                            fontSize: 13, fontWeight: 600,
+                          }}
+                        >
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <BrandLogo brand={sosta.tappa.brand} name={sosta.tappa.nome} size={22} />
+                            <span
+                              className="truncate"
+                              style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14.5, color: 'var(--mf-ink)' }}
+                            >
+                              {sosta.tappa.brand}
+                            </span>
+                          </span>
+                          <span className="mf-num mt-1 block" style={{ color: 'var(--mf-ink-2)', fontSize: 11.5 }}>
+                            al km {numero(sosta.tappa.kmDaPartenza, 0)}
+                            {sosta.tappa.deviazioneKm > 0.15 && <> &middot; {numero(sosta.tappa.deviazioneKm * 2, 1)} km di deviazione</>}
+                          </span>
+                          <span
+                            className="mt-1.5 inline-block px-2 py-0.5"
+                            style={{
+                              borderRadius: 'var(--mf-radius-pill)',
+                              background: 'var(--mf-ground)',
+                              border: '1px solid var(--mf-hairline)',
+                              color: 'var(--mf-ink)',
+                              fontSize: 11.5,
+                            }}
+                          >
+                            {sosta.pieno ? 'fai il pieno' : 'metti'} <b className="mf-num">{litriIt(sosta.litri)}</b>
+                            {' \u00b7 '}<span className="mf-num">{euroIt(sosta.spesa)}</span>
+                          </span>
+                        </span>
+                        <span className="flex-shrink-0 text-right">
+                          <span className="mf-num block" style={{ color: 'var(--mf-price-best)', fontSize: 15, fontWeight: 600 }}>
+                            {numero(sosta.tappa.prezzo, 3)}
+                          </span>
+                          <span className="mf-label block" style={{ fontSize: 9 }}>al litro</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p
+                  className="mt-3 pt-3"
+                  style={{ borderTop: '1px solid var(--mf-hairline)', color: 'var(--mf-muted)', fontSize: 11, lineHeight: 1.5 }}
+                >
+                  Dove costa meno di quello che hai in pancia si mette il minimo per arrivare all&rsquo;occasione
+                  successiva; dove non c&rsquo;è di meglio si fa il pieno e si va più lontano possibile.
+                </p>
+              </Card>
+            </Section>
           )}
 
           {sortedNearby.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between gap-2 px-1 mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-                  <h2 className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Stazioni lungo il percorso</h2>
-                  <span className="text-[9px] font-black text-[#48484a] uppercase tracking-widest tabular-nums">{sortedNearby.length}</span>
-                </div>
-              </div>
-              <div className="flex gap-1.5 mb-3">
-                {[
+            <Section title="impianti lungo la strada" aside={`${sortedNearby.length}`}>
+              <div
+                className="mb-3 flex p-0.5"
+                style={{ background: 'var(--mf-ground)', borderRadius: 'var(--mf-radius-pill)', border: '1px solid var(--mf-hairline)' }}
+              >
+                {([
                   { id: 'price' as const, label: 'Prezzo' },
                   { id: 'detour' as const, label: 'Deviazione' },
-                  { id: 'progress' as const, label: 'Tappa' },
-                ].map(o => (
+                  { id: 'progress' as const, label: 'Ordine' },
+                ]).map((o) => (
                   <button
                     key={o.id}
                     onClick={() => setNearbySort(o.id)}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
-                      nearbySort === o.id
-                        ? 'bg-blue-600 text-white border-blue-400/40 shadow-[0_0_12px_rgba(37,99,235,0.4)]'
-                        : 'bg-white/5 text-[#8e8e93] border-white/10 hover:text-white'
-                    }`}
-                  >{o.label}</button>
+                    className="flex-1 py-1.5 transition-colors"
+                    style={{
+                      borderRadius: 'var(--mf-radius-pill)',
+                      background: nearbySort === o.id ? 'var(--mf-accent)' : 'transparent',
+                      color: nearbySort === o.id ? 'var(--mf-accent-ink)' : 'var(--mf-ink-2)',
+                      fontFamily: 'var(--mf-font-sans)',
+                      fontWeight: 600,
+                      fontSize: 12,
+                    }}
+                  >
+                    {o.label}
+                  </button>
                 ))}
               </div>
-              <div className="bg-[#09090b]/50 backdrop-blur-xl rounded-[32px] border border-white/5 overflow-hidden divide-y divide-white/5 shadow-2xl max-h-[480px] overflow-y-auto no-scrollbar">
-                {sortedNearby.map((st: any) => {
-                  const logo = getBrandLogo(st.brand || st.name || '');
-                  const isCheapest = nearbyMinPrice !== null && st._price === nearbyMinPrice;
-                  const isStop = p.tripStops.some(s => s.id === st.id);
-                  return (
-                    <div
-                      key={st.id}
-                      onClick={() => p.onStationClick?.(st)}
-                      className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/[0.03] active:scale-[0.99] transition-all"
-                    >
-                      <div className={`w-10 h-10 rounded-full bg-black border flex items-center justify-center flex-shrink-0 overflow-hidden ${isCheapest ? 'border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'border-white/10'}`}>
-                        <img src={logo} alt={st.brand} className="w-full h-full object-contain scale-[0.9]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[13px] font-black uppercase italic tracking-tight text-white truncate">{st.brand || st.name}</p>
-                          {isCheapest && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex-shrink-0">Min</span>}
-                          {isStop && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex-shrink-0">Sosta</span>}
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-[#8e8e93] uppercase tracking-widest mt-0.5 tabular-nums">
-                          <span>{st.routeProgressKm.toFixed(0)} km</span>
-                          <span className="opacity-40">•</span>
-                          <span>+{(st.routeDetourKm * 2).toFixed(1)} km dev.</span>
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className={`text-[15px] font-black tabular-nums tracking-tighter ${isCheapest ? 'text-emerald-400' : 'text-white'}`}>
-                          €{st._price ? st._price.toFixed(3) : '—'}
-                        </p>
-                        <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">{p.selectedFuel}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+
+              <Card pad="md">
+                <div className="max-h-[460px] overflow-y-auto">
+                  {sortedNearby.map((st: any, i: number) => {
+                    const isCheapest = nearbyMinPrice !== null && st._price === nearbyMinPrice;
+                    const isStop = p.tripStops.some((s) => s.id === st.id);
+                    return (
+                      <Row key={st.id} first={i === 0} onClick={() => p.onStationClick?.(st)}>
+                        <BrandLogo brand={st.brand} name={st.name} size={34} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="truncate"
+                              style={{ fontFamily: 'var(--mf-font-sans)', fontWeight: 600, fontSize: 14, color: 'var(--mf-ink)' }}
+                            >
+                              {st.brand || st.name}
+                            </span>
+                            {isCheapest && <Tag text="min" color="var(--mf-price-best)" />}
+                            {isStop && <Tag text="sosta" color="var(--mf-accent)" />}
+                          </span>
+                          <span className="mf-num block truncate" style={{ color: 'var(--mf-ink-2)', fontSize: 11 }}>
+                            al km {st.routeProgressKm.toFixed(0)} · +{(st.routeDetourKm * 2).toFixed(1)} km di deviazione
+                          </span>
+                        </span>
+                        <span className="flex-shrink-0 text-right">
+                          <span
+                            className="mf-num block"
+                            style={{ color: isCheapest ? 'var(--mf-price-best)' : 'var(--mf-ink)', fontSize: 15, fontWeight: 600 }}
+                          >
+                            {st._price ? st._price.toFixed(3).replace('.', ',') : '—'}
+                          </span>
+                        </span>
+                      </Row>
+                    );
+                  })}
+                </div>
+              </Card>
+            </Section>
           )}
         </motion.div>
       )}
@@ -579,23 +581,18 @@ export function TripTab(p: Props) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Tag({ text, color }: { text: string; color: string }) {
   return (
-    <div className="min-w-0">
-      <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-1 truncate">{label}</p>
-      <p className="text-[15px] font-black text-white tabular-nums truncate tracking-tight">{value}</p>
-    </div>
-  );
-}
-
-function BigStat({ icon, label, value, valueClass }: { icon: React.ReactNode; label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        {icon}
-        <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest truncate">{label}</p>
-      </div>
-      <p className={cn('text-[22px] font-black tabular-nums tracking-tighter truncate text-white', valueClass)}>{value}</p>
-    </div>
+    <span
+      className="mf-label flex-shrink-0 px-1.5 py-0.5"
+      style={{
+        fontSize: 8,
+        color,
+        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+        borderRadius: 'var(--mf-radius-pill)',
+      }}
+    >
+      {text}
+    </span>
   );
 }

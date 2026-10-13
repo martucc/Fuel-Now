@@ -1,3 +1,4 @@
+@import './design/tokens.css';
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
@@ -169,16 +170,32 @@ html, body {
 .leaflet-bottom { z-index: 400 !important; }
 .leaflet-control { z-index: 410 !important; }
 
-/* Leaflet popup overrides */
+/* I popup di Leaflet nel sistema: erano bianchi su una mappa notturna. */
 .leaflet-popup-content-wrapper {
-  border-radius: 1.5rem !important;
-  background: white !important;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
-  border: 1px solid rgba(0,0,0,0.05) !important;
+  border-radius: var(--mf-radius-md) !important;
+  background: var(--mf-surface-raised) !important;
+  color: var(--mf-ink) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .5) !important;
+  border: 1px solid var(--mf-hairline) !important;
+  font-family: var(--mf-font-sans) !important;
 }
 .leaflet-popup-tip {
-  background: white !important;
+  background: var(--mf-surface-raised) !important;
+  border: 1px solid var(--mf-hairline) !important;
 }
+.leaflet-popup-close-button { color: var(--mf-muted) !important; }
+
+/* La firma di Leaflet resta — e dovuta — ma smette di gridare. */
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--mf-ground) 80%, transparent) !important;
+  color: var(--mf-muted) !important;
+  font-family: var(--mf-font-mono) !important;
+  font-size: 9px !important;
+  padding: 2px 6px !important;
+  border-top-left-radius: var(--mf-radius-sm);
+}
+.leaflet-control-attribution a { color: var(--mf-ink-2) !important; }
+.leaflet-control-attribution svg { display: none !important; }
 
 /* Custom div icon reset */
 .custom-div-icon {
@@ -260,5 +277,14 @@ input, textarea, [contenteditable="true"] {
   transform: scale(0.96);
   opacity: 0.88;
   transition: all 0.1s ease;
+}
+
+/* La mappa riempie il suo contenitore: Leaflet, montato a mano, non si
+   dimensiona da solo come faceva il MapContainer di react-leaflet. */
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  background: #0c0c0e !important;
+  z-index: 1;
 }
 

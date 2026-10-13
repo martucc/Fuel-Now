@@ -24,15 +24,6 @@
 
         </activity>
 
-        <activity
-            android:name=".MartuccWidgetConfigureActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-            </intent-filter>
-        </activity>
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -43,36 +34,36 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Martucc Fuel Widget Provider -->
+        <!-- Il Tabellone -->
         <receiver android:name=".MartuccFuelWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.martucc.fuel.UPDATE_WIDGET" />
-                <action android:name="com.martucc.fuel.TOGGLE_STYLE" />
+                <action android:name="com.martucc.fuel.RUOTA_SFONDO" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/martucc_fuel_widget_info" />
         </receiver>
 
-        <!-- Martucc Fuel Compact Widget Provider -->
+        <!-- La Tacca -->
         <receiver android:name=".MartuccFuelCompactWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.martucc.fuel.UPDATE_WIDGET" />
-                <action android:name="com.martucc.fuel.TOGGLE_STYLE" />
+                <action android:name="com.martucc.fuel.RUOTA_SFONDO" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/martucc_fuel_compact_widget_info" />
         </receiver>
 
-        <!-- Martucc Fuel Map Radar Widget Provider -->
+        <!-- Il Radar -->
         <receiver android:name=".MartuccFuelMapWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.martucc.fuel.UPDATE_WIDGET" />
-                <action android:name="com.martucc.fuel.TOGGLE_STYLE" />
+                <action android:name="com.martucc.fuel.RUOTA_SFONDO" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

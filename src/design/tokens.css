@@ -1,0 +1,77 @@
+/* Design system "Notte" — spec § 4. Unica fonte di verità dei colori.
+ *
+ * Ogni token porta il prefisso --mf-. Non è vezzo: Tailwind v4 emette il suo
+ * @theme in :root dopo questo file, quindi --font-sans, --font-mono e
+ * --radius-sm|md|lg senza prefisso verrebbero sovrascritti in silenzio e il
+ * sistema sarebbe morto senza che nulla lo segnali. Invertire l'ordine di
+ * import non è la soluzione: cambierebbe l'aspetto dell'app adesso, mentre
+ * l'adozione dei caratteri Notte è una decisione della fase 2.
+ */
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource/dm-mono/400.css';
+@import '@fontsource/dm-mono/500.css';
+
+:root {
+  /* Superfici e testo */
+  --mf-ground: #08090b;
+  --mf-surface: #101418;
+  --mf-surface-raised: #171c21;
+  --mf-hairline: #222a31;
+  --mf-ink: #f2f5f4;
+  --mf-ink-2: #a5aeb4;
+  --mf-muted: #646e75;
+  --mf-accent: #40dce6;
+  /* Blu del consigliato: non e un livello di prezzo, e la scelta. */
+  --mf-recommended: #3b82f6;
+  --mf-recommended-ink: #ffffff;
+  --mf-accent-ink: #02171a;
+
+  /* Scala semantica del prezzo — solo per i prezzi, mai per la grafica.
+     L'accento non significa mai "risparmio". */
+  --mf-price-best: #2fe0a8;
+  --mf-price-good: #9be07b;
+  --mf-price-normal: #f2d94e;
+  --mf-price-high: #f2b33c;
+  --mf-price-worst: #f2645a;
+
+  /* Il filo di luce sul bordo alto: è questo che rende materiali
+     le superfici su fondo scuro. */
+  --mf-edge-light: inset 0 1px 0 rgb(255 255 255 / 0.05);
+
+  /* Tipografia */
+  --mf-font-sans: 'Bricolage Grotesque Variable', 'Bricolage Grotesque',
+    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mf-font-mono: 'DM Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+
+  --mf-price-hero-size: 58px;
+  --mf-price-hero-weight: 800;
+  --mf-price-hero-tracking: -0.06em;
+
+  /* Spazio e raggi */
+  --mf-gap-1: 4px;
+  --mf-gap-2: 8px;
+  --mf-gap-3: 12px;
+  --mf-gap-4: 16px;
+  --mf-gap-5: 24px;
+  --mf-gap-6: 32px;
+  --mf-radius-sm: 10px;
+  --mf-radius-md: 16px;
+  --mf-radius-lg: 24px;
+  --mf-radius-pill: 999px;
+}
+
+/* Ogni cifra mostrata all'utente passa da qui: mono tabulare, sempre. */
+.mf-num {
+  font-family: var(--mf-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Micro-etichette maiuscole: mono, spaziate, mai in tondo umano. */
+.mf-label {
+  font-family: var(--mf-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mf-muted);
+}
