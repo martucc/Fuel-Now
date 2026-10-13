@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// La firma della build release. Chiave e password stanno in
+// android/keystore.properties, che non va mai su git (vedi .gitignore):
+//   storeFile=/percorso/martucc-fuel.p12
+//   storePassword=...
+//   keyAlias=martucc-fuel
+//   keyPassword=...
+// Senza quel file la release esce firmata con la chiave di debug.
+def firmaFile = rootProject.file('keystore.properties')
+def firma = new Properties()
+if (firmaFile.exists()) {
+    firmaFile.withInputStream { firma.load(it) }
+}
+
 android {
     namespace = "com.martucc.fuel"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,8 @@ android {
         applicationId "com.martucc.fuel"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +29,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (firmaFile.exists()) {
+                storeFile file(firma['storeFile'])
+                storePassword firma['storePassword']
+                keyAlias firma['keyAlias']
+                keyPassword firma['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig firmaFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
