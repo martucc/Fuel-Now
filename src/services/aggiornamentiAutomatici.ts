@@ -15,14 +15,18 @@ const CONTROLLO_MS = 5 * 60_000;
  * Anche il ritorno della rete conta come ripresa: e il momento in cui un
  * download fallito puo finalmente riuscire.
  */
-export function avviaAggiornamentiAutomatici(negozio: NegozioDataset): () => void {
-  const ripresa = () => { void negozio.aggiorna('ripresa'); };
+export function avviaAggiornamentiAutomatici(negozio: NegozioDataset, onRipresa?: () => void): () => void {
+  const ripresa = () => {
+    void negozio.aggiorna('ripresa');
+    onRipresa?.();
+  };
+  const reteTornata = () => { void negozio.aggiorna('rete'); };
   const visibilita = () => {
     if (document.visibilityState === 'visible') ripresa();
   };
 
   document.addEventListener('visibilitychange', visibilita);
-  window.addEventListener('online', ripresa);
+  window.addEventListener('online', reteTornata);
 
   let maniglia: PluginListenerHandle | null = null;
   let spento = false;
@@ -39,7 +43,7 @@ export function avviaAggiornamentiAutomatici(negozio: NegozioDataset): () => voi
   return () => {
     spento = true;
     document.removeEventListener('visibilitychange', visibilita);
-    window.removeEventListener('online', ripresa);
+    window.removeEventListener('online', reteTornata);
     clearInterval(timer);
     if (maniglia) void maniglia.remove();
   };
