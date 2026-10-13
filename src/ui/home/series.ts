@@ -45,7 +45,9 @@ export function seriesFromDataset(d: RawDataset, fuel: FuelKey): Series {
   const passo = f.deltaC / 100 / f.daysAhead;
   const forecast = Array.from({ length: f.daysAhead }, (_, i) => ({
     date: `+${i + 1}g`,
-    price: Math.round((ultimo.price + passo * (i + 1)) * 1000) / 1000,
+    // Niente arrotondamento qui: lo storico ha quattro decimali e tagliarne
+    // uno spostava l'arrivo dal delta dichiarato. Si arrotonda a schermo.
+    price: ultimo.price + passo * (i + 1),
   }));
 
   return { historicalData, forecast };

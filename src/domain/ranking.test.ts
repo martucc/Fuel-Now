@@ -39,7 +39,17 @@ function row(over: Partial<StationRow>): StationRow {
 
 const d = realDataset();
 const allRows = parseStations(d.stations);
-const cohorts = buildCohorts(allRows);
+const realCohorts = buildCohorts(allRows);
+
+/**
+ * Una coorte milanese finta con media esattamente 2,00 €/L. I test sul
+ * comportamento non possono dipendere dai prezzi del giorno: col dataset
+ * vero la media di Milano cambia a ogni `seed`, e un 1,98 «sotto la media»
+ * a giugno era sopra la media a ottobre (LEGGIMI § 5).
+ */
+const coorteMilano: StationRow[] = Array.from({ length: 41 }, (_, i) =>
+  row({ id: `coorte-${i}`, prices: { diesel: 1.9 + i * 0.005 }, lat: 45.2, lng: 9.0 }));
+const cohorts = buildCohorts(coorteMilano);
 
 const ctx: RankContext = {
   fuel: 'diesel',
@@ -103,7 +113,7 @@ describe('rankStations', () => {
   it('regge il dataset reale e produce un migliore sensato', () => {
     const milan = { lat: 45.4642, lng: 9.19 };
     const near = allRows.filter((r) => Math.abs(r.lat - milan.lat) < 0.2 && Math.abs(r.lng - milan.lng) < 0.2);
-    const ranked = rankStations(near, { ...ctx, user: milan });
+    const ranked = rankStations(near, { ...ctx, user: milan, cohorts: realCohorts, now: new Date() });
     const best = pickBest(ranked)!;
     expect(best).toBeTruthy();
     expect(best.net.net).toBeGreaterThan(0);
@@ -113,7 +123,7 @@ describe('rankStations', () => {
 
   it('non elegge un impianto autostradale solo perché la coorte cittadina è più bassa', () => {
     const hw = allRows.filter((r) => r.isHighway && r.prices.diesel !== undefined);
-    const ranked = rankStations(hw.slice(0, 200), ctx);
+    const ranked = rankStations(hw.slice(0, 200), { ...ctx, cohorts: realCohorts });
     for (const r of ranked) {
       expect(['province-highway', 'national-highway', 'national']).toContain(r.cohort.source);
     }
