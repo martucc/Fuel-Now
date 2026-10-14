@@ -140,11 +140,10 @@ describe('pianificaViaggio: proprieta su istanze casuali', () => {
   });
 });
 
-describe('pianificaViaggio: le pompe battute in tutto si possono ignorare', () => {
-  it('su strade fitte di distributori il conto e quello del riferimento, che le guarda tutte', () => {
+describe('pianificaViaggio: tante pompe vicine, nessuna scartata', () => {
+  it('su strade fitte di distributori il conto e quello del riferimento', () => {
     // Come in citta in Risparmio: tante pompe in pochi km, molte fino a 2,5
-    // km dalla strada, spesso allo stesso prezzo. Il piano toglie quelle
-    // battute da una vicina; il riferimento no.
+    // km dalla strada, spesso allo stesso prezzo.
     const r = casuale(31337);
     const problemi: string[] = [];
     let confrontate = 0;
@@ -186,6 +185,69 @@ describe('pianificaViaggio: le pompe battute in tutto si possono ignorare', () =
     }
     expect(problemi).toEqual([]);
     expect(confrontate).toBeGreaterThan(80);
+  });
+
+  it('in riserva, con un grappolo di pompe attorno a fin dove si arriva, il conto e quello del riferimento', () => {
+    // Il caso che una potatura delle pompe «battute» sbagliava: si parte al
+    // fondo minimo o appena sopra la riserva, l unica pompa raggiungibile e
+    // sulla strada proprio dove finisce l autonomia, e attorno ce ne sono di
+    // piu economiche con deviazioni fino a 2,5 km, alcune gia fuori portata.
+    // Dopo la sosta obbligata conta quale resta: toglierne una prima del
+    // conto costava fino a 7 €. Piu qualche pompa piu avanti, anche al km 0
+    // con la deviazione.
+    const r = casuale(1);
+    const scegli = <T,>(a: readonly T[]): T => a[Math.floor(r() * a.length)]!;
+    const problemi: string[] = [];
+    let confrontate = 0;
+    for (let n = 0; n < 400; n++) {
+      const serbatoioL = scegli([20, 30, 40, 45]);
+      const kml = scegli([10, 12, 15, 18, 20, 25]);
+      const km = suReticolo(kml);
+      const R = serbatoioL * RISERVA;
+      const litriAdesso = dueCentilitri(scegli([0.3, 0.6, R * 0.5, R * 0.83, R - 0.02, R, R + 0.5, R + 2, r() * serbatoioL]));
+      const distanzaKm = km(scegli([60, 150, 400, 700]) * (0.5 + r()));
+      const limite = Math.max(0, (litriAdesso - fondoPrimaSosta(litriAdesso, R)) * kml);
+      const centro = Math.min(distanzaKm - 3, limite - r() * 3);
+      const candidate: TappaCandidata[] = [];
+      const nelGrappolo = 3 + Math.floor(r() * 6);
+      for (let k = 0; k < nelGrappolo; k++) {
+        const sullaStrada = k === 0;
+        candidate.push({
+          id: `g${n}-${k}`,
+          nome: '',
+          brand: '',
+          level: 'normal',
+          prezzo: sullaStrada ? scegli([2.25, 2.19, 2.199]) : scegli([2.19, 1.99, 1.99, 2.099, 2.25]),
+          kmDaPartenza: km(Math.max(0, Math.min(distanzaKm - 0.01, sullaStrada ? centro : centro - 1.5 + r() * 3))),
+          deviazioneKm: sullaStrada ? 0 : km(scegli([0.05, r() * 0.5, r() * 2.5, r() * 2.5, 2.4])),
+        });
+      }
+      const dopo = 1 + Math.floor(r() * 3);
+      for (let k = 0; k < dopo; k++) {
+        const alKmZero = r() < 0.2;
+        candidate.push({
+          id: `l${n}-${k}`,
+          nome: '',
+          brand: '',
+          level: 'normal',
+          prezzo: scegli([2.19, 2.19, 2.199, 2.209, 1.99]),
+          kmDaPartenza: alKmZero ? 0 : km(r() * distanzaKm),
+          deviazioneKm: alKmZero ? km(r() * 2.5) : r() < 0.6 ? 0 : km(r() * 2.5),
+        });
+      }
+      const i: PianoInput = { distanzaKm, kml, serbatoioL, litriAdesso, candidate, prezzoPartenza: 2.2 };
+      const piano = pianificaViaggio(i);
+      const rif = pianoDiRiferimento(i);
+      if (piano.fattibile !== rif.fattibile) problemi.push(`#${n}: fattibile ${piano.fattibile} contro ${rif.fattibile}`);
+      if (!piano.fattibile || !rif.fattibile) continue;
+      confrontate++;
+      const errori = verificaPiano(i, piano, rif.regole);
+      if (errori.length > 0) problemi.push(`#${n}: ${errori.join('; ')}`);
+      const scarto = valorePiano(i, piano, rif.regole) - rif.valore;
+      if (Math.abs(scarto) > 0.01) problemi.push(`#${n}: ${scarto.toFixed(3)} €`);
+    }
+    expect(problemi).toEqual([]);
+    expect(confrontate).toBeGreaterThan(300);
   });
 });
 
