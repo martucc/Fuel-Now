@@ -11,13 +11,13 @@ import { VALORE_TEMPO_EURO_ORA } from './ranking';
  * piu del minimo di oltre 50 centesimi una volta su tre (fino a 14 €), e
  * a volte faceva deviare per una sosta da zero litri.
  *
- * Qui il piano e quello a costo minimo. Lo rende veloce un fatto noto
- * (Khuller, Malekian e Mestre, «To fill or not to fill»): in un piano
- * ottimo, a ogni sosta o si fa il pieno, o si mette giusto quanto basta per
- * arrivare alla sosta dopo, o in fondo, con la riserva, o si mette il
- * minimo di una sosta. Quindi arrivando a una pompa nel serbatoio ci possono
- * essere solo pochi livelli, e su quelli la programmazione dinamica trova
- * il piano migliore senza provarli tutti.
+ * Qui il piano e quello a costo minimo, esatto. La programmazione dinamica
+ * passa le pompe in ordine di km e tiene, per ogni livello del serbatoio,
+ * il conto minimo per averlo: una funzione lineare a tratti, non pochi
+ * livelli scelti in anticipo (com'era nella prima versione, che con
+ * l'acquisto minimo a volte sbagliava le soste di qualche euro). Le
+ * pompe che un'altra batte in tutto si tolgono prima (senzaDominate): sui
+ * viaggi lunghi in Risparmio il conto resta sotto i dieci millisecondi.
  *
  * Il conto che il piano tiene basso e il carburante comprato, al prezzo di
  * ogni pompa, piu 0,75 € per sosta: cinque minuti al valore del tempo della
@@ -33,14 +33,17 @@ import { VALORE_TEMPO_EURO_ORA } from './ranking';
  *  - una sosta mette almeno 5 L, o fa il pieno: se nel serbatoio cinque
  *    litri non entrano, il pieno (almeno un decilitro) e l'unica sosta
  *    da meno. Succede prima di un tratto lungo, dove serve ogni litro;
- *  - a ogni pompa e all'arrivo si tiene la riserva, il 12% del serbatoio.
+ *  - a ogni pompa e all'arrivo si tiene la riserva, il 12% del serbatoio,
+ *    con la stessa soglia dappertutto: un metro di strada di tolleranza per
+ *    gli arrotondamenti, e mai sotto zero.
  *
  * Quando la riserva non si puo tenere il piano scende un gradino alla
  * volta, con la stessa regola qualunque sia il carburante di partenza:
  *  1. la riserva a ogni pompa e all'arrivo;
  *  2. se nessun piano ci riesce, alla prima sosta si puo arrivare con meno
  *     (fondoPrimaSosta): meta di quello che c'e, mai piu di meta riserva,
- *     mai meno di 0,3 L. Chi parte in riserva va a una pompa vicina, non a
+ *     mai meno di 0,3 L, mai a secco. Vale uguale appena sopra e appena
+ *     sotto la riserva. Chi parte in riserva va a una pompa vicina, non a
  *     quella a cinquanta km che costa un centesimo meno;
  *  3. se nemmeno cosi, il piano che va meno in riserva: ogni litro sotto la
  *     riserva a ogni arrivo costa 5 €, sotto meta riserva 20 €, piu di
@@ -169,8 +172,8 @@ export const PENALE_FONDO_EUR_L = 15;
  * un percorso stradale.
  */
 const TOLLERANZA_KM = 0.001;
-/** Sotto questa quantita un acquisto e un arrotondamento, non un acquisto. */
-const ZERO_LITRI = 1e-9;
+/** Sotto lo zero si tollerano solo gli arrotondamenti dei conti, mai un litro vero. */
+const ARROTONDAMENTO_L = 1e-9;
 
 /** La riserva in litri: la frazione chiesta, se ha senso, altrimenti quella di sempre. */
 export function riservaLitri(i: Pick<PianoInput, 'serbatoioL' | 'riservaFrazione'>): number {
@@ -181,7 +184,8 @@ export function riservaLitri(i: Pick<PianoInput, 'serbatoioL' | 'riservaFrazione
 /**
  * Con quanto si puo arrivare alla prima sosta quando la riserva non si puo
  * tenere: meta di quello che c'e, ma mai piu di meta riserva e mai meno di
- * 0,3 L. Cresce col carburante di partenza, ma piu piano: con un decilitro
+ * 0,3 L (o della riserva, se e piu piccola). Cresce col carburante di
+ * partenza, ma piu piano: con un decilitro
  * in piu alla partenza si arriva a ogni pompa con un decilitro in piu e il
  * fondo sale al piu di mezzo. Una pompa ammessa con meno resta ammessa con
  * di piu.
@@ -258,49 +262,51 @@ function senzaDominate(tappe: TappaCandidata[]): TappaCandidata[] {
   return out;
 }
 
-/** Un modo di trovarsi alla pompa di una tappa, prima di comprare. */
-interface Stato {
-  /** Quale tappa, come indice nell'ordine dei km. */
+/*
+ * Il conto della programmazione dinamica, scritto col «potenziale»: il
+ * livello del serbatoio riportato al km 0, livello + km/kml. Ripartendo da
+ * una pompa con potenziale π si arriva alla pompa j con π − (km di j piu la
+ * sua deviazione)/kml litri, da qualunque pompa si venga: le ripartenze di
+ * pompe diverse si confrontano senza guardare da dove.
+ *
+ * Per ogni potenziale il conto minimo per avercelo e una funzione lineare a
+ * tratti (il «fronte»): i tratti hanno la pendenza del prezzo a cui si e
+ * comprato l'ultimo litro, e una sosta che mette solo il minimo sposta il
+ * tratto di chi ha comprato prima senza cambiarne la pendenza. Tenere tutta
+ * la funzione, e non qualche livello scelto in anticipo, rende il conto
+ * esatto anche con l'acquisto minimo: a volte conviene comprare dove costa
+ * meno giusto quanto serve perche due soste obbligate piu avanti, piu
+ * care, mettano cinque litri ciascuna e si arrivi in fondo con la riserva.
+ */
+
+/** Da dove viene un tratto del conto: serve a rifare le soste alla fine. */
+interface Origine {
+  /** La tappa da cui si riparte; −1 e la partenza. */
   tappa: number;
-  /** Litri all'arrivo alla pompa. */
-  litri: number;
-  /** Il conto fin qui: euro spesi, soste e, nel ripiego, penali. */
-  valore: number;
-  /** Lo stato alla sosta prima; null se questa e la prima sosta. */
-  prima: Stato | null;
+  /**
+   * true: alla tappa si e arrivati con `arrivo` litri. false: si e messo il
+   * minimo, e all'arrivo c'era la ripartenza meno LITRI_SOSTA.
+   */
+  fisso: boolean;
+  arrivo: number;
+  /** Come si e arrivati alla tappa; null per la partenza. */
+  da: Origine | null;
 }
 
-/**
- * Gli stati utili di una tappa, in ordine di litri. Arrivare con a litri e
- * ripartire con L costa valore + (L − a) × prezzo: per ogni L il migliore e
- * quello col minimo di (valore − a × prezzo) fra gli stati che arrivano con
- * abbastanza meno di L da comprare il minimo di una sosta. Restano solo gli
- * stati che abbassano quel minimo: gli altri non sarebbero mai la risposta,
- * nemmeno per l'acquisto minimo, che da uno stato migliore con meno litri
- * si fa comprando un po' di piu.
- */
-interface Indice {
-  litri: Float64Array;
-  /** valore − litri × prezzo, strettamente decrescente. */
-  minimo: Float64Array;
-  stato: Stato[];
+/** Un tratto: su [x0, x1] vale y0 + s·(x − x0). */
+interface Tratto {
+  x0: number;
+  x1: number;
+  y0: number;
+  s: number;
+  o: Origine;
 }
 
-/**
- * Le partenze a livello fisso da una tappa: da ogni stato utile l'acquisto
- * minimo, e il pieno. Il livello e scritto come potenziale (vedi risolvi).
- */
-interface Partenze {
-  livello: Float64Array;
-  valore: Float64Array;
-  stato: Stato[];
-}
-
-/** L'ultima sosta di un piano che arriva, e con quanto si riparte da li. */
-interface Fine {
-  valore: number;
-  stato: Stato;
-  ripartenza: number;
+/** Un punto: il pieno da una tappa, o la partenza. */
+interface Punto {
+  x: number;
+  y: number;
+  o: Origine;
 }
 
 /** Un giro della programmazione dinamica: con quanto si arriva, e se si paga la riserva. */
@@ -313,152 +319,76 @@ interface Regole {
   penali: boolean;
 }
 
+/** L'ultima sosta di un piano che arriva, con quanto si riparte da li e da dove viene. */
+interface Fine {
+  valore: number;
+  tappa: number;
+  ripartenza: number;
+  o: Origine;
+}
+
 interface Esito {
   fine: Fine | null;
-  indici: Array<Indice | null>;
-  statoPieno: Array<Stato | null>;
+  /** Per ogni tappa, il modo migliore di ripartire col pieno; null se non ci si arriva. */
+  pieni: Array<Punto | null>;
 }
+
+/** Tratti piu corti di cosi (in litri) sono arrotondamenti: si buttano. */
+const CORTO = 1e-9;
+
+const valoreIn = (t: Tratto, x: number): number => t.y0 + t.s * (x - t.x0);
 
 /**
- * La posizione dell'ultimo stato che arriva con non piu di `livelloMax`
- * litri, o −1. Con `livelloMax` = L − minimo sono gli stati da cui si puo
- * ripartire con L comprando almeno il minimo.
+ * Il minimo di due funzioni fatte di tratti, ognuna in ordine e senza
+ * sovrapposizioni. A parita vince la prima.
  */
-function ripartiCon(ind: Indice, livelloMax: number): number {
-  let lo = 0;
-  let hi = ind.litri.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (ind.litri[mid]! <= livelloMax + ZERO_LITRI) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo - 1;
-}
-
-/** Le tappe di una catena di stati, dalla prima all'ultima. */
-function catena(ultimo: Stato): Stato[] {
-  const out: Stato[] = [];
-  for (let s: Stato | null = ultimo; s; s = s.prima) out.push(s);
-  return out.reverse();
-}
-
-const senzaPenale = (): number => 0;
-
-/*
- * Funzioni convesse lineari a tratti, per rifare i conti di una sequenza di
- * soste gia scelta. Con le soste fissate il costo, in funzione del livello
- * con cui si riparte da ognuna, e una catena di funzioni convesse: la
- * minima si trova esatta, tratto per tratto.
- */
-
-/** Su [da, da + Σ lunghezze]: il valore in `da` e, tratto per tratto, lunghezza e pendenza crescente. */
-interface Convessa {
-  da: number;
-  valore: number;
-  lunghezze: number[];
-  pendenze: number[];
-}
-
-/** Sotto questa pendenza, in € al litro, un tratto e piatto. */
-const PIATTO = 1e-9;
-
-function fineConvessa(f: Convessa): number {
-  let x = f.da;
-  for (const l of f.lunghezze) x += l;
-  return x;
-}
-
-/** f su [a, b], o null se l'intervallo e vuoto. */
-function restringi(f: Convessa, a: number, b: number): Convessa | null {
-  const lo = Math.max(f.da, a);
-  const hi = Math.min(fineConvessa(f), b);
-  if (hi < lo - ZERO_LITRI) return null;
-  const lunghezze: number[] = [];
-  const pendenze: number[] = [];
-  let x = f.da;
-  let valore = f.valore;
-  for (let s = 0; s < f.lunghezze.length; s++) {
-    const pend = f.pendenze[s]!;
-    const fine = x + f.lunghezze[s]!;
-    if (fine <= lo) {
-      valore += (fine - x) * pend;
-    } else {
-      if (x < lo) valore += (lo - x) * pend;
-      const a0 = Math.max(x, lo);
-      const a1 = Math.min(fine, hi);
-      if (a1 > a0) {
-        lunghezze.push(a1 - a0);
-        pendenze.push(pend);
-      }
-      if (fine >= hi) break;
+function inviluppo(a: readonly Tratto[], b: readonly Tratto[]): Tratto[] {
+  if (a.length === 0) return b.slice();
+  if (b.length === 0) return a.slice();
+  const out: Tratto[] = [];
+  const emetti = (x0: number, x1: number, t: Tratto) => {
+    if (x1 - x0 <= CORTO) return;
+    const y0 = valoreIn(t, x0);
+    const u = out[out.length - 1];
+    // Lo stesso tratto spezzato da un confronto si ricuce.
+    if (u && u.o === t.o && u.s === t.s && x0 - u.x1 <= CORTO && Math.abs(valoreIn(u, x0) - y0) <= 1e-9) {
+      u.x1 = x1;
+      return;
     }
+    out.push({ x0, x1, y0, s: t.s, o: t.o });
+  };
+  let i = 0;
+  let k = 0;
+  let x = Math.min(a[0]!.x0, b[0]!.x0);
+  for (;;) {
+    while (i < a.length && a[i]!.x1 <= x) i++;
+    while (k < b.length && b[k]!.x1 <= x) k++;
+    const A = i < a.length ? a[i]! : null;
+    const B = k < b.length ? b[k]! : null;
+    if (!A && !B) break;
+    const conA = A !== null && A.x0 <= x;
+    const conB = B !== null && B.x0 <= x;
+    if (!conA && !conB) {
+      x = Math.min(A ? A.x0 : Infinity, B ? B.x0 : Infinity);
+      continue;
+    }
+    let fine = Infinity;
+    if (A) fine = Math.min(fine, conA ? A.x1 : A.x0);
+    if (B) fine = Math.min(fine, conB ? B.x1 : B.x0);
+    if (conA && conB) {
+      const du = valoreIn(A, x) - valoreIn(B, x);
+      const dv = valoreIn(A, fine) - valoreIn(B, fine);
+      if (du <= 0 && dv <= 0) emetti(x, fine, A);
+      else if (du >= 0 && dv >= 0) emetti(x, fine, B);
+      else {
+        const t = x + ((fine - x) * du) / (du - dv);
+        emetti(x, t, du < 0 ? A : B);
+        emetti(t, fine, du < 0 ? B : A);
+      }
+    } else emetti(x, fine, conA ? A! : B!);
     x = fine;
   }
-  return { da: lo, valore, lunghezze, pendenze };
-}
-
-/** x ↦ f(x) + p·x. */
-function piuLineare(f: Convessa, p: number): Convessa {
-  return { da: f.da, valore: f.valore + p * f.da, lunghezze: f.lunghezze.slice(), pendenze: f.pendenze.map((q) => q + p) };
-}
-
-/** x ↦ f(x) + penaleRiserva(x, riservaL): pendenza −20 sotto meta riserva, −5 fino alla riserva, poi 0. */
-function piuPenale(f: Convessa, riservaL: number): Convessa {
-  const pieghe = [riservaL / 2, riservaL];
-  const pendenzaPenale = (x: number) =>
-    x < riservaL / 2 ? -(PENALE_RISERVA_EUR_L + PENALE_FONDO_EUR_L) : x < riservaL ? -PENALE_RISERVA_EUR_L : 0;
-  const lunghezze: number[] = [];
-  const pendenze: number[] = [];
-  let x = f.da;
-  for (let s = 0; s < f.lunghezze.length; s++) {
-    const fine = x + f.lunghezze[s]!;
-    let a = x;
-    for (const k of pieghe) {
-      if (k > a && k < fine) {
-        lunghezze.push(k - a);
-        pendenze.push(f.pendenze[s]! + pendenzaPenale((a + k) / 2));
-        a = k;
-      }
-    }
-    lunghezze.push(fine - a);
-    pendenze.push(f.pendenze[s]! + pendenzaPenale((a + fine) / 2));
-    x = fine;
-  }
-  return { da: f.da, valore: f.valore + penaleRiserva(f.da, riservaL), lunghezze, pendenze };
-}
-
-/**
- * Il minimo di f da `da` fino a x, come funzione di x: la parte che scende,
- * poi piatta fino a `finoA`. E il punto piu a destra dove f e minima.
- */
-function minimoFinQui(f: Convessa, finoA: number): { g: Convessa; xMinimo: number } {
-  const lunghezze: number[] = [];
-  const pendenze: number[] = [];
-  let x = f.da;
-  let s = 0;
-  for (; s < f.lunghezze.length && f.pendenze[s]! < -PIATTO; s++) {
-    lunghezze.push(f.lunghezze[s]!);
-    pendenze.push(f.pendenze[s]!);
-    x += f.lunghezze[s]!;
-  }
-  let xMinimo = x;
-  for (; s < f.lunghezze.length && f.pendenze[s]! <= PIATTO; s++) xMinimo += f.lunghezze[s]!;
-  if (finoA > x) {
-    lunghezze.push(finoA - x);
-    pendenze.push(0);
-  }
-  return { g: { da: f.da, valore: f.valore, lunghezze, pendenze }, xMinimo };
-}
-
-/** Il punto piu a sinistra dove f e minima, e il valore li. */
-function minimoConvessa(f: Convessa): { x: number; v: number } {
-  let x = f.da;
-  let v = f.valore;
-  for (let s = 0; s < f.lunghezze.length && f.pendenze[s]! < -PIATTO; s++) {
-    x += f.lunghezze[s]!;
-    v += f.lunghezze[s]! * f.pendenze[s]!;
-  }
-  return { x, v };
+  return out;
 }
 
 /** Il piano di rifornimento a costo minimo. */
@@ -486,262 +416,252 @@ export function pianificaViaggio(i: PianoInput): Piano {
   const R = riservaLitri(i);
   const S0 = Number.isFinite(i.litriAdesso) ? Math.min(Math.max(0, i.litriAdesso), T) : 0;
   const eps = TOLLERANZA_KM / kml;
-  const penale = (litri: number) => penaleRiserva(litri, R);
+  /**
+   * Un livello va bene se non sta sotto la soglia di piu di un metro di
+   * strada, e mai sotto zero: li si tollerano solo gli arrotondamenti.
+   */
+  const almeno = (litri: number, soglia: number) => litri >= Math.max(0, soglia - eps) - ARROTONDAMENTO_L;
+  const m = LITRI_SOSTA;
 
   const tappe = senzaDominate(tappeSullaStrada(i.candidate, D));
   const n = tappe.length;
   const km = Float64Array.from(tappe, (t) => t.kmDaPartenza);
   const prezzo = Float64Array.from(tappe, (t) => t.prezzo);
   // La deviazione si fa andata e ritorno: arrivare alla pompa costa come
-  // fare kmAndata km di strada, e ripartire da li e come ripartire dal km
-  // kmRitorno.
-  const kmAndata = Float64Array.from(tappe, (t) => t.kmDaPartenza + t.deviazioneKm);
-  const kmRitorno = Float64Array.from(tappe, (t) => t.kmDaPartenza - t.deviazioneKm);
+  // fare km + deviazione di strada, e ripartire da li e come ripartire dal
+  // km km − deviazione. In litri dal km 0, come il potenziale.
+  const andata = Float64Array.from(tappe, (t) => (t.kmDaPartenza + t.deviazioneKm) / kml);
+  const ritorno = Float64Array.from(tappe, (t) => (t.kmDaPartenza - t.deviazioneKm) / kml);
 
   /**
    * Litri dalla pompa h alla pompa j: ritorno sulla strada da h, strada fra
    * le due, uscita verso j. h = −1 e la partenza, j = n l'arrivo.
    */
-  const consumo = (h: number, j: number): number => ((j >= n ? D : kmAndata[j]!) - (h < 0 ? 0 : kmRitorno[h]!)) / kml;
-
-  // I modi utili di arrivare alla tappa in corso, in ordine di litri con
-  // (valore − litri × prezzo) strettamente decrescente: la scala che
-  // diventa l'Indice. Un modo nuovo entra solo se nessuno con meno litri
-  // costa meno, e butta fuori quelli con piu litri che costano di piu.
-  // Cosi non si accumulano centinaia di candidati da ordinare per tenerne
-  // una decina.
-  const scalaLitri: number[] = [];
-  const scalaW: number[] = [];
-  const scalaValore: number[] = [];
-  const scalaPrima: Array<Stato | null> = [];
+  const consumo = (h: number, j: number): number => (j >= n ? D / kml : andata[j]!) - (h < 0 ? 0 : ritorno[h]!);
 
   /** La programmazione dinamica, tappa per tappa in ordine di km. */
   const risolvi = (g: Regole): Esito => {
-    const { fondoPrima, fondo } = g;
-    const minimo = LITRI_SOSTA;
-    const pen = g.penali ? penale : senzaPenale;
-    const indici: Array<Indice | null> = new Array<Indice | null>(n).fill(null);
-    // Ripartire da h col pieno costa lo stesso qualunque sia la tappa dopo:
-    // si calcola una volta per tappa, non una per coppia.
-    const costoPieno = new Float64Array(n).fill(Infinity);
-    const statoPieno: Array<Stato | null> = new Array<Stato | null>(n).fill(null);
-    // Le partenze a livello fisso, il pieno e gli acquisti minimi, di ogni
-    // tappa gia vista, scritte col «potenziale»: il livello riportato al km
-    // 0, livello + kmRitorno/kml. Da una partenza di potenziale π alla tappa
-    // j si arriva con π − kmAndata[j]/kml, da qualunque tappa venga: due
-    // partenze si confrontano senza guardare da dove. Chi ha piu potenziale
-    // e costa meno vince sempre, e resta solo il fronte di quelle che
-    // nessuna batte, in ordine di potenziale e di costo. Una partenza entra
-    // nel fronte quando la tappa in corso e a piu di 0,4 km dalla sua: da li
-    // in poi vale per tutte quelle dopo.
-    const uscite: Array<Partenze | null> = new Array<Partenze | null>(n).fill(null);
-    const frontePi: number[] = [];
-    const fronteV: number[] = [];
-    const fronteStato: Stato[] = [];
+    const { fondoPrima, fondo, penali } = g;
+    const pen = (a: number) => (penali ? penaleRiserva(a, R) : 0);
+    const pendenzaPen = (a: number) => (!penali ? 0 : a < R / 2 ? -(PENALE_RISERVA_EUR_L + PENALE_FONDO_EUR_L) : a < R ? -PENALE_RISERVA_EUR_L : 0);
+    const pieghe = penali ? [R / 2, R] : [];
+    const casa: Origine = { tappa: -1, fisso: true, arrivo: S0, da: null };
+
+    // Le ripartenze delle tappe gia viste: tratti e pieni. Entrano nel
+    // fronte quando la tappa in corso e a piu di 0,4 km: da li in poi
+    // valgono per tutte quelle dopo.
+    let fronte: Tratto[] = [];
     let fronteDa = 0;
+    const punti: Punto[] = [];
+    const uscite: Array<{ tratti: Tratto[]; pieno: Punto | null } | null> = new Array(n).fill(null);
+    const pieni: Array<Punto | null> = new Array<Punto | null>(n).fill(null);
     let attivate = 0;
-    const attiva = (pi: number, v: number, stato: Stato) => {
-      let lo = fronteDa;
-      let hi = frontePi.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (frontePi[mid]! < pi) lo = mid + 1;
-        else hi = mid;
-      }
-      if (lo < frontePi.length && fronteV[lo]! <= v) return;
-      let da = lo;
-      while (da > fronteDa && fronteV[da - 1]! >= v) da--;
-      const a = lo < frontePi.length && frontePi[lo] === pi ? lo + 1 : lo;
-      frontePi.splice(da, a - da, pi);
-      fronteV.splice(da, a - da, v);
-      fronteStato.splice(da, a - da, stato);
-    };
     let fine: Fine | null = null;
-    const proponi = (valore: number, stato: Stato, ripartenza: number) => {
-      if (!fine || valore < fine.valore) fine = { valore, stato, ripartenza };
-    };
-    /** Oltre questi km da una pompa, nemmeno col pieno si arriva alla prossima col fondo. */
-    const raggioKm = (T - fondo) * kml;
-    let primaUtile = 0;
-
-    // Il prezzo della tappa in corso.
-    let p = 0;
-    const metti = (litri: number, valore: number, prima: Stato | null) => {
-      const w = valore - litri * p;
-      const len = scalaLitri.length;
-      // Il primo con piu litri.
-      let lo = 0;
-      let hi = len;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (scalaLitri[mid]! <= litri) lo = mid + 1;
-        else hi = mid;
-      }
-      if (lo > 0 && scalaW[lo - 1]! <= w) return;
-      // Chi ha gli stessi litri e costa di piu esce, e cosi chi ne ha di piu.
-      let da = lo;
-      if (da > 0 && scalaLitri[da - 1] === litri) da--;
-      let a = lo;
-      while (a < len && scalaW[a]! >= w) a++;
-      scalaLitri.splice(da, a - da, litri);
-      scalaW.splice(da, a - da, w);
-      scalaValore.splice(da, a - da, valore);
-      scalaPrima.splice(da, a - da, prima);
+    const proponi = (valore: number, tappa: number, ripartenza: number, o: Origine) => {
+      if (!fine || valore < fine.valore - 1e-12) fine = { valore, tappa, ripartenza, o };
     };
 
-    const giusti = new Float64Array(3);
-    const giustoValore = new Float64Array(3);
-    const giustoPrima: Array<Stato | null> = [null, null, null];
+    // Cosa si puo arrivare ad avere alla tappa in corso: tratti e punti nel
+    // livello all'arrivo, gia col conto della sosta e del prezzo di qui.
+    const tratti: Tratto[] = [];
+    const puntiQui: Punto[] = [];
 
     for (let j = 0; j < n; j++) {
-      p = prezzo[j]!;
-      scalaLitri.length = 0;
-      scalaW.length = 0;
-      scalaValore.length = 0;
-      scalaPrima.length = 0;
-
-      // Dritti dalla partenza, senza soste prima: con quello che c'e.
-      const daCasa = S0 - consumo(-1, j);
-      if (daCasa >= fondoPrima - eps) metti(daCasa, COSTO_SOSTA_EUR + pen(daCasa), null);
-
-      // Da una sosta precedente: col pieno, con l'acquisto minimo da uno dei
-      // modi di arrivarci, o con quanto basta per arrivare qui con un livello
-      // «giusto». I giusti sono tre: la riserva; quanto serve perche qui
-      // l'acquisto minimo faccia il pieno; quanto serve perche qui
-      // l'acquisto minimo basti fino in fondo con la riserva. Gli ultimi due
-      // fanno comprare il piu possibile prima, dove costa meno, quando qui
-      // ci si deve fermare comunque. Ogni giusto da sempre lo stesso
-      // livello, quindi ne resta solo il migliore.
-      const cFine = consumo(j, n);
-      let nGiusti = 0;
-      const giusto = (livello: number) => {
-        if (livello < fondo - eps || livello > T + eps) return;
-        for (let g = 0; g < nGiusti; g++) if (Math.abs(giusti[g]! - livello) < ZERO_LITRI) return;
-        giusti[nGiusti] = livello;
-        giustoValore[nGiusti] = Infinity;
-        giustoPrima[nGiusti] = null;
-        nGiusti++;
-      };
-      giusto(R);
-      giusto(T - minimo);
-      if (cFine + R <= T + eps) giusto(cFine + R - minimo);
-
-      // Il fronte delle partenze: entrano quelle delle tappe ormai a piu di
-      // 0,4 km, escono quelle che non arrivano piu nemmeno qui.
       for (; attivate < j && km[j]! - km[attivate]! > STESSO_PUNTO_KM; attivate++) {
         const u = uscite[attivate];
         if (!u) continue;
-        for (let q = 0; q < u.livello.length; q++) attiva(u.livello[q]!, u.valore[q]!, u.stato[q]!);
+        if (u.tratti.length > 0) {
+          fronte = inviluppo(fronteDa > 0 ? fronte.slice(fronteDa) : fronte, u.tratti);
+          fronteDa = 0;
+        }
+        if (u.pieno) {
+          // In ordine di potenziale.
+          let k = punti.length;
+          while (k > 0 && punti[k - 1]!.x > u.pieno.x) k--;
+          punti.splice(k, 0, u.pieno);
+        }
         uscite[attivate] = null;
       }
-      const andata = kmAndata[j]!;
-      const piMinimo = km[j]! / kml + fondo - eps;
-      while (fronteDa < frontePi.length && frontePi[fronteDa]! < piMinimo) fronteDa++;
-      if (fronteDa > 256) {
-        frontePi.splice(0, fronteDa);
-        fronteV.splice(0, fronteDa);
-        fronteStato.splice(0, fronteDa);
-        fronteDa = 0;
-      }
-      // Dal fronte entrano nella scala solo quelli che, in ordine di litri,
-      // costano meno di tutti quelli con meno litri: gli altri la scala li
-      // butterebbe comunque.
-      const X = andata / kml;
-      let lo = fronteDa;
-      let hi = frontePi.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (frontePi[mid]! - X < fondo - eps) lo = mid + 1;
-        else hi = mid;
-      }
-      let minimoW = Infinity;
-      for (let q = lo; q < frontePi.length; q++) {
-        const a = frontePi[q]! - X;
-        const valore = fronteV[q]! + COSTO_SOSTA_EUR + pen(a);
-        const w = valore - a * p;
-        if (w < minimoW) {
-          minimoW = w;
-          metti(a, valore, fronteStato[q]!);
+      // Nessuna tappa da qui in avanti si raggiunge con meno di questo.
+      const minimoUtile = km[j]! / kml + fondo - eps;
+      while (fronteDa < fronte.length && fronte[fronteDa]!.x1 < minimoUtile) fronteDa++;
+      // Un pieno che il fronte batte allo stesso potenziale non serve piu:
+      // il fronte puo solo scendere.
+      {
+        let q = fronteDa;
+        let tieni = 0;
+        for (const pt of punti) {
+          if (pt.x < minimoUtile) continue;
+          while (q < fronte.length && fronte[q]!.x1 < pt.x) q++;
+          let battuto = false;
+          for (let r = q; r < fronte.length && fronte[r]!.x0 <= pt.x && !battuto; r++) battuto = valoreIn(fronte[r]!, pt.x) <= pt.y + 1e-12;
+          if (!battuto) punti[tieni++] = pt;
         }
+        punti.length = tieni;
       }
 
-      while (km[j]! - km[primaUtile]! > raggioKm + TOLLERANZA_KM) primaUtile++;
-      for (let h = primaUtile; h < j; h++) {
-        const ind = indici[h];
-        if (!ind || km[j]! - km[h]! <= STESSO_PUNTO_KM) continue;
-        const c = (andata - kmRitorno[h]!) / kml;
-        if (c > T - fondo + eps) continue;
-
-        // Il minimo di tutta la tappa e l'ultimo: se nemmeno quello batte il
-        // migliore trovato, la ricerca non serve.
-        const minimoTappa = ind.minimo[ind.minimo.length - 1]!;
-        for (let g = 0; g < nGiusti; g++) {
-          const L = c + giusti[g]!;
-          if (L > T + eps) continue;
-          const costoFisso = Math.min(T, L) * prezzo[h]! + COSTO_SOSTA_EUR;
-          if (minimoTappa + costoFisso >= giustoValore[g]!) continue;
-          const q = ripartiCon(ind, L - minimo);
-          if (q >= 0) {
-            const valore = ind.minimo[q]! + costoFisso;
-            if (valore < giustoValore[g]!) {
-              giustoValore[g] = valore;
-              giustoPrima[g] = ind.stato[q]!;
-            }
+      const A = andata[j]!;
+      const p = prezzo[j]!;
+      // Il conto g(a) = arrivare con a, piu la sosta e le penali, meno a·p:
+      // ripartire con L comprando da a costa g(a) + L·p.
+      tratti.length = 0;
+      puntiQui.length = 0;
+      const aggiungiTratto = (a0: number, a1: number, y0: number, s: number, o: Origine) => {
+        // Le penali cambiano pendenza a meta riserva e alla riserva.
+        let x = a0;
+        let y = y0 + COSTO_SOSTA_EUR + pen(a0) - a0 * p;
+        for (const k of pieghe) {
+          if (k > x + CORTO && k < a1 - CORTO) {
+            const sk = s + pendenzaPen((x + k) / 2) - p;
+            tratti.push({ x0: x, x1: k, y0: y, s: sk, o });
+            y += sk * (k - x);
+            x = k;
           }
         }
+        tratti.push({ x0: x, x1: a1, y0: y, s: s + pendenzaPen((x + a1) / 2) - p, o });
+      };
+      for (let q = fronteDa; q < fronte.length; q++) {
+        const t = fronte[q]!;
+        const a1 = t.x1 - A;
+        if (a1 < fondo - eps) continue;
+        const a0 = Math.max(t.x0 - A, fondo);
+        if (a1 - a0 > CORTO) aggiungiTratto(a0, a1, valoreIn(t, a0 + A), t.s, t.o);
+        // Un tratto che arriva al fondo per un soffio conta come un punto.
+        else puntiQui.push({ x: a1, y: valoreIn(t, a1 + A) + COSTO_SOSTA_EUR + pen(a1) - a1 * p, o: t.o });
       }
-      for (let g = 0; g < nGiusti; g++) {
-        const prima = giustoPrima[g];
-        if (prima) metti(giusti[g]!, giustoValore[g]! + pen(giusti[g]!), prima);
+      const ordinati = puntiQui.length === 0;
+      for (const q of punti) {
+        const a = q.x - A;
+        if (almeno(a, fondo)) puntiQui.push({ x: a, y: q.y + COSTO_SOSTA_EUR + pen(a) - a * p, o: q.o });
       }
-      if (scalaLitri.length === 0) continue;
-
-      const litri = scalaLitri.slice();
-      const minimi = scalaW;
-      const stato: Stato[] = litri.map((l, q) => ({ tappa: j, litri: l, valore: scalaValore[q]!, prima: scalaPrima[q] ?? null }));
-      const ind: Indice = { litri: Float64Array.from(litri), minimo: Float64Array.from(minimi), stato };
-      indici[j] = ind;
-
-      const qPieno = ripartiCon(ind, T - LITRI_MINIMI_SOSTA);
-      if (qPieno >= 0) {
-        costoPieno[j] = ind.minimo[qPieno]! + T * p;
-        statoPieno[j] = ind.stato[qPieno]!;
-      }
-      let k = 0;
-      while (k < litri.length && litri[k]! + minimo <= T + ZERO_LITRI) k++;
-      {
-        const pieno = statoPieno[j] !== null ? 1 : 0;
-        const livello = new Float64Array(k + pieno);
-        const valore = new Float64Array(k + pieno);
-        const da: Stato[] = [];
-        const ritorno = kmRitorno[j]! / kml;
-        for (let q = 0; q < k; q++) {
-          livello[q] = Math.min(T, litri[q]! + minimo) + ritorno;
-          valore[q] = stato[q]!.valore + minimo * p;
-          da.push(stato[q]!);
+      const daCasa = S0 - A;
+      if (almeno(daCasa, fondoPrima)) {
+        puntiQui.push({ x: daCasa, y: COSTO_SOSTA_EUR + pen(daCasa) - daCasa * p, o: casa });
+        // La partenza va al suo posto: gli altri sono gia in ordine.
+        for (let k = puntiQui.length - 1; k > 0 && puntiQui[k - 1]!.x > puntiQui[k]!.x; k--) {
+          const t = puntiQui[k]!;
+          puntiQui[k] = puntiQui[k - 1]!;
+          puntiQui[k - 1] = t;
         }
-        if (pieno) {
-          livello[k] = T + ritorno;
-          valore[k] = costoPieno[j]!;
-          da.push(statoPieno[j]!);
-        }
-        if (da.length > 0) uscite[j] = { livello, valore, stato: da };
       }
+      if (tratti.length === 0 && puntiQui.length === 0) continue;
+      if (!ordinati) puntiQui.sort((u, v) => u.x - v.x);
 
-      // Da qui all'arrivo: quanto basta per arrivare con la riserva,
-      // l'acquisto minimo da chi ha gia quasi abbastanza, o il pieno.
-      if (cFine <= T - fondo + eps) {
-        const bersaglio = Math.min(T, cFine + R);
-        const q = ripartiCon(ind, bersaglio - minimo);
-        if (q >= 0) proponi(ind.minimo[q]! + bersaglio * p + pen(bersaglio - cFine), ind.stato[q]!, bersaglio);
-        for (let s = q + 1; s < k; s++) {
-          const L = Math.min(T, litri[s]! + minimo);
-          proponi(stato[s]!.valore + minimo * p + pen(L - cFine), stato[s]!, L);
+      // Il minimo di g fin qui, Q(x) = min g(a) per a ≤ x: ripartire con L
+      // costa L·p + Q(L − minimo). Dove Q e piatta si compra qui (pendenza
+      // p); dove scende si porta avanti il carburante comprato prima, e qui
+      // si mette il minimo.
+      const finoA = T - m;
+      const pieno = T - LITRI_MINIMI_SOSTA;
+      const qTratti: Tratto[] = [];
+      let minimo = Infinity;
+      let piatto = 0;
+      let origPiatto: Origine | null = null;
+      let minimoPieno = Infinity;
+      let origPieno: Origine | null = null;
+      const chiudi = (x: number) => {
+        if (origPiatto && x - piatto > CORTO) qTratti.push({ x0: piatto, x1: x, y0: minimo, s: 0, o: origPiatto });
+      };
+      const nuovoMinimo = (x: number, y: number, o: Origine) => {
+        chiudi(x);
+        minimo = y;
+        piatto = x;
+        origPiatto = { tappa: j, fisso: true, arrivo: x, da: o };
+      };
+      /** Arrivando oltre T − minimo il minimo non entra: si puo solo fare il pieno. */
+      const versoPieno = (x: number, y: number, o: Origine) => {
+        if (x <= pieno + eps && y < minimoPieno) {
+          minimoPieno = y;
+          origPieno = { tappa: j, fisso: true, arrivo: x, da: o };
         }
-        if (statoPieno[j]) proponi(costoPieno[j]! + pen(T - cFine), statoPieno[j]!, T);
+      };
+      const punto = (x: number, y: number, o: Origine) => {
+        if (x > finoA) versoPieno(x, y, o);
+        else if (y < minimo) nuovoMinimo(x, y, o);
+      };
+      const tratto = (u: number, v: number, gu: number, s: number, o: Origine) => {
+        if (v > finoA) {
+          const da = Math.max(u, finoA);
+          const a = Math.min(v, pieno);
+          if (a >= da) {
+            const gd = gu + s * (da - u);
+            const ga = gu + s * (a - u);
+            if (gd <= ga) versoPieno(da, gd, o);
+            else versoPieno(a, ga, o);
+          }
+          if (u >= finoA) return;
+          v = finoA;
+        }
+        const gv = gu + s * (v - u);
+        if (s >= 0) {
+          if (gu < minimo) nuovoMinimo(u, gu, o);
+          return;
+        }
+        if (gv >= minimo) return;
+        const t = gu > minimo ? u + (minimo - gu) / s : u;
+        chiudi(t);
+        if (v - t > CORTO) qTratti.push({ x0: t, x1: v, y0: gu + s * (t - u), s, o: { tappa: j, fisso: false, arrivo: NaN, da: o } });
+        minimo = gv;
+        piatto = v;
+        origPiatto = { tappa: j, fisso: true, arrivo: v, da: o };
+      };
+      let ip = 0;
+      for (const t of tratti) {
+        let u = t.x0;
+        let gu = t.y0;
+        while (ip < puntiQui.length && puntiQui[ip]!.x <= t.x1) {
+          const q = puntiQui[ip]!;
+          if (q.x > u) {
+            tratto(u, q.x, gu, t.s, t.o);
+            gu += t.s * (q.x - u);
+            u = q.x;
+          }
+          punto(q.x, q.y, q.o);
+          ip++;
+        }
+        if (t.x1 > u) tratto(u, t.x1, gu, t.s, t.o);
       }
+      for (; ip < puntiQui.length; ip++) punto(puntiQui[ip]!.x, puntiQui[ip]!.y, puntiQui[ip]!.o);
+      chiudi(finoA);
+
+      // Le ripartenze da qui, nel potenziale: L = x + minimo, valore Q(x) + L·p.
+      const rit = ritorno[j]!;
+      const uscitaTratti: Tratto[] = qTratti.map((t) => ({
+        x0: t.x0 + m + rit,
+        x1: t.x1 + m + rit,
+        y0: t.y0 + (t.x0 + m) * p,
+        s: t.s + p,
+        o: t.o,
+      }));
+      // Col pieno: dal minimo di Q fino a T − minimo, o arrivando gia quasi pieni.
+      let pienoQui: Punto | null = null;
+      if (origPiatto && minimo < Infinity) pienoQui = { x: T, y: minimo + T * p, o: origPiatto };
+      if (origPieno && (!pienoQui || minimoPieno + T * p < pienoQui.y - 1e-12)) pienoQui = { x: T, y: minimoPieno + T * p, o: origPieno };
+      pieni[j] = pienoQui;
+      const ultimo = uscitaTratti[uscitaTratti.length - 1];
+      const pienoAParte = pienoQui !== null && (!ultimo || ultimo.x1 < T + rit - CORTO || valoreIn(ultimo, T + rit) > pienoQui.y + 1e-12);
+      uscite[j] = {
+        tratti: uscitaTratti,
+        pieno: pienoAParte ? { x: T + rit, y: pienoQui!.y, o: pienoQui!.o } : null,
+      };
+
+      // Da qui all'arrivo: il minimo del conto fra le ripartenze che
+      // arrivano in fondo col fondo, piu le penali dell'arrivo.
+      const cFine = consumo(j, n);
+      if (cFine > T - fondo + eps) continue;
+      const minimoL = cFine + fondo;
+      for (const t of uscitaTratti) {
+        const l0 = t.x0 - rit;
+        const l1 = t.x1 - rit;
+        if (l1 < minimoL - eps) continue;
+        const prova = (L: number) => proponi(valoreIn(t, L + rit) + pen(L - cFine), j, L, t.o);
+        prova(Math.max(l0, Math.min(l1, minimoL)));
+        prova(l1);
+        for (const k of pieghe) if (cFine + k > l0 && cFine + k < l1) prova(cFine + k);
+      }
+      if (pienoQui && almeno(T - cFine, fondo)) proponi(pienoQui.y + pen(T - cFine), j, T, pienoQui.o);
     }
-    return { fine, indici, statoPieno };
+    return { fine, pieni };
   };
 
   /** Dalle tappe e dai livelli di ripartenza alle soste vere, rifacendo il viaggio litro per litro. */
@@ -752,7 +672,7 @@ export function pianificaViaggio(i: PianoInput): Piano {
     for (let t = 0; t < sequenza.length; t++) {
       const j = sequenza[t]!;
       const arrivo = livello - consumo(t === 0 ? -1 : sequenza[t - 1]!, j);
-      const dopo = ripartenze[t]!;
+      const dopo = Math.min(T, ripartenze[t]!);
       const litri = dopo - arrivo;
       soste.push({
         tappa: tappe[j]!,
@@ -769,68 +689,24 @@ export function pianificaViaggio(i: PianoInput): Piano {
     return { soste, arrivi, finale };
   };
 
-  /** Le tappe di una catena di stati e i livelli con cui la programmazione dinamica riparte da ognuna. */
-  const daCatena = (ultimo: Stato, ripartenzaFinale: number) => {
-    const stati = catena(ultimo);
-    const sequenza = stati.map((s) => s.tappa);
-    const ripartenze = stati.map((s, t) => {
-      const dopo = stati[t + 1];
-      return dopo ? dopo.litri + consumo(s.tappa, dopo.tappa) : ripartenzaFinale;
-    });
-    return { sequenza, ripartenze };
-  };
-
-  /**
-   * Con le soste gia scelte, i litri migliori da mettere a ognuna: esatti.
-   *
-   * La programmazione dinamica sceglie le soste guardando pochi livelli, e
-   * di solito sono quelli giusti. Non sempre, con l'acquisto minimo: se una
-   * sosta obbligata in mezzo costa di piu, conviene comprare prima, dove
-   * costa meno, giusto quanto serve perche li basti il minimo per arrivare
-   * alla sosta dopo; e quel livello dipende da una sosta che la
-   * programmazione dinamica non ha ancora visto. Qui le soste sono note e i
-   * conti si fanno su tutti i livelli: il costo, in funzione del livello con
-   * cui si riparte da una sosta, e convesso, e il minimo si trova esatto.
-   */
-  const acquistiMigliori = (sequenza: readonly number[], soloPieno: readonly boolean[], g: Regole): number[] | null => {
-    const k = sequenza.length;
-    if (k === 0) return [];
-    const a1 = S0 - consumo(-1, sequenza[0]!);
-    if (a1 < g.fondoPrima - eps) return null;
-    // Il conto, in funzione del livello all'arrivo alla sosta t.
-    let arrivo: Convessa = { da: a1, valore: g.penali ? penale(a1) : 0, lunghezze: [], pendenze: [] };
-    const piuDestra: number[] = [];
-    let ripartenza: Convessa | null = null;
-    const minimi = soloPieno.map((pieno) => (pieno ? LITRI_MINIMI_SOSTA : LITRI_SOSTA));
-    for (let t = 0; t < k; t++) {
-      const p = prezzo[sequenza[t]!]!;
-      // Ripartire con L costa L·p piu il minimo, su chi arriva con al piu
-      // L − minimo, di (conto − livello·p). Una sosta da meno di cinque
-      // litri resta un pieno.
-      const { g: fin, xMinimo } = minimoFinQui(piuLineare(arrivo, -p), T - minimi[t]!);
-      piuDestra.push(xMinimo);
-      const r = restringi({ ...fin, da: fin.da + minimi[t]! }, soloPieno[t] ? T : -Infinity, T);
-      if (!r) return null;
-      ripartenza = piuLineare(r, p);
-      if (t + 1 < k) {
-        const c = consumo(sequenza[t]!, sequenza[t + 1]!);
-        const a = restringi({ ...ripartenza, da: ripartenza.da - c }, Math.max(g.fondo, 0), Infinity);
-        if (!a) return null;
-        arrivo = g.penali ? piuPenale(a, R) : a;
-      }
+  /** Le soste di un piano, dall'ultima all'indietro: tappe e livelli di ripartenza. */
+  const daOrigine = (tappa: number, ripartenza: number, o: Origine) => {
+    const sequenza: number[] = [];
+    const ripartenze: number[] = [];
+    let j = tappa;
+    let L = ripartenza;
+    let x: Origine = o;
+    for (;;) {
+      sequenza.push(j);
+      ripartenze.push(L);
+      const arrivo = x.fisso ? x.arrivo : L - m;
+      const prima = x.da;
+      if (!prima || prima.tappa < 0) break;
+      L = arrivo + consumo(prima.tappa, j);
+      j = prima.tappa;
+      x = prima;
     }
-    const cFine = consumo(sequenza[k - 1]!, n);
-    const f = restringi({ ...ripartenza!, da: ripartenza!.da - cFine }, Math.max(g.fondo, 0), Infinity);
-    if (!f) return null;
-    const migliore = minimoConvessa(g.penali ? piuPenale(f, R) : f);
-    // All'indietro: da ogni livello di ripartenza, con quanto conviene arrivare.
-    const ripartenze = new Array<number>(k);
-    let L = migliore.x + cFine;
-    for (let t = k - 1; t >= 0; t--) {
-      ripartenze[t] = Math.min(T, L);
-      if (t > 0) L = Math.min(L - minimi[t]!, piuDestra[t]!) + consumo(sequenza[t - 1]!, sequenza[t]!);
-    }
-    return ripartenze;
+    return { sequenza: sequenza.reverse(), ripartenze: ripartenze.reverse() };
   };
 
   const componi = (soste: Sosta[], arrivi: number[], finale: number): Piano => {
@@ -863,8 +739,8 @@ export function pianificaViaggio(i: PianoInput): Piano {
       spesaCarburante,
       kmDeviazione,
       litriDeviazione: kmDeviazione / kml,
-      // Ogni giro accetta solo arrivi da −1 m di strada in su: qui si tolgono
-      // quei micrometri, non un arrivo a secco.
+      // Ogni giro accetta arrivi fino a un metro di strada sotto la soglia,
+      // ma mai sotto zero: qui si tolgono solo arrotondamenti.
       litriAllArrivo: Math.max(0, finale),
       arrivoSottoRiserva: finale < R - eps,
       sostaInRiserva: inRiserva >= 0 ? inRiserva + 1 : null,
@@ -873,25 +749,9 @@ export function pianificaViaggio(i: PianoInput): Piano {
     };
   };
 
-  /** Il conto di un piano con le regole del giro: carburante, soste e, nel ripiego, penali. */
-  const conto = (r: ReturnType<typeof realizza>, g: Regole) => {
-    let v = g.penali ? penale(r.finale) : 0;
-    r.soste.forEach((s, t) => (v += s.spesa + COSTO_SOSTA_EUR + (g.penali ? penale(r.arrivi[t]!) : 0)));
-    return v;
-  };
-
-  const dalFine = (f: Fine, g: Regole): Piano => {
-    const { sequenza, ripartenze } = daCatena(f.stato, f.ripartenza);
-    let r = realizza(sequenza, ripartenze);
-    const meglio = acquistiMigliori(
-      sequenza,
-      r.soste.map((s) => s.litri < LITRI_SOSTA - ZERO_LITRI),
-      g,
-    );
-    if (meglio) {
-      const r2 = realizza(sequenza, meglio);
-      if (conto(r2, g) < conto(r, g) - 1e-9) r = r2;
-    }
+  const dalFine = (f: Fine): Piano => {
+    const { sequenza, ripartenze } = daOrigine(f.tappa, f.ripartenza, f.o);
+    const r = realizza(sequenza, ripartenze);
     return componi(r.soste, r.arrivi, r.finale);
   };
 
@@ -925,21 +785,19 @@ export function pianificaViaggio(i: PianoInput): Piano {
   // Se il carburante che c'e basta, con la riserva, non ci si ferma: zero
   // euro e zero soste non si battono.
   const finaleSenzaSoste = S0 - D / kml;
-  if (finaleSenzaSoste >= R - eps) return componi([], [], finaleSenzaSoste);
+  if (almeno(finaleSenzaSoste, R)) return componi([], [], finaleSenzaSoste);
   const fondoPrima = fondoPrimaSosta(S0, R);
 
   // 1. La riserva a ogni pompa e in fondo. Chi parte sotto la riserva alla
   // prima pompa non ci arriva con la riserva: il giro non serve.
-  if (S0 >= R - eps) {
-    const g: Regole = { fondoPrima: R, fondo: R, penali: false };
-    const e = risolvi(g);
-    if (e.fine) return dalFine(e.fine, g);
+  if (almeno(S0, R)) {
+    const e = risolvi({ fondoPrima: R, fondo: R, penali: false });
+    if (e.fine) return dalFine(e.fine);
   }
   // 2. La prima sosta un po' in riserva, mai troppo.
   if (fondoPrima < R - eps) {
-    const g: Regole = { fondoPrima, fondo: R, penali: false };
-    const e = risolvi(g);
-    if (e.fine) return dalFine(e.fine, g);
+    const e = risolvi({ fondoPrima, fondo: R, penali: false });
+    if (e.fine) return dalFine(e.fine);
   }
   // 3. Il ripiego: prima di tutto il piano il cui punto piu basso e il piu
   // alto possibile; fra quelli, il conto piu basso, con le penali che
@@ -947,29 +805,29 @@ export function pianificaViaggio(i: PianoInput): Piano {
   // se e piu sicuro: arriva in fondo con piu di quanto qualunque piano con
   // soste tenga nel suo punto piu basso. Cosi il punto piu basso del piano
   // sale sempre col carburante di partenza.
-  const senzaSosteArriva = finaleSenzaSoste >= -eps;
+  const senzaSosteArriva = almeno(finaleSenzaSoste, 0);
   const piuAlto = livelloPiuAlto();
   if (senzaSosteArriva && finaleSenzaSoste > piuAlto + eps) return componi([], [], finaleSenzaSoste);
   if (piuAlto >= -eps) {
-    const g: Regole = { fondoPrima: Math.max(0, piuAlto), fondo: Math.max(0, piuAlto), penali: true };
-    const e = risolvi(g);
-    if (e.fine) return dalFine(e.fine, g);
+    const f = Math.max(0, piuAlto);
+    const e = risolvi({ fondoPrima: f, fondo: f, penali: true });
+    if (e.fine) return dalFine(e.fine);
   }
   // Una rete di sicurezza: il livello piu alto si calcola col pieno a ogni
   // sosta, e se un pieno non si potesse fare il conto qui sopra non
   // troverebbe niente.
   if (senzaSosteArriva) return componi([], [], finaleSenzaSoste);
-  const g: Regole = { fondoPrima: 0, fondo: 0, penali: true };
-  const ripiego = risolvi(g);
-  if (ripiego.fine) return dalFine(ripiego.fine, g);
+  const ripiego = risolvi({ fondoPrima: 0, fondo: 0, penali: true });
+  if (ripiego.fine) return dalFine(ripiego.fine);
 
   // Non si arriva: dove si resta a secco, col pieno all'ultima pompa
-  // raggiungibile, e le soste per arrivarci.
+  // raggiungibile, e le soste per arrivarci. Senza pompe raggiungibili,
+  // dove finisce il carburante di adesso.
   let bloccoAlKm = S0 * kml;
   let ultima = -1;
   for (let j = 0; j < n; j++) {
-    if (!ripiego.statoPieno[j]) continue;
-    const finoA = kmRitorno[j]! + T * kml;
+    if (!ripiego.pieni[j]) continue;
+    const finoA = ritorno[j]! * kml + T * kml;
     if (finoA > bloccoAlKm) {
       bloccoAlKm = finoA;
       ultima = j;
@@ -977,7 +835,7 @@ export function pianificaViaggio(i: PianoInput): Piano {
   }
   let soste: Sosta[] = [];
   if (ultima >= 0) {
-    const { sequenza, ripartenze } = daCatena(ripiego.statoPieno[ultima]!, T);
+    const { sequenza, ripartenze } = daOrigine(ultima, T, ripiego.pieni[ultima]!.o);
     soste = realizza(sequenza, ripartenze).soste;
   }
   return { ...vuoto, motivo: 'buco-troppo-lungo', bloccoAlKm: Math.min(D, bloccoAlKm), soste };

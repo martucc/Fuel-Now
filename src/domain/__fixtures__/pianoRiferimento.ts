@@ -126,6 +126,43 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
     return migliore;
   };
 
+  /**
+   * Il punto piu basso piu alto possibile, fra tutti i piani con soste: per
+   * ogni tappa e livello d'arrivo, il punto piu basso migliore con cui ci si
+   * arriva. In centilitri; −1 se con le soste non si arriva.
+   */
+  const fondoPiuAlto = (): number => {
+    const minimo = intero(LITRI_SOSTA);
+    const minimoPieno = intero(LITRI_MINIMI_SOSTA);
+    const basso = tappe.map(() => new Float64Array(Tn + 1).fill(-1));
+    let migliore = -1;
+    for (let j = 0; j < n; j++) {
+      const arr = basso[j]!;
+      const a0 = S0n - cl(-1, j);
+      if (a0 >= 0) arr[a0] = Math.max(arr[a0]!, a0);
+      const riparti = new Float64Array(Tn + 1).fill(-1);
+      let massimo = -1;
+      for (let L = minimo; L <= Tn; L++) {
+        massimo = Math.max(massimo, arr[L - minimo]!);
+        riparti[L] = massimo;
+      }
+      for (let a = Math.max(0, Tn - minimo + 1); a <= Tn - minimoPieno; a++) riparti[Tn] = Math.max(riparti[Tn]!, arr[a]!);
+      const cFine = cl(j, n);
+      for (let L = Math.max(0, cFine); L <= Tn; L++) if (riparti[L]! >= 0) migliore = Math.max(migliore, Math.min(riparti[L]!, L - cFine));
+      for (let h = j + 1; h < n; h++) {
+        if (tappe[h]!.x - tappe[j]!.x <= STESSO_PUNTO_KM) continue;
+        const c = cl(j, h);
+        const dopo = basso[h]!;
+        for (let L = Math.max(0, c); L <= Tn; L++) {
+          if (riparti[L]! < 0) continue;
+          const v = Math.min(riparti[L]!, L - c);
+          if (v > dopo[L - c]!) dopo[L - c] = v;
+        }
+      }
+    }
+    return migliore;
+  };
+
   const fondoPrima = fondoPrimaSosta(S0, R);
   const gradini: RegoleRiferimento[] = [];
   if (S0n >= Rn) gradini.push({ fondoPrima: R, fondo: R, penali: false });
@@ -135,14 +172,8 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
     if (v < Infinity) return { fattibile: true, regole: g, valore: v };
   }
   // Il ripiego: il fondo piu alto che un piano con soste tiene a ogni
-  // arrivo, cercato al centilitro; senza soste solo se arriva con di piu.
-  let basso = -1;
-  let alto = Rn;
-  while (basso < alto) {
-    const f = Math.ceil((basso + alto + 1) / 2);
-    if (f >= 0 && risolvi({ fondoPrima: f / CL, fondo: f / CL, penali: false }) < Infinity) basso = f;
-    else alto = f - 1;
-  }
+  // arrivo, al centilitro; senza soste solo se arriva con di piu.
+  const basso = fondoPiuAlto();
   if (finaleN >= 0 && finaleN > basso) return { fattibile: true, regole: null, valore: senzaSoste };
   if (basso >= 0) {
     const ripiego: RegoleRiferimento = { fondoPrima: basso / CL, fondo: basso / CL, penali: true };
