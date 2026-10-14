@@ -39,8 +39,8 @@ export const SCOSTAMENTO_MAX_KM = 2.5;
  * sinistra di cosi non e sulla nostra strada. Con 25 m, come nella prima
  * versione, restava dentro Lucignano Est (A1, carreggiata nord), che
  * andando verso Roma sta 11 m a sinistra e costa meno del gemello giusto.
- * Sui diciassette percorsi veri provati nessun'area di servizio dalla
- * parte giusta sta a sinistra della linea.
+ * Sui diciassette percorsi veri provati, passare da 25 a 8 m cambia solo
+ * quella.
  */
 export const SULLA_LINEA_KM = 0.008;
 /**
