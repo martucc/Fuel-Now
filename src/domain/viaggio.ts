@@ -424,8 +424,9 @@ export function pianificaViaggio(i: PianoInput): Piano {
     const pieni: Array<Punto | null> = new Array<Punto | null>(n).fill(null);
     let attivate = 0;
     let fine: Fine | null = null;
-    const proponi = (valore: number, tappa: number, ripartenza: number, o: Origine) => {
-      if (!fine || valore < fine.valore - 1e-12) fine = { valore, tappa, ripartenza, o };
+    /** L'ultima sosta alla tappa `tappa`, arrivandoci con `arrivo` litri da `da`. */
+    const proponi = (valore: number, tappa: number, ripartenza: number, arrivo: number, da: Origine) => {
+      if (!fine || valore < fine.valore - 1e-12) fine = { valore, tappa, ripartenza, o: { tappa, fisso: true, arrivo, da } };
     };
 
     // Cosa si puo arrivare ad avere alla tappa in corso: tratti e punti nel
@@ -612,21 +613,33 @@ export function pianificaViaggio(i: PianoInput): Piano {
         pieno: pienoAParte ? { x: T + rit, y: pienoQui!.y, o: pienoQui!.o } : null,
       };
 
-      // Da qui all'arrivo: il minimo del conto fra le ripartenze che
-      // arrivano in fondo col fondo, piu le penali dell'arrivo.
+      // Se questa e l'ultima sosta: da qui all'arrivo. Quello che resta in
+      // fondo oltre la riserva l'ha comprato questa sosta, e vale quanto e
+      // costato: l'ultima sosta conta solo i litri che servono, X − a al
+      // prezzo di qui, anche quando ne mette cinque. Senza, la deviazione
+      // verso una sosta da 5 L non costava niente: i litri bruciati
+      // uscivano da quello che avanza in fondo, e avanzare valeva zero.
+      // Il credito non supera i litri comprati qui: il carburante portato
+      // da prima non si rivaluta al prezzo di una sosta che non serve.
       const cFine = consumo(j, n);
       if (cFine > T - fondo + eps) continue;
-      const minimoL = cFine + fondo;
-      for (const t of uscitaTratti) {
-        const l0 = t.x0 - rit;
-        const l1 = t.x1 - rit;
-        if (l1 < minimoL - eps) continue;
-        const prova = (L: number) => proponi(valoreIn(t, L + rit) + pen(L - cFine), j, L, t.o);
-        prova(Math.max(l0, Math.min(l1, minimoL)));
-        prova(l1);
-        for (const k of pieghe) if (cFine + k > l0 && cFine + k < l1) prova(cFine + k);
+      // Si riparte con almeno X: la riserva in fondo, se ci sta; sotto, nel
+      // ripiego, le penali chiedono comunque di salirci, litro per litro.
+      const X = Math.min(T, cFine + R);
+      const penFine = pen(X - cFine);
+      const tetto = T - LITRI_MINIMI_SOSTA;
+      const chiudiQui = (a: number, ga: number, o: Origine) => {
+        if (a > tetto + eps) return;
+        proponi(ga + p * Math.max(a, X) + penFine, j, a + m > T ? T : Math.max(a + m, X), a, o);
+      };
+      for (const t of tratti) {
+        if (t.x0 > tetto + eps) continue;
+        const b = Math.min(t.x1, tetto);
+        chiudiQui(t.x0, t.y0, t.o);
+        if (b > t.x0) chiudiQui(b, valoreIn(t, b), t.o);
+        if (X > t.x0 && X < b) chiudiQui(X, valoreIn(t, X), t.o);
       }
-      if (pienoQui && almeno(T - cFine, fondo)) proponi(pienoQui.y + pen(T - cFine), j, T, pienoQui.o);
+      for (const q of puntiQui) chiudiQui(q.x, q.y, q.o);
     }
     return { fine, pieni };
   };
