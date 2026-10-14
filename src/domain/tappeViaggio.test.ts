@@ -10,7 +10,7 @@ import {
   testoSottoRiserva,
   type DatiViaggio,
 } from './tappeViaggio';
-import type { ImpiantoSulPercorso } from './lungoPercorso';
+import { impiantiLungoPercorso, type ImpiantoSulPercorso } from './lungoPercorso';
 import { buildCohorts } from './market';
 import type { StationRow } from './parse';
 import { DEFAULT_TANK_L } from './units';
@@ -136,6 +136,22 @@ describe('tappeCandidate', () => {
       { ...o, strategia: 'bilanciato' },
     );
     expect(tappe.map((t) => t.id)).toEqual(['est-giusta', 'citta-a-sinistra']);
+  });
+
+  it('un area di servizio segnata quasi sulla carreggiata opposta si scarta, nei due versi', () => {
+    // Come Lucignano sull A1. La linea e la carreggiata sud; «Est» ha le
+    // coordinate su quella nord, 11 m a est, e costa meno di «Ovest», 33 m
+    // a ovest. Andando a sud Est sta a sinistra e si scarta; andando a nord
+    // (qui sulla stessa linea) e Ovest a stare a sinistra.
+    const KM_LAT = (6371 * Math.PI) / 180;
+    const nord = Array.from({ length: 201 }, (_, i) => ({ lat: 43 + i / 10 / KM_LAT, lng: 11.77 }));
+    const k = KM_LAT * Math.cos((43.1 * Math.PI) / 180);
+    const est = riga('est', 1.7, { isHighway: true, lat: 43 + 10 / KM_LAT, lng: 11.77 + 0.011 / k });
+    const ovest = riga('ovest', 1.76, { isHighway: true, lat: 43 + 10.2 / KM_LAT, lng: 11.77 - 0.033 / k });
+    const scelte = (strada: typeof nord) =>
+      tappeCandidate(impiantiLungoPercorso(strada, [est, ovest], { fuel: 'diesel', adesso: ADESSO }), { ...o, strategia: 'bilanciato' }).map((t) => t.id);
+    expect(scelte(nord)).toEqual(['est']);
+    expect(scelte([...nord].reverse())).toEqual(['ovest']);
   });
 });
 
