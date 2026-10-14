@@ -331,6 +331,7 @@ interface Esito {
 /** Tratti piu corti di cosi (in litri) sono arrotondamenti: si buttano. */
 const CORTO = 1e-9;
 
+
 const valoreIn = (t: Tratto, x: number): number => t.y0 + t.s * (x - t.x0);
 
 /**
@@ -431,6 +432,21 @@ interface DatiConto {
  * passava i 50 ms.
  */
 class Conto {
+  /*
+   * Un oggetto per forma, coi numeri non interi, creato quando nasce la
+   * classe: il motore JavaScript decide come tenere un campo dal primo
+   * valore che vede, e se il primo e un intero (lo 0 di un tratto piatto, i
+   * 45 L di un pieno) e poi arriva 2,19 deve cambiare idea e buttare il
+   * codice gia ottimizzato. Alla prima chiamata costava piu del conto.
+   */
+  static readonly forme = (() => {
+    const o: Origine = { tappa: -1, fisso: true, arrivo: 0.5, da: null };
+    const t: Tratto = { x0: 0.5, x1: 0.5, y0: 0.5, s: 0.5, o };
+    const q: Punto = { x: 0.5, y: 0.5, o };
+    const f: Fine = { valore: 0.5, tappa: -1, ripartenza: 0.5, o: { tappa: -1, fisso: false, arrivo: 0.5, da: o } };
+    return [t, q, f] as const;
+  })();
+
   private readonly d: DatiConto;
   /** Oltre T − minimo il minimo non entra: si puo solo fare il pieno. */
   private readonly finoA: number;
@@ -439,8 +455,8 @@ class Conto {
   private readonly casa: Origine;
 
   // Le regole del giro.
-  private fondoPrima = 0;
-  private fondo = 0;
+  private fondoPrima = Number.NaN;
+  private fondo = Number.NaN;
   private penali = false;
 
   // Le ripartenze delle tappe gia viste: tratti e pieni. Entrano nel
@@ -456,7 +472,7 @@ class Conto {
 
   // La tappa in corso e il suo prezzo.
   private j = 0;
-  private p = 0;
+  private p = Number.NaN;
   // Cosa si puo arrivare ad avere alla tappa: tratti e punti nel livello
   // all'arrivo, gia col conto della sosta e del prezzo di qui. Gli oggetti
   // si riusano da una tappa all'altra: non escono mai dalla tappa in cui
@@ -469,13 +485,13 @@ class Conto {
   // piatto, e il pieno di chi arriva oltre T − minimo.
   private readonly qTratti: Tratto[] = [];
   private minimo = Infinity;
-  private piatto = 0;
+  private piatto = Number.NaN;
   private origPiatto: Origine | null = null;
   private minimoPieno = Infinity;
   private origPieno: Origine | null = null;
   // L'arrivo in fondo dall'ultima sosta.
-  private X = 0;
-  private penFine = 0;
+  private X = Number.NaN;
+  private penFine = Number.NaN;
 
   constructor(d: DatiConto) {
     this.d = d;
@@ -758,7 +774,7 @@ class Conto {
     const puntiQui = this.puntiQui;
     this.qTratti.length = 0;
     this.minimo = Infinity;
-    this.piatto = 0;
+    this.piatto = Number.NaN;
     this.origPiatto = null;
     this.minimoPieno = Infinity;
     this.origPieno = null;
