@@ -29,12 +29,21 @@ import { VALORE_TEMPO_EURO_ORA } from './ranking';
  * Il conto che il piano tiene basso e il carburante comprato, al prezzo di
  * ogni pompa, piu 0,75 € per sosta: cinque minuti al valore del tempo della
  * Home. Quei 0,75 € pesano nella scelta ma non entrano nella spesa che si
- * mostra: servono a non fermarsi per pochi centesimi.
+ * mostra: servono a non fermarsi per pochi centesimi. Dal conto si toglie
+ * quello che l'ultima sosta compra e avanza in fondo oltre la riserva, a
+ * meta del litro piu economico del viaggio (FRAZIONE_AVANZO). Senza, una
+ * sosta che mette il minimo di 5 L, piu del necessario, rendeva gratis la
+ * deviazione: i litri bruciati uscivano da quello che avanza, che valeva
+ * zero, e Risparmio usciva di 2,4 km per la stessa spesa. A meta, e non a
+ * prezzo pieno, perche comprare di piu solo per farlo avanzare non
+ * convenga mai: a prezzo pieno il piano sceglieva una sosta da 5 L invece
+ * di un rabbocco da 2, e la spesa mostrata saliva fino a 4 €.
  *
  * Le regole:
  *  - non si resta mai a secco;
  *  - fermarsi costa la deviazione, andata e ritorno: quei litri si
- *    bruciano davvero e si pagano con quello che si compra;
+ *    bruciano davvero e si pagano con quello che si compra, o con quello
+ *    che avanza in fondo;
  *  - dopo aver comprato non si supera il serbatoio;
  *  - due soste di fila non stanno mai entro 0,4 km: e lo stesso posto;
  *  - una sosta mette almeno 5 L, o fa il pieno: se nel serbatoio cinque
