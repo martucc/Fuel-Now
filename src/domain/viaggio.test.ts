@@ -787,6 +787,33 @@ describe('pianificaViaggio: soste obbligate in fila', () => {
   });
 });
 
+describe('pianificaViaggio: nessuna pompa si scarta in anticipo', () => {
+  it('dopo una sosta obbligata usa la pompa economica vicina, anche se un altra uguale sembrava batterla', () => {
+    // In riserva con 45 L a 18 km/l. P, sulla strada al km 40, e l unica a
+    // cui si arriva col fondo. A e B costano 1,99, una mezzo km prima e
+    // una mezzo km dopo P: A ha meno deviazione e «batte» B, ma dopo la
+    // sosta a P non si puo piu tornare indietro. La versione che toglieva
+    // B prima del conto metteva 17,57 L a P a 2,25 e spendeva 6 € in piu.
+    const i = input({
+      distanzaKm: 600,
+      kml: 18,
+      serbatoioL: 45,
+      litriAdesso: 4.5,
+      candidate: [
+        tappa({ id: 'P', kmDaPartenza: 40, prezzo: 2.25 }),
+        tappa({ id: 'A', kmDaPartenza: 39.5, prezzo: 1.99, deviazioneKm: 1.4 }),
+        tappa({ id: 'B', kmDaPartenza: 40.5, prezzo: 1.99, deviazioneKm: 2.4 }),
+        tappa({ id: 'Q', kmDaPartenza: 300, prezzo: 2.19 }),
+      ],
+    });
+    const p = pianificaViaggio(i);
+    expect(verificaPiano(i, p)).toEqual([]);
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['P', 'B']);
+    expect(p.soste.map((s) => s.litri)).toEqual([expect.closeTo(LITRI_SOSTA, 6), expect.closeTo(29.5, 6)]);
+    expect(p.spesaCarburante).toBeCloseTo(LITRI_SOSTA * 2.25 + 29.5 * 1.99, 6);
+  });
+});
+
 describe('MOTIVO_TESTO', () => {
   it('manda a scegliere l auto nelle impostazioni: il Garage nella 2.0 non c e piu', () => {
     expect(MOTIVO_TESTO['senza-consumo']).not.toContain('Garage');
