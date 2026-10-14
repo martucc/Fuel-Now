@@ -1,11 +1,11 @@
 import type { FuelKey } from '../../domain/raw';
 import { FUEL_LABEL } from '../../domain/fuel';
 import type { EsitoViaggio, Strategia } from '../../domain/tappeViaggio';
-import { testoImpossibile, testoSottoRiserva } from '../../domain/tappeViaggio';
+import { testoImpossibile, testoSostaInRiserva, testoSottoRiserva } from '../../domain/tappeViaggio';
 import { chilometri, euro, litri, numero } from '../../lib/formato';
 import type { PercorsoViaggio } from '../../services/percorsoService';
 import { Segnaposto } from '../kit/Stato';
-import { durata } from './formatoViaggio';
+import { durata, litriDaMettere } from './formatoViaggio';
 
 interface Props {
   percorso: PercorsoViaggio;
@@ -71,8 +71,9 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
                   {p.soste.length === 1 ? 'Ti fermi una volta' : `Ti fermi ${numero(p.soste.length)} volte`}
                 </p>
                 <p className="mf-subhead mt-1 text-mf-ink-2">
-                  Metti <span className="mf-num text-mf-ink">{litri(p.litriComprati, 0)}</span> in tutto, per{' '}
+                  Metti <span className="mf-num text-mf-ink">{litriDaMettere(p.litriComprati)}</span> in tutto, per{' '}
                   <span className="mf-num text-mf-ink">{euro(p.spesaCarburante)}</span>.
+                  {p.sostaInRiserva !== null && ` ${testoSostaInRiserva(p.sostaInRiserva)}`}
                   {p.risparmioEur !== null && p.risparmioEur >= RISPARMIO_MINIMO && (
                     <>
                       {' '}Risparmi <span className="mf-num font-semibold text-mf-best">{euro(p.risparmioEur)}</span> rispetto al

@@ -222,6 +222,40 @@ describe('impiantiLungoPercorso: chi e sulla strada', () => {
   });
 });
 
+describe('impiantiLungoPercorso: da che lato della strada', () => {
+  it('sa se un impianto sta a destra o a sinistra nel verso di marcia', () => {
+    // Due aree di servizio speculari, come Sillaro Est e Ovest: verso est la
+    // destra e a sud. Al ritorno, verso ovest, si scambiano.
+    const andata = rettaEst(60, 20);
+    const sud = riga('sud', sposta(andata[0]!, -0.045, 33));
+    const nord = riga('nord', sposta(andata[0]!, 0.045, 33.1));
+    const lato = (strada: LatLng[]) =>
+      Object.fromEntries(impiantiLungoPercorso(strada, [sud, nord], opz).map((x) => [x.row.id, x.aSinistra]));
+    expect(lato(andata)).toEqual({ sud: false, nord: true });
+    expect(lato([...andata].reverse())).toEqual({ sud: true, nord: false });
+  });
+
+  it('regge anche su una strada in diagonale e dopo una curva', () => {
+    // Verso nord-est, poi verso nord-ovest: a destra c'e sempre il lato est.
+    const a = { lat: 44, lng: 11 };
+    const b = sposta(a, 20, 20);
+    const c = sposta(b, 20, -20);
+    const righe = [
+      riga('primo-destra', sposta(sposta(a, 10, 10), -0.05, 0.05)),
+      riga('primo-sinistra', sposta(sposta(a, 10.2, 10.2), 0.05, -0.05)),
+      riga('secondo-destra', sposta(sposta(b, 10, -10), 0.05, 0.05)),
+      riga('secondo-sinistra', sposta(sposta(b, 10.2, -10.2), -0.05, -0.05)),
+    ];
+    const out = impiantiLungoPercorso([a, b, c], righe, opz);
+    expect(Object.fromEntries(out.map((x) => [x.row.id, x.aSinistra]))).toEqual({
+      'primo-destra': false,
+      'primo-sinistra': true,
+      'secondo-destra': false,
+      'secondo-sinistra': true,
+    });
+  });
+});
+
 describe('impiantiLungoPercorso: i km dalla partenza', () => {
   it('restituisce gli impianti in ordine di strada, non di elenco', () => {
     const strada = rettaEst(100, 5);

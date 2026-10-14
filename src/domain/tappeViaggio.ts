@@ -61,6 +61,11 @@ export function serbatoioDi(auto: CarSpec | null): number {
  * Fuori, come nella Home, i prezzi fuori scala (quasi sempre un errore di
  * battitura) e quelli molto bassi e pure vecchi: il dato fantasma che fa
  * fermare per una pompa che in realta costa come le altre.
+ *
+ * Fuori anche le aree di servizio dell'autostrada a sinistra della strada:
+ * sono sull'altra carreggiata, a quaranta metri in linea d'aria ma
+ * raggiungibili solo tornando indietro dall'uscita dopo. Il piano, che
+ * conta la deviazione al metro, le preferiva proprio perche «vicine».
  */
 export function tappeCandidate(
   impianti: readonly ImpiantoSulPercorso[],
@@ -70,6 +75,7 @@ export function tappeCandidate(
   const out: TappaCandidata[] = [];
   for (const i of impianti) {
     if (i.scostamentoKm > max) continue;
+    if (i.row.isHighway && i.aSinistra) continue;
     const coorte = cohortFor(i.row, o.fuel, o.cohorts);
     let level: PriceLevel = 'normal';
     if (coorte) {
@@ -177,16 +183,26 @@ export function testoImpossibile(piano: Piano, strategia: Strategia): string {
   const dove = km !== null ? ` intorno al km ${numero(km)}` : '';
   const base =
     piano.soste.length === 0
-      ? `Con il carburante che hai resti a secco${dove}, prima di un distributore lungo la strada.`
-      : `${MOTIVO_TESTO['buco-troppo-lungo']} Il tratto scoperto inizia${dove}.`;
+      ? `Con il carburante che hai resti a secco${dove}, prima di arrivare a un distributore lungo la strada.`
+      : `${MOTIVO_TESTO['buco-troppo-lungo']} Anche col pieno all’ultimo distributore che raggiungi resti a secco${dove}.`;
   return strategia === 'risparmio' ? base : `${base} Prova con Risparmio: conta anche i distributori più lontani dalla strada.`;
 }
 
 /**
- * Quando ci si arriva ma sotto la riserva: nessun distributore raggiungibile
- * lungo la strada permette di tenerla, il carburante pero basta.
+ * Quando ci si arriva sotto la riserva: succede solo se nessun piano la
+ * tiene, perche non c'e un distributore dove servirebbe o perche un pieno
+ * non basta per l'ultimo tratto. Dice quanto resta e cosa fare, senza
+ * negare distributori che magari ci sono.
  */
 export function testoSottoRiserva(piano: Piano, strategia: Strategia): string {
-  const base = `Lungo la strada non c’è un distributore che ti eviti la riserva: arrivi con circa ${litri(piano.litriAllArrivo, 1)}. Fai benzina appena puoi.`;
-  return strategia === 'risparmio' ? base : `${base} Con Risparmio conti anche i distributori più lontani dalla strada.`;
+  const n = piano.soste.length;
+  const arrivi = `arrivi con circa ${litri(piano.litriAllArrivo, 1)}, sotto la riserva. Fai benzina appena puoi.`;
+  const base =
+    n === 0 ? `Senza fermarti ${arrivi}` : `${n === 1 ? 'Con la sosta qui sotto' : `Con le ${numero(n)} soste qui sotto`} ${arrivi}`;
+  return strategia === 'risparmio' ? base : `${base} Con Risparmio il piano guarda anche i distributori più lontani dalla strada.`;
+}
+
+/** «Alla prima sosta ci arrivi in riserva.», «Alla sosta 2 ci arrivi in riserva.» */
+export function testoSostaInRiserva(numeroSosta: number): string {
+  return numeroSosta === 1 ? 'Alla prima sosta ci arrivi in riserva.' : `Alla sosta ${numero(numeroSosta)} ci arrivi in riserva.`;
 }

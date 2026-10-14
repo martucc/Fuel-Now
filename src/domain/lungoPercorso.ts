@@ -26,6 +26,13 @@ import { ageHours, isLikelyClosed } from './freshness';
 
 /** Oltre questa distanza dalla strada un impianto non e piu «lungo il percorso». */
 export const SCOSTAMENTO_MAX_KM = 2.5;
+/**
+ * Sotto questa distanza dalla linea della strada non si dice da che lato
+ * sta un impianto: e sulla strada. Le due carreggiate di un'autostrada
+ * stanno a una ventina di metri l'una dall'altra, le aree di servizio di
+ * solito a quaranta o piu.
+ */
+export const SULLA_LINEA_KM = 0.025;
 /** Tolleranza della semplificazione: sotto i 30 m la forma della strada non cambia. */
 export const TOLLERANZA_SEMPLIFICAZIONE_KM = 0.03;
 /** Lato delle celle della griglia, in gradi. */
@@ -189,6 +196,12 @@ export interface ImpiantoSulPercorso {
   scostamentoKm: number;
   /** Km dalla partenza al punto in cui si lascia la strada. */
   kmDaPartenza: number;
+  /**
+   * true quando l'impianto sta a sinistra della strada, guardando nel verso
+   * di marcia, ad almeno SULLA_LINEA_KM. In autostrada vuol dire l'altra
+   * carreggiata: non ci si entra.
+   */
+  aSinistra: boolean;
 }
 
 export interface OpzioniLungoPercorso {
@@ -263,6 +276,7 @@ export function impiantiLungoPercorso(
     let migliore = Infinity;
     let tratto = -1;
     let piede = 0;
+    let lato = 0;
     for (let c = 0; c < candidati.length; c++) {
       const s = candidati[c]!;
       const vx = dLng[s]! * k;
@@ -278,6 +292,9 @@ export function impiantiLungoPercorso(
         migliore = d2;
         tratto = s;
         piede = t;
+        // Il prodotto vettoriale fra il verso del tratto e l'impianto:
+        // positivo a sinistra, con l'est sulle x e il nord sulle y.
+        lato = vx * py - vy * px;
       }
     }
     if (tratto < 0) continue;
@@ -286,11 +303,13 @@ export function impiantiLungoPercorso(
     // La data si legge solo per i pochi impianti vicini alla strada.
     if (isLikelyClosed(ageHours(r.updated, o.adesso))) continue;
 
+    const scostamentoKm = gradi * KM_PER_GRADO;
     out.push({
       row: r,
       prezzo,
-      scostamentoKm: gradi * KM_PER_GRADO,
+      scostamentoKm,
       kmDaPartenza: (cumulateKm[tratto]! + piede * lunghezza[tratto]!) * scala,
+      aSinistra: lato > 0 && scostamentoKm >= SULLA_LINEA_KM,
     });
   }
 

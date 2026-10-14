@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MOTIVO_TESTO, pianificaViaggio, RISERVA, type PianoInput, type TappaCandidata } from './viaggio';
+import { COSTO_SOSTA_EUR, MOTIVO_TESTO, pianificaViaggio, RISERVA, type PianoInput, type TappaCandidata } from './viaggio';
+import { verificaPiano } from './__fixtures__/pianoRiferimento';
 
 function tappa(over: Partial<TappaCandidata> & { id: string; kmDaPartenza: number; prezzo: number }): TappaCandidata {
   return {
@@ -328,7 +329,7 @@ describe('pianificaViaggio: non si compra piu del necessario', () => {
   });
 
   it('quando non ci si arriva, dice fin dove portano le soste', () => {
-    // Da b (km 700) restano 900 km: con un pieno se ne fanno 660.
+    // Da b (km 700) restano 900 km: con un pieno se ne fanno 750, a secco.
     const p = pianificaViaggio(
       input({
         distanzaKm: 1600,
@@ -341,7 +342,7 @@ describe('pianificaViaggio: non si compra piu del necessario', () => {
     );
     expect(p.fattibile).toBe(false);
     expect(p.motivo).toBe('buco-troppo-lungo');
-    expect(p.bloccoAlKm).toBeCloseTo(700 + 44 * 15, 6);
+    expect(p.bloccoAlKm).toBeCloseTo(700 + 50 * 15, 6);
     expect(p.soste.map((s) => s.tappa.id)).toEqual(['a', 'b']);
     expect(p.soste[1]!.pieno).toBe(true);
   });
@@ -510,6 +511,193 @@ describe('pianificaViaggio: le scelte che si spiegano', () => {
       })
     );
     expect(p.soste.map((s) => s.tappa.id)).toEqual(['vicina']);
+  });
+});
+
+/*
+ * La seconda revisione del 13 ottobre: la riserva era un gradino (un
+ * decilitro sopra o sotto cambiava tutto), chi partiva in riserva veniva
+ * mandato alla pompa piu lontana raggiungibile, e una sosta costava un
+ * decimo di centesimo, quindi ne spuntavano per pochi centesimi.
+ */
+describe('pianificaViaggio: la riserva senza gradini', () => {
+  const T = 45;
+  const R = T * RISERVA;
+
+  it('appena sopra la riserva si ferma alla pompa sulla strada invece di arrivare in riserva', () => {
+    // «1/4» di 45 L a 15 km/l: 11,25 L. Senza soste si arriva con 1,3 L;
+    // fermandosi al km 100 ci si arriva con 4,6 L e si arriva con la riserva.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 150,
+        serbatoioL: T,
+        litriAdesso: 11.25,
+        candidate: [tappa({ id: 'km100', kmDaPartenza: 100, prezzo: 2.19, deviazioneKm: 0.1 })],
+      }),
+    );
+    expect(p.fattibile).toBe(true);
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['km100']);
+    expect(p.arrivoSottoRiserva).toBe(false);
+    expect(p.litriAllArrivo).toBeCloseTo(R, 6);
+  });
+
+  it('non dice «resti a secco al km 88» quando al km 100 ci arrivi', () => {
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 300,
+        serbatoioL: T,
+        litriAdesso: 11.25,
+        candidate: [tappa({ id: 'a', kmDaPartenza: 100, prezzo: 2.19 }), tappa({ id: 'b', kmDaPartenza: 200, prezzo: 2.19 })],
+      }),
+    );
+    expect(p.fattibile).toBe(true);
+    expect(p.arrivoSottoRiserva).toBe(false);
+  });
+
+  it('il piano non cambia da cosi a cosi per un decilitro in piu alla partenza', () => {
+    // Con 5,3 L ci si fermava, con 6 no (e si arrivava con 3 L), con 6,5 di nuovo si.
+    for (const litriAdesso of [5.3, 5.4, 5.41, 6, 6.5]) {
+      const p = pianificaViaggio(
+        input({ distanzaKm: 60, kml: 20, serbatoioL: T, litriAdesso, candidate: [tappa({ id: 'via', kmDaPartenza: 20, prezzo: 2.19 })] }),
+      );
+      expect(p.soste.map((s) => s.tappa.id)).toEqual(['via']);
+      expect(p.litriAllArrivo).toBeCloseTo(R, 6);
+    }
+  });
+
+  it('se l ultimo tratto e piu lungo di un pieno con la riserva, ci arrivi in riserva, non «non ci arrivi»', () => {
+    // 900 km a 20 km/l col pieno: senza soste si arriva a secco. Un rabbocco
+    // al km 50 fa arrivare con 2,5 L. Prima a 900,1 km diventava impossibile.
+    for (const distanzaKm of [900, 900.1]) {
+      const p = pianificaViaggio(
+        input({ distanzaKm, kml: 20, serbatoioL: T, litriAdesso: T, candidate: [tappa({ id: 'km50', kmDaPartenza: 50, prezzo: 2.19 })] }),
+      );
+      expect(p.fattibile).toBe(true);
+      expect(p.soste.map((s) => s.tappa.id)).toEqual(['km50']);
+      expect(p.soste[0]!.pieno).toBe(true);
+      expect(p.litriAllArrivo).toBeCloseTo(T - (distanzaKm - 50) / 20, 6);
+      expect(p.arrivoSottoRiserva).toBe(true);
+    }
+  });
+
+  it('quando non si arriva al primo distributore dice dove si resta a secco davvero', () => {
+    // 5 L a 15 km/l sono 75 km: la prima pompa e al km 100.
+    const p = pianificaViaggio(
+      input({ distanzaKm: 300, serbatoioL: T, litriAdesso: 5, candidate: [tappa({ id: 'a', kmDaPartenza: 100, prezzo: 2.19 })] }),
+    );
+    expect(p.fattibile).toBe(false);
+    expect(p.soste).toEqual([]);
+    expect(p.bloccoAlKm).toBeCloseTo(75, 6);
+  });
+});
+
+describe('pianificaViaggio: chi parte in riserva va alla pompa vicina', () => {
+  it('fra due pompe allo stesso prezzo, a 10 e a 50 km, sceglie quella a 10', () => {
+    // Come Milano → Bologna con la spia accesa: il piano mandava ad A1
+    // Somaglia, al km 51,5, arrivando con 0,03 L, per sei centesimi.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 220,
+        kml: 13,
+        serbatoioL: 40,
+        litriAdesso: 4,
+        candidate: [
+          tappa({ id: 'vicina', kmDaPartenza: 10, prezzo: 1.99, deviazioneKm: 0.25 }),
+          tappa({ id: 'lontana', kmDaPartenza: 50, prezzo: 1.99, deviazioneKm: 0.04 }),
+        ],
+      }),
+    );
+    expect(p.soste[0]!.tappa.id).toBe('vicina');
+    expect(p.primaSostaInRiserva).toBe(true);
+    // Alla pompa ci arriva con piu di tre litri, non a secco.
+    expect(p.soste[0]!.litriDopo - p.soste[0]!.litri).toBeGreaterThan(3);
+  });
+
+  it('non va 40 km piu in la in riserva nemmeno per qualche centesimo al litro', () => {
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 600,
+        kml: 18,
+        serbatoioL: 45,
+        litriAdesso: 4.5,
+        candidate: [tappa({ id: 'vicina', kmDaPartenza: 1.2, prezzo: 2.19, deviazioneKm: 0.13 }), tappa({ id: 'lontana', kmDaPartenza: 52.9, prezzo: 2.16 })],
+      }),
+    );
+    expect(p.soste[0]!.tappa.id).toBe('vicina');
+  });
+
+  it('con la riserva a zero non resta mai a secco, nemmeno di un soffio', () => {
+    const lontana = { distanzaKm: 1, kml: 14, serbatoioL: 10, litriAdesso: 0, riservaFrazione: 0 };
+    const p1 = pianificaViaggio(input({ ...lontana, candidate: [tappa({ id: 't0', kmDaPartenza: 0, prezzo: 2.19, deviazioneKm: 0.3 })] }));
+    // A secco non si arriva nemmeno alla pompa: non ci si arriva, e lo dice.
+    expect(p1.fattibile).toBe(false);
+
+    const i = input({
+      distanzaKm: 80.8,
+      kml: 14,
+      serbatoioL: 10,
+      litriAdesso: 0,
+      riservaFrazione: 0,
+      candidate: [tappa({ id: 'qui', kmDaPartenza: 0, prezzo: 2.2 }), tappa({ id: 'dopo', kmDaPartenza: 0.5, prezzo: 2.19 })],
+    });
+    const p2 = pianificaViaggio(i);
+    expect(p2.soste.map((s) => s.tappa.id)).toEqual(['qui']);
+    expect(verificaPiano(i, p2)).toEqual([]);
+  });
+});
+
+describe('pianificaViaggio: una sosta deve valere la sosta', () => {
+  it('non si ferma a cinque km dall arrivo per due decilitri', () => {
+    // Come Bologna → Firenze con «1/4»: senza soste si arriva con 5,2 L,
+    // due decilitri sotto la riserva. Prima: sosta da 0,2 L a 0,44 €.
+    const p = pianificaViaggio(
+      input({ distanzaKm: 105, kml: 18, serbatoioL: 45, litriAdesso: 5.2 + 105 / 18, candidate: [tappa({ id: 'quasi', kmDaPartenza: 100, prezzo: 2.209 })] }),
+    );
+    expect(p.soste).toEqual([]);
+    expect(p.litriAllArrivo).toBeCloseTo(5.2, 6);
+    // 5,2 L su 45 e sopra la spia: non e «in riserva».
+    expect(p.arrivoSottoRiserva).toBe(false);
+  });
+
+  it('spostare la pompa di un km non cambia la risposta', () => {
+    // 110 km, 11,25 L a 18 km/l: senza soste si arriva con 5,14 L. Prima
+    // con la pompa al km 105 si metteva 0,26 L, al km 106 «non c'e un distributore».
+    const esiti = [104, 105, 106, 107].map((km) =>
+      pianificaViaggio(input({ distanzaKm: 110, kml: 18, serbatoioL: 45, litriAdesso: 11.25, candidate: [tappa({ id: 'A', kmDaPartenza: km, prezzo: 2.19 })] })),
+    );
+    for (const p of esiti) {
+      expect(p.soste).toEqual([]);
+      expect(p.arrivoSottoRiserva).toBe(false);
+      expect(p.litriAllArrivo).toBeCloseTo(11.25 - 110 / 18, 6);
+    }
+  });
+
+  it('non aggiunge una sosta per risparmiare meno di quanto costa fermarsi', () => {
+    // Servono 40 L, e B senza fermarsi prima non si raggiunge. Metterne 20
+    // ad A e 20 a B, un centesimo meno, fa risparmiare 20 centesimi: non
+    // vale una seconda sosta.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 900,
+        litriAdesso: 26,
+        candidate: [tappa({ id: 'A', kmDaPartenza: 300, prezzo: 2.2 }), tappa({ id: 'B', kmDaPartenza: 600, prezzo: 2.19 })],
+      }),
+    );
+    expect(p.soste).toHaveLength(1);
+  });
+
+  it('la seconda sosta si fa quando fa risparmiare piu di quanto costa fermarsi', () => {
+    // Come sopra, ma B costa venti centesimi meno: 20 L × 0,20 = 4 €.
+    const p = pianificaViaggio(
+      input({
+        distanzaKm: 900,
+        litriAdesso: 26,
+        candidate: [tappa({ id: 'A', kmDaPartenza: 300, prezzo: 2.2 }), tappa({ id: 'B', kmDaPartenza: 600, prezzo: 2.0 })],
+      }),
+    );
+    expect(p.soste.map((s) => s.tappa.id)).toEqual(['A', 'B']);
+    expect(COSTO_SOSTA_EUR).toBeGreaterThan(1);
+    expect(COSTO_SOSTA_EUR).toBeLessThan(3);
   });
 });
 

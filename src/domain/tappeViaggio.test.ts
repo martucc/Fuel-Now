@@ -50,8 +50,8 @@ function riga(id: string, prezzo: number, over: Partial<StationRow> = {}): Stati
  */
 const COORTI = buildCohorts(Array.from({ length: 20 }, (_, i) => riga(`c${i}`, i % 2 ? 1.8 : 1.7)));
 
-function sulPercorso(id: string, prezzo: number, kmDaPartenza: number, scostamentoKm = 0.1, over: Partial<StationRow> = {}): ImpiantoSulPercorso {
-  return { row: riga(id, prezzo, over), prezzo, kmDaPartenza, scostamentoKm };
+function sulPercorso(id: string, prezzo: number, kmDaPartenza: number, scostamentoKm = 0.1, over: Partial<StationRow> = {}, aSinistra = false): ImpiantoSulPercorso {
+  return { row: riga(id, prezzo, over), prezzo, kmDaPartenza, scostamentoKm, aSinistra };
 }
 
 function dati(over: Partial<DatiViaggio> = {}): DatiViaggio {
@@ -121,6 +121,21 @@ describe('tappeCandidate', () => {
       { ...o, strategia: 'bilanciato' },
     );
     expect(tappe.map((t) => t.id)).toEqual(['basso-di-oggi']);
+  });
+
+  it('in autostrada scarta le aree di servizio sull altra carreggiata', () => {
+    // Come Sillaro Ovest e Sillaro Est sull A14: andando verso Bologna la
+    // prima sta a 43 m, ma a sinistra, sulla carreggiata per Ancona.
+    const tappe = tappeCandidate(
+      [
+        sulPercorso('ovest-opposta', 1.74, 33, 0.04, { isHighway: true }, true),
+        sulPercorso('est-giusta', 1.76, 33.1, 0.05, { isHighway: true }, false),
+        // In citta a sinistra si gira: resta.
+        sulPercorso('citta-a-sinistra', 1.75, 40, 0.05, {}, true),
+      ],
+      { ...o, strategia: 'bilanciato' },
+    );
+    expect(tappe.map((t) => t.id)).toEqual(['est-giusta', 'citta-a-sinistra']);
   });
 });
 
@@ -211,19 +226,22 @@ describe('calcolaViaggio', () => {
     expect(e.costoStimato).toBeNull();
   });
 
-  it('in riserva ti manda al distributore e ti fa arrivare con la riserva', () => {
+  it('in riserva ti manda al distributore vicino e ti fa arrivare con la riserva', () => {
     // 4,5 L su 45: la spia e accesa. Il viaggio da 50 km si farebbe anche
-    // cosi, ma arrivando quasi a secco: il piano fa fermare a quello buono.
+    // cosi, ma arrivando quasi a secco: il piano fa fermare, e a quello
+    // vicino. Andare all'altro vorrebbe dire 22 km in piu in riserva, fino
+    // a 2,5 L, per risparmiare sessanta centesimi.
     const e = calcolaViaggio(
       dati({
         livello: 'riserva',
         distanzaKm: 50,
-        impianti: [sulPercorso('caro', 1.82, 8), sulPercorso('buono', 1.68, 30)],
+        impianti: [sulPercorso('vicino', 1.82, 8), sulPercorso('lontano', 1.68, 30)],
       }),
     );
     expect(e.piano.fattibile).toBe(true);
     expect(e.piano.arrivoSottoRiserva).toBe(false);
-    expect(e.piano.soste.map((s) => s.tappa.id)).toEqual(['buono']);
+    expect(e.piano.primaSostaInRiserva).toBe(true);
+    expect(e.piano.soste.map((s) => s.tappa.id)).toEqual(['vicino']);
     expect(e.piano.litriAllArrivo).toBeCloseTo(45 * 0.12, 6);
   });
 
@@ -253,6 +271,7 @@ describe('testoImpossibile', () => {
     litriDeviazione: 0,
     litriAllArrivo: 0,
     arrivoSottoRiserva: false,
+    primaSostaInRiserva: false,
     spesaPienoPrima: null,
     risparmioEur: null,
   });
@@ -268,12 +287,16 @@ describe('testoImpossibile', () => {
     const p = { ...piano(0), fattibile: true, motivo: undefined, arrivoSottoRiserva: true, litriAllArrivo: 2.34 };
     const t = testoSottoRiserva(p, 'bilanciato');
     expect(t).toContain('arrivi con circa 2,3 L');
+    expect(t).toContain('spia della riserva');
     expect(t).toContain('Con Risparmio');
     expect(testoSottoRiserva(p, 'risparmio')).not.toContain('Con Risparmio');
+    // Non dice che un distributore non c'e: magari c'e, e non conveniva.
+    expect(t).not.toMatch(/non c.è un distributore/);
+    expect(testoSottoRiserva({ ...p, soste: piano(2).soste }, 'risparmio')).toMatch(/^Con le 2 soste qui sotto arrivi/);
   });
 
   it('con una strategia stretta suggerisce di allargare', () => {
     expect(testoImpossibile(piano(0, 80), 'veloce')).toContain('Prova con Risparmio');
-    expect(testoImpossibile(piano(2, 800), 'bilanciato')).toContain('Il tratto scoperto inizia intorno al km 800');
+    expect(testoImpossibile(piano(2, 800), 'bilanciato')).toContain('resti a secco intorno al km 800');
   });
 });
