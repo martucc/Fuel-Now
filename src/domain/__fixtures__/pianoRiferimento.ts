@@ -5,7 +5,9 @@ import {
   LITRI_SOSTA,
   penaleRiserva,
   riservaLitri,
+  SCONTO_AVANZO_EUR,
   STESSO_PUNTO_KM,
+  valoriAvanzo,
   type Piano,
   type PianoInput,
 } from '../viaggio';
@@ -72,6 +74,10 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
     .map((t) => ({ x: t.kmDaPartenza, d: Math.max(0, t.deviazioneKm), p: t.prezzo }))
     .sort((a, b) => a.x - b.x);
   const n = tappe.length;
+  const avanzo = valoriAvanzo(
+    tappe.map((t) => t.x),
+    tappe.map((t) => t.p),
+  );
   /** Centilitri dalla pompa h alla pompa j; −1 la partenza, n l'arrivo. */
   const cl = (h: number, j: number) => {
     const da = h < 0 ? 0 : tappe[h]!.x - tappe[h]!.d;
@@ -109,19 +115,22 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
       for (let a = Math.max(0, Tn - minimo + 1); a <= Tn - minimoPieno; a++) {
         riparti[Tn] = Math.min(riparti[Tn]!, arr[a]! + ((Tn - a) / CL) * t.p);
       }
-      // L'ultima sosta: per ogni livello d'arrivo si riparte col minimo
-      // possibile che porta in fondo con la riserva (se ci sta), e si paga
-      // solo quello che serve. Il resto avanza in fondo e vale quanto e
-      // costato qui, fino ai litri comprati qui.
+      // L'ultima sosta: per ogni livello d'arrivo si prova a ripartire coi
+      // livelli che portano in fondo col fondo. Quello che avanza in fondo
+      // oltre la riserva (o oltre il pieno, se la riserva non ci sta), fino
+      // ai litri comprati qui, vale `avanzo[j]` al litro. Il conto in L e
+      // lineare a tratti: bastano gli estremi e le pieghe.
       const cFine = cl(j, n);
-      if (cFine + fondo <= Tn) {
-        const necessario = Math.min(Tn, cFine + Rn);
-        for (let a = 0; a <= Tn - minimoPieno; a++) {
-          if (arr[a] === Infinity) continue;
-          const L = a + minimo > Tn ? Tn : Math.max(a + minimo, necessario);
-          const finale = L - cFine;
-          const avanzo = Math.min(L - a, Math.max(0, L - necessario));
-          const v = arr[a]! + ((L - a - avanzo) / CL) * t.p + pen(finale);
+      const necessario = Math.min(Tn, cFine + Rn);
+      const pieghe = [necessario, cFine + Math.floor(Rn / 2), cFine + Math.ceil(Rn / 2), cFine + Rn, Tn];
+      for (let a = 0; a <= Tn - minimoPieno; a++) {
+        if (arr[a] === Infinity) continue;
+        const da = Math.max(a + minimo > Tn ? Tn : a + minimo, cFine + fondo);
+        for (const L of [da, ...pieghe]) {
+          if (L < da || L > Tn) continue;
+          const comprati = L - a;
+          const resta = Math.min(comprati, Math.max(0, L - necessario));
+          const v = arr[a]! + (comprati / CL) * t.p - (resta / CL) * avanzo[j]! + pen(L - cFine);
           if (v < migliore) migliore = v;
         }
       }
@@ -235,7 +244,8 @@ export function valorePiano(i: PianoInput, piano: Piano, regole: RegoleRiferimen
 /**
  * Quanto vale il carburante che avanza in fondo: quello oltre la riserva
  * (o oltre il pieno meno la strada che resta, se la riserva non ci sta),
- * comprato all'ultima sosta e al suo prezzo, mai piu dei litri comprati li.
+ * comprato all'ultima sosta, mai piu dei litri comprati li, al valore di
+ * `valoriAvanzo`: il litro piu economico fin li, meno un centesimo.
  */
 export function creditoAvanzo(i: PianoInput, piano: Piano, finale = ripercorri(i, piano).finale): number {
   const ultima = piano.soste[piano.soste.length - 1];
@@ -243,7 +253,13 @@ export function creditoAvanzo(i: PianoInput, piano: Piano, finale = ripercorri(i
   const t = ultima.tappa;
   const strada = (i.distanzaKm - t.kmDaPartenza + t.deviazioneKm) / i.kml;
   const necessario = Math.min(riservaLitri(i), i.serbatoioL - strada);
-  return t.prezzo * Math.min(ultima.litri, Math.max(0, finale - necessario));
+  // Il litro piu economico fra le pompe sulla strada fino all'ultima sosta.
+  let minimo = Infinity;
+  for (const c of i.candidate) {
+    if (c.kmDaPartenza >= 0 && c.kmDaPartenza < i.distanzaKm && c.prezzo > 0 && c.kmDaPartenza <= t.kmDaPartenza) minimo = Math.min(minimo, c.prezzo);
+  }
+  const valore = Math.max(0, minimo - SCONTO_AVANZO_EUR);
+  return valore * Math.min(ultima.litri, Math.max(0, finale - necessario));
 }
 
 /**

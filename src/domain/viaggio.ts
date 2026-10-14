@@ -173,6 +173,12 @@ export const PENALE_RISERVA_EUR_L = 5;
 /** In piu, ogni litro sotto meta riserva. */
 export const PENALE_FONDO_EUR_L = 15;
 /**
+ * Un litro che avanza in fondo vale un centesimo meno del litro piu
+ * economico visto fin li: cosi la deviazione si paga sempre, e comprare
+ * per far avanzare non pareggia mai.
+ */
+export const SCONTO_AVANZO_EUR = 0.01;
+/**
  * Un metro di tolleranza sulle distanze.
  *
  * Senza, un piano che arriva esatto viene dichiarato impossibile: 440/15
@@ -212,6 +218,26 @@ export function penaleRiserva(litri: number, riservaL: number): number {
   const sotto = Math.max(0, riservaL - litri);
   const sottoMeta = Math.max(0, riservaL / 2 - litri);
   return sotto * PENALE_RISERVA_EUR_L + sottoMeta * PENALE_FONDO_EUR_L;
+}
+
+/**
+ * Quanto vale un litro che avanza in fondo, comprato all'ultima sosta, per
+ * ogni tappa in ordine di km: il prezzo piu basso fra le pompe fin li,
+ * questa compresa, meno SCONTO_AVANZO_EUR. Mai piu di quanto costa
+ * comprarlo prima, a nessuna pompa: comprare apposta per farlo avanzare
+ * non conviene mai.
+ */
+export function valoriAvanzo(km: ArrayLike<number>, prezzo: ArrayLike<number>): Float64Array {
+  const n = km.length;
+  const v = new Float64Array(n);
+  let minimo = Infinity;
+  for (let j = 0; j < n; j++) {
+    minimo = Math.min(minimo, prezzo[j]!);
+    v[j] = Math.max(0, minimo - SCONTO_AVANZO_EUR);
+  }
+  // Le pompe allo stesso km si vedono tutte insieme.
+  for (let j = n - 2; j >= 0; j--) if (km[j] === km[j + 1]) v[j] = v[j + 1]!;
+  return v;
 }
 
 /** Solo le tappe che stanno davvero sulla strada, in ordine di percorrenza. */
@@ -399,6 +425,7 @@ export function pianificaViaggio(i: PianoInput): Piano {
   // km km − deviazione. In litri dal km 0, come il potenziale.
   const andata = Float64Array.from(tappe, (t) => (t.kmDaPartenza + t.deviazioneKm) / kml);
   const ritorno = Float64Array.from(tappe, (t) => (t.kmDaPartenza - t.deviazioneKm) / kml);
+  const valoreAvanzo = valoriAvanzo(km, prezzo);
 
   /**
    * Litri dalla pompa h alla pompa j: ritorno sulla strada da h, strada fra
@@ -628,16 +655,25 @@ export function pianificaViaggio(i: PianoInput): Piano {
       const X = Math.min(T, cFine + R);
       const penFine = pen(X - cFine);
       const tetto = T - LITRI_MINIMI_SOSTA;
+      const c = valoreAvanzo[j]!;
+      // a·p piu la spesa dell'ultima sosta arrivando con a, meno quello che
+      // ne avanza in fondo oltre X: g(a) + conto(a) e il conto del piano.
+      const conto = (a: number) =>
+        a + m > T ? p * T - c * (T - Math.max(a, X)) : a <= X - m ? p * X : a <= X ? p * (a + m) - c * (a + m - X) : p * (a + m) - c * m;
       const chiudiQui = (a: number, ga: number, o: Origine) => {
         if (a > tetto + eps) return;
-        proponi(ga + p * Math.max(a, X) + penFine, j, a + m > T ? T : Math.max(a + m, X), a, o);
+        proponi(ga + conto(a) + penFine, j, a + m > T ? T : Math.max(a + m, X), a, o);
       };
       for (const t of tratti) {
         if (t.x0 > tetto + eps) continue;
         const b = Math.min(t.x1, tetto);
         chiudiQui(t.x0, t.y0, t.o);
         if (b > t.x0) chiudiQui(b, valoreIn(t, b), t.o);
+        // conto cambia pendenza dove la sosta passa dal necessario al
+        // minimo, dove non serve piu, e dove il minimo non entra.
+        if (X - m > t.x0 && X - m < b) chiudiQui(X - m, valoreIn(t, X - m), t.o);
         if (X > t.x0 && X < b) chiudiQui(X, valoreIn(t, X), t.o);
+        if (T - m > t.x0 && T - m < b) chiudiQui(T - m, valoreIn(t, T - m), t.o);
       }
       for (const q of puntiQui) chiudiQui(q.x, q.y, q.o);
     }
