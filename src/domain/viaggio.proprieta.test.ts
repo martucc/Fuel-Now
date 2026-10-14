@@ -218,8 +218,8 @@ describe('pianificaViaggio: tante pompe vicine, nessuna scartata', () => {
           brand: '',
           level: 'normal',
           prezzo: sullaStrada ? scegli([2.25, 2.19, 2.199]) : scegli([2.19, 1.99, 1.99, 2.099, 2.25]),
-          kmDaPartenza: km(Math.max(0, Math.min(distanzaKm - 0.01, sullaStrada ? centro : centro - 1.5 + r() * 3))),
-          deviazioneKm: sullaStrada ? 0 : km(scegli([0.05, r() * 0.5, r() * 2.5, r() * 2.5, 2.4])),
+          kmDaPartenza: km(Math.max(0, Math.min(distanzaKm - 0.01, sullaStrada ? centro : centro - 0.8 + r() * 1.6))),
+          deviazioneKm: sullaStrada ? 0 : km(scegli([0.05, r() * 0.5, r() * 2.5, 1 + r() * 1.5, 2.4])),
         });
       }
       const dopo = 1 + Math.floor(r() * 3);
