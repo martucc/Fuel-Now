@@ -1,13 +1,13 @@
 import {
   COSTO_SOSTA_EUR,
   fondoPrimaSosta,
+  FRAZIONE_AVANZO,
   LITRI_MINIMI_SOSTA,
   LITRI_SOSTA,
   penaleRiserva,
   riservaLitri,
-  SCONTO_AVANZO_EUR,
   STESSO_PUNTO_KM,
-  valoriAvanzo,
+  valoreAvanzo,
   type Piano,
   type PianoInput,
 } from '../viaggio';
@@ -74,10 +74,7 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
     .map((t) => ({ x: t.kmDaPartenza, d: Math.max(0, t.deviazioneKm), p: t.prezzo }))
     .sort((a, b) => a.x - b.x);
   const n = tappe.length;
-  const avanzo = valoriAvanzo(
-    tappe.map((t) => t.x),
-    tappe.map((t) => t.p),
-  );
+  const avanzo = valoreAvanzo(tappe.map((t) => t.p));
   /** Centilitri dalla pompa h alla pompa j; −1 la partenza, n l'arrivo. */
   const cl = (h: number, j: number) => {
     const da = h < 0 ? 0 : tappe[h]!.x - tappe[h]!.d;
@@ -118,7 +115,7 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
       // L'ultima sosta: per ogni livello d'arrivo si prova a ripartire coi
       // livelli che portano in fondo col fondo. Quello che avanza in fondo
       // oltre la riserva (o oltre il pieno, se la riserva non ci sta), fino
-      // ai litri comprati qui, vale `avanzo[j]` al litro. Il conto in L e
+      // ai litri comprati qui, vale `avanzo` al litro. Il conto in L e
       // lineare a tratti: bastano gli estremi e le pieghe.
       const cFine = cl(j, n);
       const necessario = Math.min(Tn, cFine + Rn);
@@ -130,7 +127,7 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
           if (L < da || L > Tn) continue;
           const comprati = L - a;
           const resta = Math.min(comprati, Math.max(0, L - necessario));
-          const v = arr[a]! + (comprati / CL) * t.p - (resta / CL) * avanzo[j]! + pen(L - cFine);
+          const v = arr[a]! + (comprati / CL) * t.p - (resta / CL) * avanzo + pen(L - cFine);
           if (v < migliore) migliore = v;
         }
       }
@@ -244,8 +241,8 @@ export function valorePiano(i: PianoInput, piano: Piano, regole: RegoleRiferimen
 /**
  * Quanto vale il carburante che avanza in fondo: quello oltre la riserva
  * (o oltre il pieno meno la strada che resta, se la riserva non ci sta),
- * comprato all'ultima sosta, mai piu dei litri comprati li, al valore di
- * `valoriAvanzo`: il litro piu economico fin li, meno un centesimo.
+ * comprato all'ultima sosta, mai piu dei litri comprati li, a meta del
+ * litro piu economico del viaggio.
  */
 export function creditoAvanzo(i: PianoInput, piano: Piano, finale = ripercorri(i, piano).finale): number {
   const ultima = piano.soste[piano.soste.length - 1];
@@ -253,13 +250,10 @@ export function creditoAvanzo(i: PianoInput, piano: Piano, finale = ripercorri(i
   const t = ultima.tappa;
   const strada = (i.distanzaKm - t.kmDaPartenza + t.deviazioneKm) / i.kml;
   const necessario = Math.min(riservaLitri(i), i.serbatoioL - strada);
-  // Il litro piu economico fra le pompe sulla strada fino all'ultima sosta.
+  // Meta del litro piu economico fra le pompe sulla strada.
   let minimo = Infinity;
-  for (const c of i.candidate) {
-    if (c.kmDaPartenza >= 0 && c.kmDaPartenza < i.distanzaKm && c.prezzo > 0 && c.kmDaPartenza <= t.kmDaPartenza) minimo = Math.min(minimo, c.prezzo);
-  }
-  const valore = Math.max(0, minimo - SCONTO_AVANZO_EUR);
-  return valore * Math.min(ultima.litri, Math.max(0, finale - necessario));
+  for (const c of i.candidate) if (c.kmDaPartenza >= 0 && c.kmDaPartenza < i.distanzaKm && c.prezzo > 0) minimo = Math.min(minimo, c.prezzo);
+  return minimo * FRAZIONE_AVANZO * Math.min(ultima.litri, Math.max(0, finale - necessario));
 }
 
 /**
