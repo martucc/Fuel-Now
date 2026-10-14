@@ -84,6 +84,7 @@ scripts/      seed.mjs, copia-worker-maplibre.mjs
 - **Test:** girano in ambiente `node` e prendono solo `src/**/*.test.ts`, mai `.tsx`. La logica sta nei moduli puri; i componenti fanno solo la resa.
 - **I test non devono fissare valori del dataset**: cambiano a ogni `seed` (i test del ranking usano una coorte finta apposta).
 - **Il risolutore di riferimento del viaggio è esatto solo «sul reticolo»**: km/l interi, distanze a multipli di un centilitro di strada, serbatoio intero. Su istanze qualsiasi rifiuta di rispondere (`fuori reticolo`): i test di proprietà generano apposta istanze così.
+- **Nel piano del viaggio non si scarta nessuna pompa prima del conto**, nemmeno quelle «battute» da una vicina non più cara e con meno deviazione. Le soste vanno in ordine di km e due soste non stanno entro 0,4 km: dopo una sosta obbligata la pompa che «batteva» può essere già alle spalle, e quella tolta era l'unica economica rimasta (6 € in più nel test P/A/B/Q di `viaggio.test.ts`). Il conto con tutte le pompe sta comunque sotto i 20 ms su Milano → Reggio in Risparmio.
 - **Il blu vuol dire «vai qui»** e nient'altro: distributore consigliato, soste del viaggio, «Portami lì». Mai schede, link, interruttori, la posizione dell'utente o i grafici.
 - **Stili di base dentro `@layer base`.** Una regola CSS fuori dai layer di Tailwind vince sulle classi di utilità: un `button { background: none }` sciolto spegneva tutti i bottoni blu.
 - **Niente service worker dentro l'APK.** Serviva la build vecchia e l'app sembrava non aggiornarsi. `main.tsx` toglie quelli rimasti.
