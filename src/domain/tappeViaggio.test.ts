@@ -245,6 +245,22 @@ describe('calcolaViaggio', () => {
     expect(e.piano.litriAllArrivo).toBeGreaterThanOrEqual(45 * 0.12);
   });
 
+  it('con un quarto di serbatoio si ferma alla pompa sulla strada invece di arrivare in riserva', () => {
+    // 45 L a 15 km/l, «1/4»: 11,25 L, appena sopra la riserva di 5,4 L. La
+    // pompa al km 100 sta oltre 0,13 × 45 × 15 ≈ 88 km: prima il piano non
+    // la guardava, e diceva «Ci arrivi, ma in riserva» o «resti a secco
+    // intorno al km 88», dove restavano 5,4 L.
+    for (const distanzaKm of [150, 300]) {
+      const e = calcolaViaggio(
+        dati({ livello: 'quarto', distanzaKm, impianti: [sulPercorso('km100', 1.75, 100), sulPercorso('km200', 1.75, 200)] }),
+      );
+      expect(e.piano.fattibile).toBe(true);
+      expect(e.piano.arrivoSottoRiserva).toBe(false);
+      expect(e.piano.soste[0]!.tappa.id).toBe('km100');
+      expect(e.piano.sostaInRiserva).toBe(1);
+    }
+  });
+
   it('dice quando con il carburante che hai non arrivi al primo distributore', () => {
     const e = calcolaViaggio(dati({ livello: 'riserva', distanzaKm: 600, impianti: [sulPercorso('lontano', 1.7, 300)] }));
     expect(e.piano.fattibile).toBe(false);
