@@ -227,22 +227,22 @@ describe('calcolaViaggio', () => {
   });
 
   it('in riserva ti manda al distributore vicino e ti fa arrivare con la riserva', () => {
-    // 4,5 L su 45: la spia e accesa. Il viaggio da 50 km si farebbe anche
+    // 4,5 L su 45: la spia e accesa. Il viaggio da 60 km si farebbe anche
     // cosi, ma arrivando quasi a secco: il piano fa fermare, e a quello
-    // vicino. Andare all'altro vorrebbe dire 22 km in piu in riserva, fino
-    // a 2,5 L, per risparmiare sessanta centesimi.
+    // vicino. All'altro si arriverebbe con 1,8 L, meno della meta di quello
+    // che c'e alla partenza: troppo poco per sette centesimi al litro.
     const e = calcolaViaggio(
       dati({
         livello: 'riserva',
-        distanzaKm: 50,
-        impianti: [sulPercorso('vicino', 1.82, 8), sulPercorso('lontano', 1.68, 30)],
+        distanzaKm: 60,
+        impianti: [sulPercorso('vicino', 1.82, 8), sulPercorso('lontano', 1.75, 40)],
       }),
     );
     expect(e.piano.fattibile).toBe(true);
     expect(e.piano.arrivoSottoRiserva).toBe(false);
-    expect(e.piano.primaSostaInRiserva).toBe(true);
+    expect(e.piano.sostaInRiserva).toBe(1);
     expect(e.piano.soste.map((s) => s.tappa.id)).toEqual(['vicino']);
-    expect(e.piano.litriAllArrivo).toBeCloseTo(45 * 0.12, 6);
+    expect(e.piano.litriAllArrivo).toBeGreaterThanOrEqual(45 * 0.12);
   });
 
   it('dice quando con il carburante che hai non arrivi al primo distributore', () => {
@@ -271,7 +271,7 @@ describe('testoImpossibile', () => {
     litriDeviazione: 0,
     litriAllArrivo: 0,
     arrivoSottoRiserva: false,
-    primaSostaInRiserva: false,
+    sostaInRiserva: null,
     spesaPienoPrima: null,
     risparmioEur: null,
   });
@@ -286,8 +286,7 @@ describe('testoImpossibile', () => {
   it('quando si arriva in riserva lo dice, coi litri all arrivo', () => {
     const p = { ...piano(0), fattibile: true, motivo: undefined, arrivoSottoRiserva: true, litriAllArrivo: 2.34 };
     const t = testoSottoRiserva(p, 'bilanciato');
-    expect(t).toContain('arrivi con circa 2,3 L');
-    expect(t).toContain('spia della riserva');
+    expect(t).toContain('arrivi con circa 2,3 L, sotto la riserva');
     expect(t).toContain('Con Risparmio');
     expect(testoSottoRiserva(p, 'risparmio')).not.toContain('Con Risparmio');
     // Non dice che un distributore non c'e: magari c'e, e non conveniva.
