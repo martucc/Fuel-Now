@@ -39,8 +39,9 @@ const CL = 100;
  * rifiuta di rispondere.
  *
  * I gradini sono gli stessi di `pianificaViaggio`, perche sono la
- * specifica: la riserva a ogni arrivo; la prima sosta col fondo minimo; il
- * ripiego con le penali, contro il viaggio senza soste. Il conto e il
+ * specifica: la riserva a ogni arrivo; la prima sosta col fondo minimo, e
+ * mai piu giu dell'arrivo senza soste; il ripiego con le penali, contro il
+ * viaggio senza soste. Il conto e il
  * carburante piu COSTO_SOSTA_EUR per sosta, piu le penali nel ripiego. Le
  * regole:
  *  - si arriva alla pompa j con `prima - (dev. di ritorno della sosta
@@ -166,7 +167,8 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
   const fondoPrima = fondoPrimaSosta(S0, R);
   const gradini: RegoleRiferimento[] = [];
   if (S0n >= Rn) gradini.push({ fondoPrima: R, fondo: R, penali: false });
-  if (intero(fondoPrima) < Rn) gradini.push({ fondoPrima, fondo: R, penali: false });
+  // Alla prima sosta, nel secondo gradino, mai piu giu di dove si arriva senza soste.
+  if (intero(fondoPrima) < Rn) gradini.push({ fondoPrima: finaleN >= 0 ? Math.max(fondoPrima, finaleN / CL) : fondoPrima, fondo: R, penali: false });
   for (const g of gradini) {
     const v = risolvi(g);
     if (v < Infinity) return { fattibile: true, regole: g, valore: v };

@@ -51,7 +51,9 @@ import { VALORE_TEMPO_EURO_ORA } from './ranking';
  *     (fondoPrimaSosta): meta di quello che c'e, mai piu di meta riserva,
  *     mai meno di 0,3 L, mai a secco. Vale uguale appena sopra e appena
  *     sotto la riserva. Chi parte in riserva va a una pompa vicina, non a
- *     quella a cinquanta km che costa un centesimo meno;
+ *     quella a cinquanta km che costa un centesimo meno. E mai con meno di
+ *     quanto si arriverebbe in fondo senza fermarsi: deviare all'ultimo km
+ *     per arrivare alla pompa piu in basso che a destinazione non serve;
  *  3. se nemmeno cosi, il piano che va meno in riserva: ogni litro sotto la
  *     riserva a ogni arrivo costa 5 €, sotto meta riserva 20 €, piu di
  *     qualunque litro di carburante; e lo si confronta col viaggio senza
@@ -759,9 +761,15 @@ export function pianificaViaggio(i: PianoInput): Piano {
     const e = risolvi({ fondoPrima: R, fondo: R, penali: false });
     if (e.fine) return dalFine(e.fine);
   }
-  // 2. La prima sosta un po' in riserva, mai troppo.
+  // 2. La prima sosta un po' in riserva, mai troppo, e mai piu giu di dove
+  // si arriverebbe senza fermarsi: una pompa dove si arriva con meno sta,
+  // deviazione compresa, oltre l'arrivo. Fermarsi li costa e non rende il
+  // viaggio piu sicuro. Vuol dire che (km + deviazione) della prima pompa
+  // non supera la distanza: non dipende dal carburante di partenza, e
+  // con piu carburante resta ammesso tutto quello che lo era con meno.
+  const senzaSosteArriva = almeno(finaleSenzaSoste, 0);
   if (fondoPrima < R - eps) {
-    const e = risolvi({ fondoPrima, fondo: R, penali: false });
+    const e = risolvi({ fondoPrima: senzaSosteArriva ? Math.max(fondoPrima, finaleSenzaSoste) : fondoPrima, fondo: R, penali: false });
     if (e.fine) return dalFine(e.fine);
   }
   // 3. Il ripiego: prima di tutto il piano il cui punto piu basso e il piu
@@ -770,7 +778,6 @@ export function pianificaViaggio(i: PianoInput): Piano {
   // se e piu sicuro: arriva in fondo con piu di quanto qualunque piano con
   // soste tenga nel suo punto piu basso. Cosi il punto piu basso del piano
   // sale sempre col carburante di partenza.
-  const senzaSosteArriva = almeno(finaleSenzaSoste, 0);
   const piuAlto = livelloPiuAlto();
   if (senzaSosteArriva && finaleSenzaSoste > piuAlto + eps) return componi([], [], finaleSenzaSoste);
   if (piuAlto >= -eps) {
