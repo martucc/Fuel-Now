@@ -42,7 +42,9 @@ const CL = 100;
  * specifica: la riserva a ogni arrivo; la prima sosta col fondo minimo, e
  * mai piu giu dell'arrivo senza soste; il ripiego con le penali, contro il
  * viaggio senza soste. Il conto e il carburante piu COSTO_SOSTA_EUR per
- * sosta, piu le penali nel ripiego. Le regole:
+ * sosta, piu le penali nel ripiego, meno quello che l'ultima sosta ha
+ * comprato e avanza in fondo oltre la riserva (vedi `creditoAvanzo`). Le
+ * regole:
  *  - si arriva alla pompa j con `prima - (dev. di ritorno della sosta
  *    precedente + km fra le due + dev. di andata di j) / kml` litri;
  *  - non si scende sotto il fondo del gradino, mai sotto zero;
@@ -107,10 +109,21 @@ export function pianoDiRiferimento(i: PianoInput): EsitoRiferimento {
       for (let a = Math.max(0, Tn - minimo + 1); a <= Tn - minimoPieno; a++) {
         riparti[Tn] = Math.min(riparti[Tn]!, arr[a]! + ((Tn - a) / CL) * t.p);
       }
+      // L'ultima sosta: per ogni livello d'arrivo si riparte col minimo
+      // possibile che porta in fondo con la riserva (se ci sta), e si paga
+      // solo quello che serve. Il resto avanza in fondo e vale quanto e
+      // costato qui, fino ai litri comprati qui.
       const cFine = cl(j, n);
-      for (let L = Math.max(minimoPieno, cFine + fondo); L <= Tn; L++) {
-        const v = riparti[L]! + pen(L - cFine);
-        if (v < migliore) migliore = v;
+      if (cFine + fondo <= Tn) {
+        const necessario = Math.min(Tn, cFine + Rn);
+        for (let a = 0; a <= Tn - minimoPieno; a++) {
+          if (arr[a] === Infinity) continue;
+          const L = a + minimo > Tn ? Tn : Math.max(a + minimo, necessario);
+          const finale = L - cFine;
+          const avanzo = Math.min(L - a, Math.max(0, L - necessario));
+          const v = arr[a]! + ((L - a - avanzo) / CL) * t.p + pen(finale);
+          if (v < migliore) migliore = v;
+        }
       }
       for (let h = j + 1; h < n; h++) {
         if (tappe[h]!.x - t.x <= STESSO_PUNTO_KM) continue;
@@ -203,8 +216,9 @@ export function ripercorri(i: PianoInput, piano: Piano): { arrivi: number[]; fin
 
 /**
  * Il conto di un piano rifatto da capo con le regole di un gradino:
- * carburante e soste, piu le penali nel ripiego. Senza soste, con le
- * regole nulle, zero; Infinity se il piano non arriva.
+ * carburante e soste, piu le penali nel ripiego, meno l'avanzo dell'ultima
+ * sosta. Senza soste, con le regole nulle, zero; Infinity se il piano non
+ * arriva.
  */
 export function valorePiano(i: PianoInput, piano: Piano, regole: RegoleRiferimento | null): number {
   if (!piano.fattibile) return Infinity;
@@ -215,7 +229,21 @@ export function valorePiano(i: PianoInput, piano: Piano, regole: RegoleRiferimen
   piano.soste.forEach((s, n) => {
     valore += s.litri * s.tappa.prezzo + COSTO_SOSTA_EUR + (penali ? penaleRiserva(arrivi[n]!, R) : 0);
   });
-  return valore;
+  return valore - creditoAvanzo(i, piano, finale);
+}
+
+/**
+ * Quanto vale il carburante che avanza in fondo: quello oltre la riserva
+ * (o oltre il pieno meno la strada che resta, se la riserva non ci sta),
+ * comprato all'ultima sosta e al suo prezzo, mai piu dei litri comprati li.
+ */
+export function creditoAvanzo(i: PianoInput, piano: Piano, finale = ripercorri(i, piano).finale): number {
+  const ultima = piano.soste[piano.soste.length - 1];
+  if (!ultima) return 0;
+  const t = ultima.tappa;
+  const strada = (i.distanzaKm - t.kmDaPartenza + t.deviazioneKm) / i.kml;
+  const necessario = Math.min(riservaLitri(i), i.serbatoioL - strada);
+  return t.prezzo * Math.min(ultima.litri, Math.max(0, finale - necessario));
 }
 
 /**
