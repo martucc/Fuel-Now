@@ -571,7 +571,8 @@ export function pianificaViaggio(i: PianoInput): Piano {
       proponi(ga + conto(a) + penFine, a + m > T ? T : Math.max(a + m, X), a, o);
     };
 
-    for (j = 0; j < n; j++) {
+    /** Le ripartenze delle tappe ormai a piu di 0,4 km entrano nel fronte. */
+    const attiva = () => {
       for (; attivate < j && km[j]! - km[attivate]! > STESSO_PUNTO_KM; attivate++) {
         const u = uscite[attivate];
         if (!u) continue;
@@ -592,24 +593,26 @@ export function pianificaViaggio(i: PianoInput): Piano {
       while (fronteDa < fronte.length && fronte[fronteDa]!.x1 < minimoUtile) fronteDa++;
       // Un pieno che il fronte batte allo stesso potenziale non serve piu:
       // il fronte puo solo scendere.
-      {
-        let q = fronteDa;
-        let tieni = 0;
-        for (let k = 0; k < punti.length; k++) {
-          const pt = punti[k]!;
-          if (pt.x < minimoUtile) continue;
-          while (q < fronte.length && fronte[q]!.x1 < pt.x) q++;
-          let battuto = false;
-          for (let r = q; r < fronte.length && fronte[r]!.x0 <= pt.x && !battuto; r++) battuto = valoreIn(fronte[r]!, pt.x) <= pt.y + 1e-12;
-          if (!battuto) punti[tieni++] = pt;
-        }
-        punti.length = tieni;
+      let q = fronteDa;
+      let tieni = 0;
+      for (let k = 0; k < punti.length; k++) {
+        const pt = punti[k]!;
+        if (pt.x < minimoUtile) continue;
+        while (q < fronte.length && fronte[q]!.x1 < pt.x) q++;
+        let battuto = false;
+        for (let r = q; r < fronte.length && fronte[r]!.x0 <= pt.x && !battuto; r++) battuto = valoreIn(fronte[r]!, pt.x) <= pt.y + 1e-12;
+        if (!battuto) punti[tieni++] = pt;
       }
+      punti.length = tieni;
+    };
 
+    /**
+     * Il conto g(a) = arrivare alla tappa con a, piu la sosta e le penali,
+     * meno a·p: ripartire con L comprando da a costa g(a) + L·p. False se
+     * alla tappa non si arriva.
+     */
+    const arrivi = (): boolean => {
       const A = andata[j]!;
-      p = prezzo[j]!;
-      // Il conto g(a) = arrivare con a, piu la sosta e le penali, meno a·p:
-      // ripartire con L comprando da a costa g(a) + L·p.
       tratti.length = 0;
       puntiQui.length = 0;
       for (let q = fronteDa; q < fronte.length; q++) {
@@ -637,13 +640,18 @@ export function pianificaViaggio(i: PianoInput): Piano {
           puntiQui[k - 1] = t;
         }
       }
-      if (tratti.length === 0 && puntiQui.length === 0) continue;
+      if (tratti.length === 0 && puntiQui.length === 0) return false;
       if (!ordinati) puntiQui.sort((u, v) => u.x - v.x);
+      return true;
+    };
 
-      // Il minimo di g fin qui, Q(x) = min g(a) per a ≤ x: ripartire con L
-      // costa L·p + Q(L − minimo). Dove Q e piatta si compra qui (pendenza
-      // p); dove scende si porta avanti il carburante comprato prima, e qui
-      // si mette il minimo.
+    /**
+     * Il minimo di g fin qui, Q(x) = min g(a) per a ≤ x: ripartire con L
+     * costa L·p + Q(L − minimo). Dove Q e piatta si compra qui (pendenza
+     * p); dove scende si porta avanti il carburante comprato prima, e qui
+     * si mette il minimo.
+     */
+    const minimoQ = () => {
       qTratti.length = 0;
       minimo = Infinity;
       piatto = 0;
@@ -669,8 +677,10 @@ export function pianificaViaggio(i: PianoInput): Piano {
       }
       for (; ip < puntiQui.length; ip++) punto(puntiQui[ip]!.x, puntiQui[ip]!.y, puntiQui[ip]!.o);
       chiudi(finoA);
+    };
 
-      // Le ripartenze da qui, nel potenziale: L = x + minimo, valore Q(x) + L·p.
+    /** Le ripartenze dalla tappa, nel potenziale: L = x + minimo, valore Q(x) + L·p; e il pieno. */
+    const ripartenze = () => {
       const rit = ritorno[j]!;
       const uscitaTratti: Tratto[] = new Array<Tratto>(qTratti.length);
       for (let k = 0; k < qTratti.length; k++) {
@@ -688,22 +698,26 @@ export function pianificaViaggio(i: PianoInput): Piano {
         tratti: uscitaTratti,
         pieno: pienoAParte ? { x: T + rit, y: pienoQui!.y, o: pienoQui!.o } : null,
       };
+    };
 
-      // Se questa e l'ultima sosta: da qui all'arrivo. Quello che la sosta
-      // compra e avanza in fondo oltre la riserva vale `avanzo` al litro, e
-      // si toglie dal conto. Senza, la deviazione verso una sosta da 5 L non
-      // costava niente: i litri bruciati uscivano da quello che avanza, e
-      // avanzare valeva zero. Il credito non supera i litri comprati qui:
-      // il carburante portato da prima non si conta.
+    /**
+     * Se questa e l'ultima sosta: da qui all'arrivo. Quello che la sosta
+     * compra e avanza in fondo oltre la riserva vale `avanzo` al litro, e
+     * si toglie dal conto. Senza, la deviazione verso una sosta da 5 L non
+     * costava niente: i litri bruciati uscivano da quello che avanza, e
+     * avanzare valeva zero. Il credito non supera i litri comprati qui:
+     * il carburante portato da prima non si conta.
+     */
+    const finoInFondo = () => {
       const cFine = consumo(j, n);
-      if (cFine > T - fondo + eps) continue;
+      if (cFine > T - fondo + eps) return;
       // Si riparte con almeno X: la riserva in fondo, se ci sta; sotto, nel
       // ripiego, le penali chiedono comunque di salirci, litro per litro.
       X = Math.min(T, cFine + R);
       penFine = pen(X - cFine);
       // Il conto non scende sotto il minimo di g piu p·X: se cosi non si
       // batte il piano migliore trovato, qui non serve guardare.
-      if (fine !== null && Math.min(minimo, minimoPieno) + p * X + penFine >= (fine as Fine).valore - 1e-12) continue;
+      if (fine !== null && Math.min(minimo, minimoPieno) + p * X + penFine >= fine.valore - 1e-12) return;
       for (let k = 0; k < tratti.length; k++) {
         const t = tratti[k]!;
         if (t.x0 > pieno + eps) continue;
@@ -717,6 +731,17 @@ export function pianificaViaggio(i: PianoInput): Piano {
         if (T - m > t.x0 && T - m < b) chiudiQui(T - m, valoreIn(t, T - m), t.o);
       }
       for (let k = 0; k < puntiQui.length; k++) chiudiQui(puntiQui[k]!.x, puntiQui[k]!.y, puntiQui[k]!.o);
+    };
+
+    // Le tappe in ordine di km. Ogni passo e una funzione a parte: chiamata
+    // a ogni tappa, si ottimizza presto, anche alla prima chiamata.
+    for (j = 0; j < n; j++) {
+      attiva();
+      p = prezzo[j]!;
+      if (!arrivi()) continue;
+      minimoQ();
+      ripartenze();
+      finoInFondo();
     }
     return { fine, pieni };
   };
