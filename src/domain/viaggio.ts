@@ -333,28 +333,35 @@ const CORTO = 1e-9;
 
 const valoreIn = (t: Tratto, x: number): number => t.y0 + t.s * (x - t.x0);
 
+/** Aggiunge in fondo a `out` il pezzo [x0, x1] di t; lo stesso tratto spezzato da un confronto si ricuce. */
+function emetti(out: Tratto[], x0: number, x1: number, t: Tratto): void {
+  if (x1 - x0 <= CORTO) return;
+  const y0 = valoreIn(t, x0);
+  const u = out.length > 0 ? out[out.length - 1]! : null;
+  if (u !== null && u.o === t.o && u.s === t.s && x0 - u.x1 <= CORTO && Math.abs(valoreIn(u, x0) - y0) <= 1e-9) {
+    u.x1 = x1;
+    return;
+  }
+  out.push({ x0, x1, y0, s: t.s, o: t.o });
+}
+
 /**
  * Il minimo di due funzioni fatte di tratti, ognuna in ordine e senza
- * sovrapposizioni. A parita vince la prima.
+ * sovrapposizioni, dal tratto `da` di a in poi. A parita vince la prima.
  */
-function inviluppo(a: readonly Tratto[], b: readonly Tratto[]): Tratto[] {
-  if (a.length === 0) return b.slice();
-  if (b.length === 0) return a.slice();
+function inviluppo(a: readonly Tratto[], da: number, b: readonly Tratto[]): Tratto[] {
   const out: Tratto[] = [];
-  const emetti = (x0: number, x1: number, t: Tratto) => {
-    if (x1 - x0 <= CORTO) return;
-    const y0 = valoreIn(t, x0);
-    const u = out[out.length - 1];
-    // Lo stesso tratto spezzato da un confronto si ricuce.
-    if (u && u.o === t.o && u.s === t.s && x0 - u.x1 <= CORTO && Math.abs(valoreIn(u, x0) - y0) <= 1e-9) {
-      u.x1 = x1;
-      return;
-    }
-    out.push({ x0, x1, y0, s: t.s, o: t.o });
-  };
-  let i = 0;
+  if (a.length <= da) {
+    for (let k = 0; k < b.length; k++) out.push(b[k]!);
+    return out;
+  }
+  if (b.length === 0) {
+    for (let k = da; k < a.length; k++) out.push(a[k]!);
+    return out;
+  }
+  let i = da;
   let k = 0;
-  let x = Math.min(a[0]!.x0, b[0]!.x0);
+  let x = Math.min(a[da]!.x0, b[0]!.x0);
   for (;;) {
     while (i < a.length && a[i]!.x1 <= x) i++;
     while (k < b.length && b[k]!.x1 <= x) k++;
@@ -373,14 +380,14 @@ function inviluppo(a: readonly Tratto[], b: readonly Tratto[]): Tratto[] {
     if (conA && conB) {
       const du = valoreIn(A, x) - valoreIn(B, x);
       const dv = valoreIn(A, fine) - valoreIn(B, fine);
-      if (du <= 0 && dv <= 0) emetti(x, fine, A);
-      else if (du >= 0 && dv >= 0) emetti(x, fine, B);
+      if (du <= 0 && dv <= 0) emetti(out, x, fine, A);
+      else if (du >= 0 && dv >= 0) emetti(out, x, fine, B);
       else {
         const t = x + ((fine - x) * du) / (du - dv);
-        emetti(x, t, du < 0 ? A : B);
-        emetti(t, fine, du < 0 ? B : A);
+        emetti(out, x, t, du < 0 ? A : B);
+        emetti(out, t, fine, du < 0 ? B : A);
       }
-    } else emetti(x, fine, conA ? A! : B!);
+    } else emetti(out, x, fine, conA ? A! : B!);
     x = fine;
   }
   return out;
@@ -439,9 +446,12 @@ export function pianificaViaggio(i: PianoInput): Piano {
   const risolvi = (g: Regole): Esito => {
     const { fondoPrima, fondo, penali } = g;
     const pen = (a: number) => (penali ? penaleRiserva(a, R) : 0);
-    const pendenzaPen = (a: number) => (!penali ? 0 : a < R / 2 ? -(PENALE_RISERVA_EUR_L + PENALE_FONDO_EUR_L) : a < R ? -PENALE_RISERVA_EUR_L : 0);
-    const pieghe = penali ? [R / 2, R] : [];
+    const pendenzaPen = (a: number) => (a < R / 2 ? -(PENALE_RISERVA_EUR_L + PENALE_FONDO_EUR_L) : a < R ? -PENALE_RISERVA_EUR_L : 0);
     const casa: Origine = { tappa: -1, fisso: true, arrivo: S0, da: null };
+    /** Oltre T − minimo il minimo non entra: si puo solo fare il pieno. */
+    const finoA = T - m;
+    /** Il pieno compra almeno un decilitro: si arriva con al piu questo. */
+    const pieno = T - LITRI_MINIMI_SOSTA;
 
     // Le ripartenze delle tappe gia viste: tratti e pieni. Entrano nel
     // fronte quando la tappa in corso e a piu di 0,4 km: da li in poi
@@ -453,22 +463,120 @@ export function pianificaViaggio(i: PianoInput): Piano {
     const pieni: Array<Punto | null> = new Array<Punto | null>(n).fill(null);
     let attivate = 0;
     let fine: Fine | null = null;
-    /** L'ultima sosta alla tappa `tappa`, arrivandoci con `arrivo` litri da `da`. */
-    const proponi = (valore: number, tappa: number, ripartenza: number, arrivo: number, da: Origine) => {
-      if (!fine || valore < fine.valore - 1e-12) fine = { valore, tappa, ripartenza, o: { tappa, fisso: true, arrivo, da } };
-    };
 
-    // Cosa si puo arrivare ad avere alla tappa in corso: tratti e punti nel
-    // livello all'arrivo, gia col conto della sosta e del prezzo di qui.
+    // Lo stato della tappa in corso. Le funzioni qui sotto lo leggono e lo
+    // cambiano: sono scritte una volta sola e non a ogni tappa, cosi il
+    // telefono le compila una volta (e a freddo il conto resta veloce).
+    let j = 0;
+    let p = 0;
+    // Cosa si puo arrivare ad avere alla tappa: tratti e punti nel livello
+    // all'arrivo, gia col conto della sosta e del prezzo di qui.
     const tratti: Tratto[] = [];
     const puntiQui: Punto[] = [];
+    // Il minimo Q del conto: i suoi tratti, il minimo fin qui e dove e
+    // piatto, e il pieno di chi arriva oltre T − minimo.
+    const qTratti: Tratto[] = [];
+    let minimo = Infinity;
+    let piatto = 0;
+    let origPiatto: Origine | null = null;
+    let minimoPieno = Infinity;
+    let origPieno: Origine | null = null;
+    // L'arrivo in fondo dall'ultima sosta.
+    let X = 0;
+    let penFine = 0;
 
-    for (let j = 0; j < n; j++) {
+    /** L'ultima sosta alla tappa j, arrivandoci con `arrivo` litri da `da`. */
+    const proponi = (valore: number, ripartenza: number, arrivo: number, da: Origine) => {
+      if (!fine || valore < fine.valore - 1e-12) fine = { valore, tappa: j, ripartenza, o: { tappa: j, fisso: true, arrivo, da } };
+    };
+    const aggiungiTratto = (a0: number, a1: number, y0: number, s: number, o: Origine) => {
+      if (!penali) {
+        tratti.push({ x0: a0, x1: a1, y0: y0 + COSTO_SOSTA_EUR - a0 * p, s: s - p, o });
+        return;
+      }
+      // Le penali cambiano pendenza a meta riserva e alla riserva.
+      let x = a0;
+      let y = y0 + COSTO_SOSTA_EUR + pen(a0) - a0 * p;
+      for (let q = 0; q < 2; q++) {
+        const k = q === 0 ? R / 2 : R;
+        if (k > x + CORTO && k < a1 - CORTO) {
+          const sk = s + pendenzaPen((x + k) / 2) - p;
+          tratti.push({ x0: x, x1: k, y0: y, s: sk, o });
+          y += sk * (k - x);
+          x = k;
+        }
+      }
+      tratti.push({ x0: x, x1: a1, y0: y, s: s + pendenzaPen((x + a1) / 2) - p, o });
+    };
+    const chiudi = (x: number) => {
+      if (origPiatto && x - piatto > CORTO) qTratti.push({ x0: piatto, x1: x, y0: minimo, s: 0, o: origPiatto });
+    };
+    const nuovoMinimo = (x: number, y: number, o: Origine) => {
+      chiudi(x);
+      minimo = y;
+      piatto = x;
+      origPiatto = { tappa: j, fisso: true, arrivo: x, da: o };
+    };
+    const versoPieno = (x: number, y: number, o: Origine) => {
+      if (x <= pieno + eps && y < minimoPieno) {
+        minimoPieno = y;
+        origPieno = { tappa: j, fisso: true, arrivo: x, da: o };
+      }
+    };
+    const punto = (x: number, y: number, o: Origine) => {
+      if (x > finoA) versoPieno(x, y, o);
+      else if (y < minimo) nuovoMinimo(x, y, o);
+    };
+    const tratto = (u: number, v: number, gu: number, s: number, o: Origine) => {
+      if (v > finoA) {
+        const da = Math.max(u, finoA);
+        const a = Math.min(v, pieno);
+        if (a >= da) {
+          const gd = gu + s * (da - u);
+          const ga = gu + s * (a - u);
+          if (gd <= ga) versoPieno(da, gd, o);
+          else versoPieno(a, ga, o);
+        }
+        if (u >= finoA) return;
+        v = finoA;
+      }
+      const gv = gu + s * (v - u);
+      if (s >= 0) {
+        if (gu < minimo) nuovoMinimo(u, gu, o);
+        return;
+      }
+      if (gv >= minimo) return;
+      const t = gu > minimo ? u + (minimo - gu) / s : u;
+      chiudi(t);
+      if (v - t > CORTO) qTratti.push({ x0: t, x1: v, y0: gu + s * (t - u), s, o: { tappa: j, fisso: false, arrivo: NaN, da: o } });
+      minimo = gv;
+      piatto = v;
+      origPiatto = { tappa: j, fisso: true, arrivo: v, da: o };
+    };
+    /**
+     * a·p piu la spesa dell'ultima sosta arrivando con a, meno quello che
+     * ne avanza in fondo oltre X: g(a) + conto(a) e il conto del piano. Non
+     * scende mai sotto p·X, il valore per a ≤ X − minimo.
+     */
+    const conto = (a: number) =>
+      a + m > T
+        ? p * T - avanzo * (T - Math.max(a, X))
+        : a <= X - m
+          ? p * X
+          : a <= X
+            ? p * (a + m) - avanzo * (a + m - X)
+            : p * (a + m) - avanzo * m;
+    const chiudiQui = (a: number, ga: number, o: Origine) => {
+      if (a > pieno + eps) return;
+      proponi(ga + conto(a) + penFine, a + m > T ? T : Math.max(a + m, X), a, o);
+    };
+
+    for (j = 0; j < n; j++) {
       for (; attivate < j && km[j]! - km[attivate]! > STESSO_PUNTO_KM; attivate++) {
         const u = uscite[attivate];
         if (!u) continue;
         if (u.tratti.length > 0) {
-          fronte = inviluppo(fronteDa > 0 ? fronte.slice(fronteDa) : fronte, u.tratti);
+          fronte = inviluppo(fronte, fronteDa, u.tratti);
           fronteDa = 0;
         }
         if (u.pieno) {
@@ -487,7 +595,8 @@ export function pianificaViaggio(i: PianoInput): Piano {
       {
         let q = fronteDa;
         let tieni = 0;
-        for (const pt of punti) {
+        for (let k = 0; k < punti.length; k++) {
+          const pt = punti[k]!;
           if (pt.x < minimoUtile) continue;
           while (q < fronte.length && fronte[q]!.x1 < pt.x) q++;
           let battuto = false;
@@ -498,25 +607,11 @@ export function pianificaViaggio(i: PianoInput): Piano {
       }
 
       const A = andata[j]!;
-      const p = prezzo[j]!;
+      p = prezzo[j]!;
       // Il conto g(a) = arrivare con a, piu la sosta e le penali, meno a·p:
       // ripartire con L comprando da a costa g(a) + L·p.
       tratti.length = 0;
       puntiQui.length = 0;
-      const aggiungiTratto = (a0: number, a1: number, y0: number, s: number, o: Origine) => {
-        // Le penali cambiano pendenza a meta riserva e alla riserva.
-        let x = a0;
-        let y = y0 + COSTO_SOSTA_EUR + pen(a0) - a0 * p;
-        for (const k of pieghe) {
-          if (k > x + CORTO && k < a1 - CORTO) {
-            const sk = s + pendenzaPen((x + k) / 2) - p;
-            tratti.push({ x0: x, x1: k, y0: y, s: sk, o });
-            y += sk * (k - x);
-            x = k;
-          }
-        }
-        tratti.push({ x0: x, x1: a1, y0: y, s: s + pendenzaPen((x + a1) / 2) - p, o });
-      };
       for (let q = fronteDa; q < fronte.length; q++) {
         const t = fronte[q]!;
         const a1 = t.x1 - A;
@@ -527,7 +622,8 @@ export function pianificaViaggio(i: PianoInput): Piano {
         else puntiQui.push({ x: a1, y: valoreIn(t, a1 + A) + COSTO_SOSTA_EUR + pen(a1) - a1 * p, o: t.o });
       }
       const ordinati = puntiQui.length === 0;
-      for (const q of punti) {
+      for (let k = 0; k < punti.length; k++) {
+        const q = punti[k]!;
         const a = q.x - A;
         if (almeno(a, fondo)) puntiQui.push({ x: a, y: q.y + COSTO_SOSTA_EUR + pen(a) - a * p, o: q.o });
       }
@@ -548,62 +644,15 @@ export function pianificaViaggio(i: PianoInput): Piano {
       // costa L·p + Q(L − minimo). Dove Q e piatta si compra qui (pendenza
       // p); dove scende si porta avanti il carburante comprato prima, e qui
       // si mette il minimo.
-      const finoA = T - m;
-      const pieno = T - LITRI_MINIMI_SOSTA;
-      const qTratti: Tratto[] = [];
-      let minimo = Infinity;
-      let piatto = 0;
-      let origPiatto: Origine | null = null;
-      let minimoPieno = Infinity;
-      let origPieno: Origine | null = null;
-      const chiudi = (x: number) => {
-        if (origPiatto && x - piatto > CORTO) qTratti.push({ x0: piatto, x1: x, y0: minimo, s: 0, o: origPiatto });
-      };
-      const nuovoMinimo = (x: number, y: number, o: Origine) => {
-        chiudi(x);
-        minimo = y;
-        piatto = x;
-        origPiatto = { tappa: j, fisso: true, arrivo: x, da: o };
-      };
-      /** Arrivando oltre T − minimo il minimo non entra: si puo solo fare il pieno. */
-      const versoPieno = (x: number, y: number, o: Origine) => {
-        if (x <= pieno + eps && y < minimoPieno) {
-          minimoPieno = y;
-          origPieno = { tappa: j, fisso: true, arrivo: x, da: o };
-        }
-      };
-      const punto = (x: number, y: number, o: Origine) => {
-        if (x > finoA) versoPieno(x, y, o);
-        else if (y < minimo) nuovoMinimo(x, y, o);
-      };
-      const tratto = (u: number, v: number, gu: number, s: number, o: Origine) => {
-        if (v > finoA) {
-          const da = Math.max(u, finoA);
-          const a = Math.min(v, pieno);
-          if (a >= da) {
-            const gd = gu + s * (da - u);
-            const ga = gu + s * (a - u);
-            if (gd <= ga) versoPieno(da, gd, o);
-            else versoPieno(a, ga, o);
-          }
-          if (u >= finoA) return;
-          v = finoA;
-        }
-        const gv = gu + s * (v - u);
-        if (s >= 0) {
-          if (gu < minimo) nuovoMinimo(u, gu, o);
-          return;
-        }
-        if (gv >= minimo) return;
-        const t = gu > minimo ? u + (minimo - gu) / s : u;
-        chiudi(t);
-        if (v - t > CORTO) qTratti.push({ x0: t, x1: v, y0: gu + s * (t - u), s, o: { tappa: j, fisso: false, arrivo: NaN, da: o } });
-        minimo = gv;
-        piatto = v;
-        origPiatto = { tappa: j, fisso: true, arrivo: v, da: o };
-      };
+      qTratti.length = 0;
+      minimo = Infinity;
+      piatto = 0;
+      origPiatto = null;
+      minimoPieno = Infinity;
+      origPieno = null;
       let ip = 0;
-      for (const t of tratti) {
+      for (let k = 0; k < tratti.length; k++) {
+        const t = tratti[k]!;
         let u = t.x0;
         let gu = t.y0;
         while (ip < puntiQui.length && puntiQui[ip]!.x <= t.x1) {
@@ -623,13 +672,11 @@ export function pianificaViaggio(i: PianoInput): Piano {
 
       // Le ripartenze da qui, nel potenziale: L = x + minimo, valore Q(x) + L·p.
       const rit = ritorno[j]!;
-      const uscitaTratti: Tratto[] = qTratti.map((t) => ({
-        x0: t.x0 + m + rit,
-        x1: t.x1 + m + rit,
-        y0: t.y0 + (t.x0 + m) * p,
-        s: t.s + p,
-        o: t.o,
-      }));
+      const uscitaTratti: Tratto[] = new Array<Tratto>(qTratti.length);
+      for (let k = 0; k < qTratti.length; k++) {
+        const t = qTratti[k]!;
+        uscitaTratti[k] = { x0: t.x0 + m + rit, x1: t.x1 + m + rit, y0: t.y0 + (t.x0 + m) * p, s: t.s + p, o: t.o };
+      }
       // Col pieno: dal minimo di Q fino a T − minimo, o arrivando gia quasi pieni.
       let pienoQui: Punto | null = null;
       if (origPiatto && minimo < Infinity) pienoQui = { x: T, y: minimo + T * p, o: origPiatto };
@@ -652,26 +699,15 @@ export function pianificaViaggio(i: PianoInput): Piano {
       if (cFine > T - fondo + eps) continue;
       // Si riparte con almeno X: la riserva in fondo, se ci sta; sotto, nel
       // ripiego, le penali chiedono comunque di salirci, litro per litro.
-      const X = Math.min(T, cFine + R);
-      const penFine = pen(X - cFine);
-      const tetto = T - LITRI_MINIMI_SOSTA;
-      // a·p piu la spesa dell'ultima sosta arrivando con a, meno quello che
-      // ne avanza in fondo oltre X: g(a) + conto(a) e il conto del piano.
-      const conto = (a: number) =>
-        a + m > T
-          ? p * T - avanzo * (T - Math.max(a, X))
-          : a <= X - m
-            ? p * X
-            : a <= X
-              ? p * (a + m) - avanzo * (a + m - X)
-              : p * (a + m) - avanzo * m;
-      const chiudiQui = (a: number, ga: number, o: Origine) => {
-        if (a > tetto + eps) return;
-        proponi(ga + conto(a) + penFine, j, a + m > T ? T : Math.max(a + m, X), a, o);
-      };
-      for (const t of tratti) {
-        if (t.x0 > tetto + eps) continue;
-        const b = Math.min(t.x1, tetto);
+      X = Math.min(T, cFine + R);
+      penFine = pen(X - cFine);
+      // Il conto non scende sotto il minimo di g piu p·X: se cosi non si
+      // batte il piano migliore trovato, qui non serve guardare.
+      if (fine !== null && Math.min(minimo, minimoPieno) + p * X + penFine >= (fine as Fine).valore - 1e-12) continue;
+      for (let k = 0; k < tratti.length; k++) {
+        const t = tratti[k]!;
+        if (t.x0 > pieno + eps) continue;
+        const b = Math.min(t.x1, pieno);
         chiudiQui(t.x0, t.y0, t.o);
         if (b > t.x0) chiudiQui(b, valoreIn(t, b), t.o);
         // conto cambia pendenza dove la sosta passa dal necessario al
@@ -680,7 +716,7 @@ export function pianificaViaggio(i: PianoInput): Piano {
         if (X > t.x0 && X < b) chiudiQui(X, valoreIn(t, X), t.o);
         if (T - m > t.x0 && T - m < b) chiudiQui(T - m, valoreIn(t, T - m), t.o);
       }
-      for (const q of puntiQui) chiudiQui(q.x, q.y, q.o);
+      for (let k = 0; k < puntiQui.length; k++) chiudiQui(puntiQui[k]!.x, puntiQui[k]!.y, puntiQui[k]!.o);
     }
     return { fine, pieni };
   };
