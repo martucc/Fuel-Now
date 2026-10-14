@@ -15,9 +15,16 @@ import { VALORE_TEMPO_EURO_ORA } from './ranking';
  * passa le pompe in ordine di km e tiene, per ogni livello del serbatoio,
  * il conto minimo per averlo: una funzione lineare a tratti, non pochi
  * livelli scelti in anticipo (com'era nella prima versione, che con
- * l'acquisto minimo a volte sbagliava le soste di qualche euro). Le
- * pompe che un'altra batte in tutto si tolgono prima (senzaDominate): sui
- * viaggi lunghi in Risparmio il conto resta sotto i dieci millisecondi.
+ * l'acquisto minimo a volte sbagliava le soste di qualche euro). Si
+ * guardano tutte le pompe: sui viaggi lunghi in Risparmio, quasi
+ * novecento, il conto resta sotto i venti millisecondi.
+ *
+ * Non si tolgono prima le pompe «battute» da una vicina non piu cara e con
+ * meno deviazione: sembra innocuo e non lo e. Le soste vanno in ordine di
+ * km e due soste non stanno entro 0,4 km, quindi una sosta obbligata fra
+ * le due, o troppo vicina a quella che batte, rende inutilizzabile proprio
+ * quella che resta. Con 45 L in riserva, una pompa a 2,25 sulla strada al
+ * km 40 e due a 1,99 attorno, toglierne una faceva spendere 6 € in piu.
  *
  * Il conto che il piano tiene basso e il carburante comprato, al prezzo di
  * ogni pompa, piu 0,75 € per sosta: cinque minuti al valore del tempo della
