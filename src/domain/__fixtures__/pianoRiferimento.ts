@@ -41,9 +41,8 @@ const CL = 100;
  * I gradini sono gli stessi di `pianificaViaggio`, perche sono la
  * specifica: la riserva a ogni arrivo; la prima sosta col fondo minimo, e
  * mai piu giu dell'arrivo senza soste; il ripiego con le penali, contro il
- * viaggio senza soste. Il conto e il
- * carburante piu COSTO_SOSTA_EUR per sosta, piu le penali nel ripiego. Le
- * regole:
+ * viaggio senza soste. Il conto e il carburante piu COSTO_SOSTA_EUR per
+ * sosta, piu le penali nel ripiego. Le regole:
  *  - si arriva alla pompa j con `prima - (dev. di ritorno della sosta
  *    precedente + km fra le due + dev. di andata di j) / kml` litri;
  *  - non si scende sotto il fondo del gradino, mai sotto zero;
