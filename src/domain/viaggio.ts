@@ -333,16 +333,21 @@ const CORTO = 1e-9;
 
 const valoreIn = (t: Tratto, x: number): number => t.y0 + t.s * (x - t.x0);
 
-/** Aggiunge in fondo a `out` il pezzo [x0, x1] di t; lo stesso tratto spezzato da un confronto si ricuce. */
+/**
+ * Aggiunge in fondo a `out` il pezzo [x0, x1] di t. Un tratto che passa
+ * intero si riusa; lo stesso tratto spezzato da un confronto si ricuce, con
+ * un oggetto nuovo: i tratti non si cambiano mai, possono stare in due liste.
+ */
 function emetti(out: Tratto[], x0: number, x1: number, t: Tratto): void {
   if (x1 - x0 <= CORTO) return;
   const y0 = valoreIn(t, x0);
-  const u = out.length > 0 ? out[out.length - 1]! : null;
+  const n = out.length;
+  const u = n > 0 ? out[n - 1]! : null;
   if (u !== null && u.o === t.o && u.s === t.s && x0 - u.x1 <= CORTO && Math.abs(valoreIn(u, x0) - y0) <= 1e-9) {
-    u.x1 = x1;
+    out[n - 1] = { x0: u.x0, x1, y0: u.y0, s: u.s, o: u.o };
     return;
   }
-  out.push({ x0, x1, y0, s: t.s, o: t.o });
+  out.push(x0 === t.x0 && x1 === t.x1 ? t : { x0, x1, y0, s: t.s, o: t.o });
 }
 
 /**
@@ -471,8 +476,40 @@ export function pianificaViaggio(i: PianoInput): Piano {
     let p = 0;
     // Cosa si puo arrivare ad avere alla tappa: tratti e punti nel livello
     // all'arrivo, gia col conto della sosta e del prezzo di qui.
+    // Gli oggetti si riusano da una tappa all'altra: non escono mai dalla
+    // tappa in cui sono scritti, ne passano solo i valori.
     const tratti: Tratto[] = [];
     const puntiQui: Punto[] = [];
+    const scortaTratti: Tratto[] = [];
+    const scortaPunti: Punto[] = [];
+    const nuovoTratto = (x0: number, x1: number, y0: number, s: number, o: Origine) => {
+      const k = tratti.length;
+      let t = scortaTratti[k];
+      if (t === undefined) {
+        t = { x0, x1, y0, s, o };
+        scortaTratti.push(t);
+      } else {
+        t.x0 = x0;
+        t.x1 = x1;
+        t.y0 = y0;
+        t.s = s;
+        t.o = o;
+      }
+      tratti.push(t);
+    };
+    const nuovoPunto = (x: number, y: number, o: Origine) => {
+      const k = puntiQui.length;
+      let q = scortaPunti[k];
+      if (q === undefined) {
+        q = { x, y, o };
+        scortaPunti.push(q);
+      } else {
+        q.x = x;
+        q.y = y;
+        q.o = o;
+      }
+      puntiQui.push(q);
+    };
     // Il minimo Q del conto: i suoi tratti, il minimo fin qui e dove e
     // piatto, e il pieno di chi arriva oltre T − minimo.
     const qTratti: Tratto[] = [];
@@ -491,7 +528,7 @@ export function pianificaViaggio(i: PianoInput): Piano {
     };
     const aggiungiTratto = (a0: number, a1: number, y0: number, s: number, o: Origine) => {
       if (!penali) {
-        tratti.push({ x0: a0, x1: a1, y0: y0 + COSTO_SOSTA_EUR - a0 * p, s: s - p, o });
+        nuovoTratto(a0, a1, y0 + COSTO_SOSTA_EUR - a0 * p, s - p, o);
         return;
       }
       // Le penali cambiano pendenza a meta riserva e alla riserva.
@@ -501,12 +538,12 @@ export function pianificaViaggio(i: PianoInput): Piano {
         const k = q === 0 ? R / 2 : R;
         if (k > x + CORTO && k < a1 - CORTO) {
           const sk = s + pendenzaPen((x + k) / 2) - p;
-          tratti.push({ x0: x, x1: k, y0: y, s: sk, o });
+          nuovoTratto(x, k, y, sk, o);
           y += sk * (k - x);
           x = k;
         }
       }
-      tratti.push({ x0: x, x1: a1, y0: y, s: s + pendenzaPen((x + a1) / 2) - p, o });
+      nuovoTratto(x, a1, y, s + pendenzaPen((x + a1) / 2) - p, o);
     };
     const chiudi = (x: number) => {
       if (origPiatto && x - piatto > CORTO) qTratti.push({ x0: piatto, x1: x, y0: minimo, s: 0, o: origPiatto });
@@ -622,17 +659,17 @@ export function pianificaViaggio(i: PianoInput): Piano {
         const a0 = Math.max(t.x0 - A, fondo);
         if (a1 - a0 > CORTO) aggiungiTratto(a0, a1, valoreIn(t, a0 + A), t.s, t.o);
         // Un tratto che arriva al fondo per un soffio conta come un punto.
-        else puntiQui.push({ x: a1, y: valoreIn(t, a1 + A) + COSTO_SOSTA_EUR + pen(a1) - a1 * p, o: t.o });
+        else nuovoPunto(a1, valoreIn(t, a1 + A) + COSTO_SOSTA_EUR + pen(a1) - a1 * p, t.o);
       }
       const ordinati = puntiQui.length === 0;
       for (let k = 0; k < punti.length; k++) {
         const q = punti[k]!;
         const a = q.x - A;
-        if (almeno(a, fondo)) puntiQui.push({ x: a, y: q.y + COSTO_SOSTA_EUR + pen(a) - a * p, o: q.o });
+        if (almeno(a, fondo)) nuovoPunto(a, q.y + COSTO_SOSTA_EUR + pen(a) - a * p, q.o);
       }
       const daCasa = S0 - A;
       if (almeno(daCasa, fondoPrima)) {
-        puntiQui.push({ x: daCasa, y: COSTO_SOSTA_EUR + pen(daCasa) - daCasa * p, o: casa });
+        nuovoPunto(daCasa, COSTO_SOSTA_EUR + pen(daCasa) - daCasa * p, casa);
         // La partenza va al suo posto: gli altri sono gia in ordine.
         for (let k = puntiQui.length - 1; k > 0 && puntiQui[k - 1]!.x > puntiQui[k]!.x; k--) {
           const t = puntiQui[k]!;
