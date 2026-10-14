@@ -220,48 +220,6 @@ function tappeSullaStrada(candidate: readonly TappaCandidata[], distanzaKm: numb
     .sort((a, b) => a.kmDaPartenza - b.kmDaPartenza);
 }
 
-/**
- * Toglie le pompe che un'altra batte in tutto. A batte B quando costa
- * uguale o meno e la sua deviazione, piu la distanza fra le due lungo la
- * strada, non supera la deviazione di B: ad A si arriva con almeno il
- * carburante con cui si arriverebbe a B, e da A si riparte come da un
- * punto non piu indietro. Per esempio B a 2 km dalla strada e A a 300 m,
- * mezzo km piu in la, allo stesso prezzo.
- *
- * Non basta che A sia piu avanti e non piu cara: per arrivarci serve piu
- * carburante, e chi arriva a B con la riserva ad A magari non ci arriva.
- *
- * Sui viaggi lunghi in Risparmio sono piu di un terzo delle candidate, e il
- * calcolo costa col quadrato di quante sono. Un test di proprieta su strade
- * fitte di distributori controlla che il conto non cambi.
- *
- * Le tappe arrivano in ordine di km.
- */
-function senzaDominate(tappe: TappaCandidata[]): TappaCandidata[] {
-  const n = tappe.length;
-  const out: TappaCandidata[] = [];
-  let devMax = 0;
-  for (const t of tappe) devMax = Math.max(devMax, t.deviazioneKm);
-  let da = 0;
-  for (let b = 0; b < n; b++) {
-    const B = tappe[b]!;
-    // Chi batte B sta entro la sua deviazione, in km.
-    while (tappe[da]!.kmDaPartenza < B.kmDaPartenza - devMax) da++;
-    let battuta = false;
-    for (let a = da; a < n && !battuta; a++) {
-      const A = tappe[a]!;
-      if (A.kmDaPartenza > B.kmDaPartenza + B.deviazioneKm) break;
-      if (a === b || A.prezzo > B.prezzo || A.kmDaPartenza < B.kmDaPartenza - B.deviazioneKm) continue;
-      const margine = B.deviazioneKm - A.deviazioneKm - Math.abs(A.kmDaPartenza - B.kmDaPartenza);
-      if (margine < 0) continue;
-      // Fra due identiche ne resta una: la prima.
-      battuta = margine > 0 || A.prezzo < B.prezzo || a < b;
-    }
-    if (!battuta) out.push(B);
-  }
-  return out;
-}
-
 /*
  * Il conto della programmazione dinamica, scritto col «potenziale»: il
  * livello del serbatoio riportato al km 0, livello + km/kml. Ripartendo da
@@ -423,7 +381,7 @@ export function pianificaViaggio(i: PianoInput): Piano {
   const almeno = (litri: number, soglia: number) => litri >= Math.max(0, soglia - eps) - ARROTONDAMENTO_L;
   const m = LITRI_SOSTA;
 
-  const tappe = senzaDominate(tappeSullaStrada(i.candidate, D));
+  const tappe = tappeSullaStrada(i.candidate, D);
   const n = tappe.length;
   const km = Float64Array.from(tappe, (t) => t.kmDaPartenza);
   const prezzo = Float64Array.from(tappe, (t) => t.prezzo);
