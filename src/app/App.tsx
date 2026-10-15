@@ -9,6 +9,7 @@ import { BarraSchede } from './BarraSchede';
 import type { Scheda } from './BarraSchede';
 import { aggiungiIndietro } from '../ui/kit/indietro';
 import { prezzoBreve } from '../domain/mappa';
+import { prezzoAllaPompa } from '../domain/parse';
 import { Home } from '../ui/schermate/Home';
 import { Mappa } from '../ui/schermate/Mappa';
 import { FoglioImpianto } from '../ui/schermate/FoglioImpianto';
@@ -64,8 +65,8 @@ export function App() {
 
   const scelto = useMemo(() => {
     const r = impianto ? m.base?.perId.get(impianto) : null;
-    const p = r?.prices[m.impostazioni.carburante];
-    return r && p !== undefined ? { id: r.id, lat: r.lat, lng: r.lng, testo: prezzoBreve(p) } : null;
+    const p = r ? prezzoAllaPompa(r, m.impostazioni.carburante) : null;
+    return r && p ? { id: r.id, lat: r.lat, lng: r.lng, testo: prezzoBreve(p.prezzo) } : null;
   }, [impianto, m.base, m.impostazioni.carburante]);
 
   const best = home?.best ?? null;

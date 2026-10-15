@@ -187,7 +187,7 @@ Ordinamento per `NETTO` decrescente; a parità entro 0,15 €, vince il più vic
 
 **Assunzioni dichiarate:**
 - `costo_strada` assume andata e ritorno dedicati. È prudente: se si passa davanti all'impianto, il risparmio reale è maggiore di quello mostrato. Meglio sorprendere in positivo.
-- Senza auto selezionata: benzina 15 km/L · diesel 18 km/L · GPL 11 km/L · metano 14 km/kg; serbatoio 45 L.
+- Senza auto selezionata: benzina 15 km/L · diesel 18 km/L · GPL 11 km/L · metano 22 km/kg; serbatoio 45 L (pieno all'85%), bombole del metano 15 kg (pieno intero). *Rivisto il 14 ottobre 2026: i 14 km/kg di prima stavano sotto a tutte le auto a metano del catalogo (20-24 km/kg).*
 - Con auto selezionata si usano `kml` e `liters` da `cars.json`; con almeno 3 rifornimenti registrati si usa il **consumo reale** calcolato da `fillupService`.
 - La distanza è in linea d'aria (Haversine). Sovrastima leggermente la convenienza degli impianti lontani. Accettabile in fase 2; migliorabile con distanza stradale se emergesse come problema.
 

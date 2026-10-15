@@ -12,6 +12,7 @@ import { FoglioLuogo } from './FoglioLuogo';
 import { Tragitto } from '../viaggio/Tragitto';
 import { Riepilogo } from '../viaggio/Riepilogo';
 import { SchedaSosta } from '../viaggio/SchedaSosta';
+import { ultimoPrezzo } from '../../domain/freshness';
 import { CaricoPercorso, ErrorePercorso, SenzaArrivo, SenzaPartenza, StessoPosto } from '../viaggio/StatiViaggio';
 import { usePercorsoViaggio } from '../viaggio/usePercorsoViaggio';
 import { useCalcoloViaggio } from '../viaggio/useCalcoloViaggio';
@@ -163,7 +164,7 @@ export function Viaggio({ m, onApriImpianto }: Props) {
               lungoStrada={calcolo.esito ? calcolo.esito.candidate.length : null}
             />
             {calcolo.soste.map((s) => (
-              <SchedaSosta key={s.row.id} s={s} fuel={m.impostazioni.carburante} adesso={m.adesso} onApri={() => onApriImpianto(s.row.id)} />
+              <SchedaSosta key={s.row.id} s={s} fuel={m.impostazioni.carburante} adesso={m.adesso} ultimo={m.base ? ultimoPrezzo(m.base.rows) : null} onApri={() => onApriImpianto(s.row.id)} />
             ))}
           </>
         )}

@@ -110,16 +110,39 @@ describe('tappeCandidate', () => {
     expect(tappe.map((t) => t.level)).toEqual(['best', 'normal', 'worst']);
   });
 
-  it('scarta i prezzi fuori scala e quelli bassissimi ma vecchi', () => {
+  it('scarta i prezzi fuori scala e quelli bassi e vecchi, con lo stesso giudice della Home', () => {
+    // Lungo la strada dieci pompe fra 1,72 e 1,78, un km l'una dall'altra.
+    const strada = Array.from({ length: 10 }, (_, i) =>
+      sulPercorso(`s${i}`, 1.72 + (i % 4) * 0.02, 5 + i, 0.1, { lng: 11.3 + i * 0.013 }));
     const tappe = tappeCandidate(
       [
-        sulPercorso('assurdo', 2.1, 10),
-        sulPercorso('fantasma', 1.6, 20, 0.1, { updated: quando(72) }),
-        sulPercorso('basso-di-oggi', 1.6, 30),
+        ...strada,
+        sulPercorso('assurdo', 2.3, 10, 0.1, { lng: 11.31 }),
+        sulPercorso('errore', 1.45, 12, 0.1, { lng: 11.33 }),
+        sulPercorso('fantasma', 1.6, 20, 0.1, { lng: 11.35, updated: quando(72) }),
+        sulPercorso('basso-di-oggi', 1.66, 30, 0.1, { lng: 11.37 }),
       ],
       { ...o, strategia: 'bilanciato' },
     );
-    expect(tappe.map((t) => t.id)).toEqual(['basso-di-oggi']);
+    const ids = tappe.map((t) => t.id);
+    expect(ids).not.toContain('assurdo');
+    expect(ids).not.toContain('errore');
+    expect(ids).not.toContain('fantasma');
+    expect(ids).toContain('basso-di-oggi');
+  });
+
+  it('da Bormio a Livigno tiene i prezzi del paese, che la Home consiglia', () => {
+    // Prima: z di provincia sotto −2,5 e prezzo di due giorni, quindi
+    // scartato, mentre la Home lo consigliava. Ora il metro è la zona.
+    const so = buildCohorts([
+      ...Array.from({ length: 50 }, (_, i) => riga(`so${i}`, 2.25 + (i % 5) * 0.01, { prov: 'SO', lat: 0, lng: 0 })),
+      ...Array.from({ length: 12 }, (_, i) => riga(`liv${i}`, 1.72, { prov: 'SO', lat: 0, lng: 0 })),
+    ]);
+    const livigno = [1.29, 1.32, 1.35, 1.38, 1.41, 1.44].map((p, i) =>
+      sulPercorso(`l${i}`, p, 30 + i, 0.05, { prov: 'SO', lat: 46.53, lng: 10.13 + i * 0.01, updated: quando(i === 0 ? 52 : 3) }));
+    const bormio = [2.195, 2.48].map((p, i) => sulPercorso(`b${i}`, p, 1 + i, 0.05, { prov: 'SO', lat: 46.467, lng: 10.37 + i * 0.003 }));
+    const tappe = tappeCandidate([...bormio, ...livigno], { ...o, cohorts: so, strategia: 'bilanciato' });
+    expect(tappe.map((t) => t.id)).toEqual(['b0', 'b1', 'l0', 'l1', 'l2', 'l3', 'l4', 'l5']);
   });
 });
 

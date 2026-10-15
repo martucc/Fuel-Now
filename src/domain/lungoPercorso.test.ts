@@ -55,7 +55,7 @@ function rettaEst(kmTotali: number, passoKm: number, da: LatLng = { lat: 44, lng
   return Array.from({ length: n + 1 }, (_, i) => sposta(da, 0, (kmTotali * i) / n));
 }
 
-const opz = { fuel: 'diesel' as const, adesso: ADESSO };
+const opz = { fuel: 'diesel' as const };
 
 /** Generatore pseudo-casuale con seme: i test restano ripetibili. */
 function casuale(seme: number): () => number {
@@ -262,6 +262,12 @@ describe('impiantiLungoPercorso: chi resta fuori', () => {
     const out = impiantiLungoPercorso(strada, righe, { ...opz, nascosti: new Set(['nascosto']) });
     expect(out.map((x) => x.row.id)).toEqual(['buono', 'sei-giorni', 'senza-data']);
     expect(out[0]!.prezzo).toBe(1.7);
+  });
+
+  it('se è il lotto intero a essere vecchio, nessuno è «chiuso»', () => {
+    // Telefono senza rete da dieci giorni: vecchi sono i dati, non i distributori.
+    const righe = ['a', 'b', 'c'].map((id, i) => riga(id, sulla(5 + i * 5), { updated: quando(10 * 24 + i) }));
+    expect(impiantiLungoPercorso(strada, righe, opz).map((x) => x.row.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('con un percorso vuoto o di un punto solo non trova niente', () => {

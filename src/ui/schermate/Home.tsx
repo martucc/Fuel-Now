@@ -14,7 +14,7 @@ import type { FuelKey } from '../../domain/raw';
 import { FUEL_KEYS } from '../../domain/raw';
 import { prezzoBreve } from '../../domain/mappa';
 import type { RankedStation } from '../../domain/ranking';
-import { parseUpdatedAt } from '../../domain/freshness';
+import { ORE_PREZZO_VECCHIO, parseUpdatedAt } from '../../domain/freshness';
 import { euro, prezzo as formatoPrezzo } from '../../lib/formato';
 import { portamiLi } from '../../services/navigazione';
 import type { ListItem } from '../home/homeModel';
@@ -24,9 +24,10 @@ import { Prezzo } from '../kit/Prezzo';
 import { LogoMarchio } from '../kit/LogoMarchio';
 import { Vuoto, Segnaposto } from '../kit/Stato';
 import { nomeMarchio } from '../kit/marchio';
-import { distanza, etaPrezzo, indirizzo, minutiGuida, oreDa } from '../kit/formatoUi';
+import { distanza, etaPrezzo, indirizzo, minutiGuida } from '../kit/formatoUi';
 import { MappaCarburanti } from '../mappa/MappaCarburanti';
 import type { ComandiMappa } from '../mappa/MappaCarburanti';
+import { unitaPrezzo } from '../prezzi/formatoPrezzi';
 import { FoglioPerche } from './FoglioPerche';
 
 interface Props {
@@ -146,11 +147,19 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
           />
         ) : (
           <div className="rounded-mf-lg bg-mf-surface">
-            <Vuoto
-              titolo={`Nessun distributore di ${FUEL_LABEL[fuel].toLowerCase()} entro ${RAGGIO_HOME_KM} km`}
-              testo="Prova un altro carburante o guarda la mappa."
-              azione={<Pulsante tono="grigio" onClick={onApriMappa}>Apri la mappa</Pulsante>}
-            />
+            {home && home.list.length > 0 ? (
+              <Vuoto
+                titolo={`Nessun distributore da consigliare entro ${RAGGIO_HOME_KM} km`}
+                testo="Quelli qui intorno sono in autostrada, forse chiusi, nascosti da te o con prezzi fuori mercato: li trovi nella lista qui sotto, ognuno col suo motivo."
+                azione={<Pulsante tono="grigio" onClick={onApriMappa}>Apri la mappa</Pulsante>}
+              />
+            ) : (
+              <Vuoto
+                titolo={`Nessun distributore di ${FUEL_LABEL[fuel].toLowerCase()} entro ${RAGGIO_HOME_KM} km`}
+                testo="Prova un altro carburante o guarda la mappa."
+                azione={<Pulsante tono="grigio" onClick={onApriMappa}>Apri la mappa</Pulsante>}
+              />
+            )}
           </div>
         )}
       </section>
@@ -218,6 +227,12 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
   );
 }
 
+/** «€/L self», «€/L servito», «€/kg»: accanto al prezzo grande del consiglio. */
+function etichettaPrezzo(fuel: FuelKey, alServito: boolean): string {
+  if (alServito) return `${unitaPrezzo(fuel)} servito`;
+  return fuel === 'diesel' || fuel === 'benzina' ? `${unitaPrezzo(fuel)} self` : unitaPrezzo(fuel);
+}
+
 function datiDel(m: Modello): number | null {
   const s = m.dataset.dati?.source?.latest_price_at;
   return parseUpdatedAt(s)?.getTime() ?? null;
@@ -267,8 +282,7 @@ interface SchedaProps {
 function SchedaConsiglio({ best, m, servito, onPerche, onApri }: SchedaProps) {
   const r = best.row;
   const netto = best.net.net;
-  const ore = oreDa(r.updated, m.adesso);
-  const vecchio = ore !== null && ore > 72;
+  const vecchio = (best.ritardoH ?? 0) > ORE_PREZZO_VECCHIO;
   const titolo = nomeMarchio(r.brand);
   return (
     <article className="rounded-mf-lg bg-mf-surface p-4">
@@ -286,7 +300,7 @@ function SchedaConsiglio({ best, m, servito, onPerche, onApri }: SchedaProps) {
       <div className="mt-4 flex items-end gap-4">
         <div>
           <Prezzo valore={best.price} livello={best.level} spento={vecchio} misura="eroe" />
-          <p className="mf-caption mt-1 text-mf-ink-2">€/L self</p>
+          <p className="mf-caption mt-1 text-mf-ink-2">{etichettaPrezzo(m.impostazioni.carburante, best.alServito)}</p>
         </div>
         {servito !== null && servito !== best.price && (
           <div className="pb-[22px]">
@@ -303,7 +317,7 @@ function SchedaConsiglio({ best, m, servito, onPerche, onApri }: SchedaProps) {
             <span className="text-mf-ink-2">, già tolta la strada per arrivarci.</span>
           </>
         ) : (
-          <span className="text-mf-ink-2">È il più conveniente qui vicino, contando anche la strada.</span>
+          <span className="text-mf-ink-2">È il più conveniente qui vicino, contando strada e tempo.</span>
         )}
       </p>
 
@@ -341,10 +355,11 @@ interface RigaProps {
 function RigaImpianto({ it, m, ordine, consigliato, bestPrice, onApri }: RigaProps) {
   const riga = m.base?.perId.get(it.id);
   const servito = riga?.servito[m.impostazioni.carburante] ?? null;
-  const ore = oreDa(riga?.updated, m.adesso);
-  const vecchio = ore !== null && ore > 72;
   const spento = it.probabilmenteChiuso || !it.eligible;
   const delta = bestPrice !== null ? it.price - bestPrice : 0;
+  // Per risparmio: chi rende piu del consigliato ci mette piu minuti, e la
+  // riga lo dice; chi non si consiglia non dice «risparmi», dice perche.
+  const tempo = ordine === 'risparmio' && it.consigliabile && it.minutiInPiu >= 1 ? `+${it.minutiInPiu} min` : null;
 
   return (
     <li>
@@ -356,17 +371,20 @@ function RigaImpianto({ it, m, ordine, consigliato, bestPrice, onApri }: RigaPro
             {consigliato && <span className="shrink-0 rounded-full bg-mf-accent-soft px-1.5 py-[1px] text-[11px] font-semibold text-mf-accent">Consigliato</span>}
           </span>
           <span className="mf-footnote block truncate text-mf-ink-2">
-            {distanza(it.distanceKm)} · <span className={vecchio ? 'text-mf-warn' : ''}>{etaPrezzo(riga?.updated, m.adesso)}</span>
+            {distanza(it.distanceKm)}
+            {tempo && ` · ${tempo}`}
+            {it.motivo && ` · ${it.motivo}`} · <span className={it.vecchio ? 'text-mf-warn' : ''}>{etaPrezzo(riga?.updated, m.adesso)}</span>
+            {it.alServito && ' · solo servito'}
           </span>
         </span>
         <span className="shrink-0 text-right">
           <Prezzo valore={it.price} livello={it.level} spento={spento} misura="riga" />
           <span className="mf-caption mf-num block text-mf-ink-2">
-            {ordine === 'risparmio' && it.net >= RISPARMIO_MINIMO
+            {ordine === 'risparmio' && it.consigliabile && it.net >= RISPARMIO_MINIMO
               ? `risparmi ${euro(it.net)}`
               : ordine === 'prezzo' && delta > 0.0005
                 ? `+${prezzoBreve(delta)}`
-                : servito !== null
+                : servito !== null && !it.alServito
                   ? `servito ${formatoPrezzo(servito)}`
                   : ' '}
           </span>

@@ -2,7 +2,8 @@ import type { FuelKey } from '../../domain/raw';
 import { FUEL_LABEL } from '../../domain/fuel';
 import type { EsitoViaggio, Strategia } from '../../domain/tappeViaggio';
 import { testoImpossibile } from '../../domain/tappeViaggio';
-import { chilometri, euro, litri, numero } from '../../lib/formato';
+import { chilometri, euro, numero } from '../../lib/formato';
+import { quantita } from '../kit/formatoUi';
 import type { PercorsoViaggio } from '../../services/percorsoService';
 import { Segnaposto } from '../kit/Stato';
 import { durata } from './formatoViaggio';
@@ -43,10 +44,10 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
             <Dato
               etichetta="Carburante"
               valore={esito.costoStimato !== null ? euro(esito.costoStimato, 0) : '—'}
-              nota={`circa ${litri(esito.litriConsumati, 0)}`}
+              nota={`circa ${quantita(esito.litriConsumati, fuel)}`}
             />
             <Dato etichetta="Soste" valore={p.fattibile ? numero(p.soste.length) : '—'} />
-            <Dato etichetta="All’arrivo" valore={p.fattibile ? litri(p.litriAllArrivo, 0) : '—'} nota="nel serbatoio" />
+            <Dato etichetta="All’arrivo" valore={p.fattibile ? quantita(p.litriAllArrivo, fuel) : '—'} nota={fuel === 'metano' ? 'nelle bombole' : 'nel serbatoio'} />
           </dl>
 
           <div className="mt-4 border-t border-mf-hairline pt-3">
@@ -57,7 +58,7 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
               </>
             ) : p.soste.length === 0 ? (
               <>
-                <p className="mf-headline">Ci arrivi senza fare benzina</p>
+                <p className="mf-headline">Ci arrivi senza fare rifornimento</p>
                 <p className="mf-subhead mt-1 text-mf-ink-2">Il carburante che hai basta, con un po’ di margine.</p>
               </>
             ) : (
@@ -66,7 +67,7 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
                   {p.soste.length === 1 ? 'Ti fermi una volta' : `Ti fermi ${numero(p.soste.length)} volte`}
                 </p>
                 <p className="mf-subhead mt-1 text-mf-ink-2">
-                  Metti <span className="mf-num text-mf-ink">{litri(p.litriComprati, 0)}</span> in tutto, per{' '}
+                  Metti <span className="mf-num text-mf-ink">{quantita(p.litriComprati, fuel)}</span> in tutto, per{' '}
                   <span className="mf-num text-mf-ink">{euro(p.spesaCarburante)}</span>.
                   {p.risparmioEur !== null && p.risparmioEur >= RISPARMIO_MINIMO && (
                     <>

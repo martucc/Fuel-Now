@@ -1,10 +1,12 @@
 import type { FuelKey } from './raw';
 import type { StationRow } from './parse';
+import { dropMisgeocoded, prezzoAllaPompa } from './parse';
 import type { CohortIndex } from './market';
 import { cohortFor } from './market';
 import type { PriceLevel } from './pricing';
-import { priceLevel, Z_ABSURD } from './pricing';
-import { ageHours, isLikelyClosed } from './freshness';
+import { priceLevel } from './pricing';
+import { isLikelyClosed, ritardoSulLotto } from './freshness';
+import { giudiceAnomalie } from './anomalie';
 
 /**
  * Cosa finisce sulla mappa. Tutti gli impianti che vendono il carburante
@@ -25,32 +27,50 @@ export interface PuntoMappa {
   id: string;
   lat: number;
   lng: number;
-  /** Prezzo confrontabile (self quando c'e). */
+  /** Il prezzo che si paga: il self, o il servito dove il self non c'e. */
   prezzo: number;
   /** Prezzo servito, se l'impianto lo comunica. */
   servito: number | null;
   livello: PriceLevel;
-  /** Prezzo fermo da piu di una settimana: si mostra spento. */
+  /**
+   * Prezzo fermo da piu di una settimana prima degli ultimi arrivati: forse
+   * chiuso, si mostra spento. Lo stesso metro della Home e della scheda.
+   */
   vecchio: boolean;
-  /** Prezzo fuori scala per la sua coorte: quasi certamente un errore di battitura. */
+  /**
+   * Prezzo da non credere, col giudice della Home (anomalie.ts): la Home
+   * non consiglia un prezzo che qui e spento, e viceversa.
+   */
   sospetto: boolean;
   marchio: string;
   nome: string;
 }
 
+/**
+ * `ultimo` e il prezzo piu recente del lotto intero (ultimoPrezzo di tutte
+ * le righe del dataset, non solo di quelle passate): l'eta si misura su di
+ * lui, cosi col seme vecchio o senza rete la mappa non diventa tutta grigia.
+ *
+ * `tutte` sono tutte le righe del dataset, quando `rows` ne e solo una parte
+ * (le soste del Viaggio): i prezzi si giudicano sulla loro zona, come nella
+ * Home, che passa per lo stesso dropMisgeocoded.
+ */
 export function puntiMappa(
   rows: StationRow[],
   cohorts: CohortIndex,
   fuel: FuelKey,
-  now: Date,
+  ultimo: string | null,
   nascosti: ReadonlySet<string> = new Set(),
+  tutte: StationRow[] = rows,
 ): PuntoMappa[] {
+  const anomalia = giudiceAnomalie(dropMisgeocoded(tutte), fuel, cohorts);
   const out: PuntoMappa[] = [];
   for (const r of rows) {
-    const prezzo = r.prices[fuel];
-    if (prezzo === undefined || nascosti.has(r.id)) continue;
+    const pompa = prezzoAllaPompa(r, fuel);
+    if (!pompa || nascosti.has(r.id)) continue;
+    const prezzo = pompa.prezzo;
     const coorte = cohortFor(r, fuel, cohorts);
-    const { level, z } = coorte ? priceLevel(prezzo, coorte) : { level: 'normal' as PriceLevel, z: null };
+    const level: PriceLevel = coorte ? priceLevel(prezzo, coorte).level : 'normal';
     out.push({
       id: r.id,
       lat: r.lat,
@@ -58,8 +78,8 @@ export function puntiMappa(
       prezzo,
       servito: r.servito[fuel] ?? null,
       livello: level,
-      vecchio: isLikelyClosed(ageHours(r.updated, now)),
-      sospetto: z !== null && Math.abs(z) > Z_ABSURD,
+      vecchio: isLikelyClosed(ritardoSulLotto(r.updated, ultimo)),
+      sospetto: anomalia(r, prezzo) !== undefined,
       marchio: r.brand,
       nome: r.name,
     });

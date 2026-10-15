@@ -18,10 +18,11 @@ describe('Bagnacavallo / Lugo / Russi real-world ranking scenario', () => {
     liters: 45,
     kml: 16,
     blocked: new Set<string>(),
+    raggioKm: 20,
   };
 
   it('ordina per convenienza reale e non mette in cima distributori autostradali cari', () => {
-    const ranked = rankStations(rows, ctx).filter((r) => r.distanceKm <= 20);
+    const ranked = rankStations(rows, ctx);
     const best = pickBest(ranked);
 
     expect(best).not.toBeNull();
@@ -76,7 +77,8 @@ describe('il consiglio deve valere qualcosa, non essere solo il piu vicino', () 
         liters: 38.25,
         kml: 15,
         blocked: new Set<string>(),
-      }).filter((r) => r.distanceKm <= 20);
+        raggioKm: 20,
+      });
 
       const best = pickBest(ranked);
       expect(best).not.toBeNull();
@@ -85,10 +87,10 @@ describe('il consiglio deve valere qualcosa, non essere solo il piu vicino', () 
       // faresti comunque: se e negativo, stiamo consigliando una perdita.
       expect(best!.net.net).toBeGreaterThanOrEqual(0);
 
-      // E non puo costare piu del piu vicino: sarebbe il peggio dei due mondi,
-      // piu lontano E piu caro.
+      // E non puo costare piu del piu vicino che si potrebbe consigliare:
+      // sarebbe il peggio dei due mondi, piu lontano E piu caro.
       const vicino = [...ranked]
-        .filter((r) => r.eligible)
+        .filter((r) => r.consigliabile)
         .sort((a, b) => a.distanceKm - b.distanceKm)[0]!;
       expect(best!.price).toBeLessThanOrEqual(vicino.price);
     });

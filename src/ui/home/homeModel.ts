@@ -2,16 +2,14 @@ import type { StationRow } from '../../domain/parse';
 import type { CohortIndex, CohortSource } from '../../domain/market';
 import type { FuelKey, RawDataset } from '../../domain/raw';
 import type { LatLng } from '../../domain/geo';
-import { haversineKm } from '../../domain/geo';
 import type { PriceLevel } from '../../domain/pricing';
-import type { RankedStation } from '../../domain/ranking';
+import type { IneligibleReason, MotivoNonConsigliabile, RankedStation } from '../../domain/ranking';
 import { dropMisgeocoded } from '../../domain/parse';
 import type { Advice, ForecastView } from '../../domain/forecast';
-import { rankStations, pickBest, limiteDeviazioneKm } from '../../domain/ranking';
-import type { Percorso } from '../../domain/corridoio';
+import { rankStations, classifica } from '../../domain/ranking';
 import { readForecast, adviceOfTheDay } from '../../domain/forecast';
 import { LEVEL_LABEL } from '../../domain/pricing';
-import { describeAge } from '../../domain/freshness';
+import { describeAge, ORE_PREZZO_VECCHIO } from '../../domain/freshness';
 
 export interface HomeInput {
   rows: StationRow[];
@@ -19,18 +17,6 @@ export interface HomeInput {
   dataset: RawDataset;
   fuel: FuelKey;
   user: LatLng;
-  /** Posizione della casa per il calcolo del rientro */
-  home?: LatLng | null;
-  /** Nome o indirizzo di casa configurato */
-  homeAddress?: string | null;
-  /** Se true, ottimizza il percorso di rientro verso casa (Utente -> Distributore -> Casa) */
-  homeMode?: boolean;
-  /**
-   * Il percorso stradale verso casa, quando il router ha risposto. Con
-   * questo la deviazione si misura sulla strada vera; senza, si ripiega
-   * sul triangolo in linea d'aria e la Home lo dichiara.
-   */
-  percorso?: Percorso | null;
   now: Date;
   liters: number;
   kml: number;
@@ -47,7 +33,10 @@ export interface ListItem {
   city: string;
   lat: number;
   lng: number;
+  /** Il prezzo che si paga: il self, o il servito dove il self non c'e. */
   price: number;
+  /** L'impianto per questo carburante ha solo il servito: va detto accanto al prezzo. */
+  alServito: boolean;
   level: PriceLevel;
   levelLabel: string;
   reliable: boolean;
@@ -57,11 +46,20 @@ export interface ListItem {
   /** Quanto costa in piu al litro rispetto al migliore. 0 per il migliore. */
   deltaVsBest: number;
   eligible: boolean;
-  reason?: string;
-  detourKm?: number;
-  tripTotalKm?: number;
-  minutiPersi?: number;
-  /** Non comunica un prezzo da oltre una settimana: da mostrare, non da nascondere. */
+  reason?: IneligibleReason;
+  /** Si puo consigliare: e solo per questi che la riga dice «risparmi X €». */
+  consigliabile: boolean;
+  nonConsigliabile?: MotivoNonConsigliabile;
+  /** Minuti di strada in piu rispetto al piu vicino, arrotondati: «+8 min». */
+  minutiInPiu: number;
+  /**
+   * Perche non si consiglia, in due parole da mettere nella riga: «in
+   * autostrada», «forse chiuso», «prezzo vecchio», «+34 min, troppa strada»…
+   */
+  motivo?: string;
+  /** Prezzo di oltre tre giorni prima degli ultimi arrivati: l'eta va in arancio. */
+  vecchio: boolean;
+  /** Non comunica un prezzo da oltre una settimana: da mostrare, non da consigliare. */
   probabilmenteChiuso: boolean;
 }
 
@@ -96,8 +94,8 @@ export interface BoardSummary {
 
 export interface HomeModel {
   best: RankedStation | null;
-  bestRank: number | null;
   eligibleCount: number;
+  /** Gli impianti entro il raggio, col consigliato in testa: vedi classifica. */
   list: ListItem[];
   spectrum: Spectrum | null;
   board: BoardSummary;
@@ -111,19 +109,6 @@ export interface HomeModel {
    * Positivo = si guadagna ad aspettare.
    */
   adviceImpactEur: number | null;
-  /**
-   * Quanti km si risparmiano scegliendo questo invece di chi guida la
-   * classifica per netto. null quando il migliore E chi la guida.
-   * Senza questo, «2 di 775» si legge come «il secondo migliore».
-   */
-  tieSavedKm: number | null;
-  homeMode: boolean;
-  homeAddress: string | null;
-  homeLocation: LatLng | null;
-  /** Km da qui a casa: stradali se il router ha risposto, in linea d'aria altrimenti. */
-  directHomeKm: number | null;
-  /** true se le deviazioni sono misurate sulla strada vera e non col triangolo. */
-  percorsoSuStrada: boolean;
 }
 
 /** Etichette del consiglio, spec § 6.5. */
@@ -134,6 +119,32 @@ export const ADVICE_LABEL: Record<Advice, string> = {
   'PRICE-ONLY': 'Decidi sul prezzo di oggi',
 };
 
+/**
+ * Il motivo per cui un distributore della lista e spento: lo stesso elenco
+ * del foglio «Perché», detto in due parole.
+ */
+export const MOTIVO_ESCLUSIONE: Record<IneligibleReason, string> = {
+  bloccato: 'nascosto',
+  'probabilmente-chiuso': 'forse chiuso',
+  autostrada: 'in autostrada',
+  'prezzo-assurdo': 'prezzo fuori mercato',
+  // L'eta e gia scritta accanto, in arancio quando e vecchia.
+  'prezzo-sospetto-stantio': 'prezzo fuori mercato',
+};
+
+/**
+ * Il motivo della riga: perche e esclusa, o perche non si consiglia pur
+ * essendo utilizzabile. I minuti di «troppa strada» si arrotondano per
+ * eccesso: sono oltre il tetto, e 20,3 minuti scritti «+20 min» smentivano
+ * il foglio Perche («mai oltre 20 minuti in piu»).
+ */
+export function motivoDi(r: Pick<RankedStation, 'reason' | 'nonConsigliabile' | 'minutiInPiu'>): string | undefined {
+  if (r.reason) return MOTIVO_ESCLUSIONE[r.reason];
+  if (r.nonConsigliabile === 'prezzo-vecchio') return 'prezzo vecchio';
+  if (r.nonConsigliabile === 'troppa-strada') return `+${Math.ceil(r.minutiInPiu)} min, troppa strada`;
+  return undefined;
+}
+
 function toItem(r: RankedStation, bestPrice: number | null): ListItem {
   return {
     id: r.row.id,
@@ -143,6 +154,7 @@ function toItem(r: RankedStation, bestPrice: number | null): ListItem {
     lat: r.row.lat,
     lng: r.row.lng,
     price: r.price,
+    alServito: r.alServito,
     level: r.level,
     levelLabel: LEVEL_LABEL[r.level],
     reliable: r.reliable,
@@ -152,9 +164,11 @@ function toItem(r: RankedStation, bestPrice: number | null): ListItem {
     deltaVsBest: bestPrice === null ? 0 : r.price - bestPrice,
     eligible: r.eligible,
     reason: r.reason,
-    detourKm: r.detourKm,
-    tripTotalKm: r.tripTotalKm,
-    minutiPersi: r.minutiPersi,
+    consigliabile: r.consigliabile,
+    nonConsigliabile: r.nonConsigliabile,
+    minutiInPiu: Math.round(r.minutiInPiu),
+    motivo: motivoDi(r),
+    vecchio: (r.ritardoH ?? 0) > ORE_PREZZO_VECCHIO,
     probabilmenteChiuso: r.probabilmenteChiuso,
   };
 }
@@ -174,46 +188,22 @@ export function buildHomeModel(i: HomeInput): HomeModel {
   // ma non possono entrare in una scelta che pesa i chilometri.
   const rows = dropMisgeocoded(i.rows);
 
-  const homeActive = Boolean(i.homeMode && i.home);
-  const percorso = homeActive && i.percorso && i.percorso.punti.length >= 2 ? i.percorso : null;
-
-  // Col percorso vero il «quanto e lontana casa» sono i km stradali del
-  // router; senza, la linea d'aria. Sono due numeri diversi e la seconda
-  // sottostima sempre: il limite di deviazione ne tiene conto da solo,
-  // perche e proporzionale.
-  const directHomeKm = percorso
-    ? percorso.km
-    : homeActive && i.home
-      ? haversineKm(i.user, i.home)
-      : null;
-
-  const allRanked = rankStations(rows, {
+  // La scelta e la lista si fanno fra gli impianti entro il raggio: «qui vicino».
+  const ranked = rankStations(rows, {
     fuel: i.fuel,
     user: i.user,
-    home: homeActive ? i.home : undefined,
-    percorso,
     cohorts: i.cohorts,
     now: i.now,
     liters: i.liters,
     kml: i.kml,
     blocked: i.blocked,
+    raggioKm: i.radiusKm,
   });
 
-  // In rientro il raggio impostato nei filtri non c'entra piu niente: la
-  // domanda non e «cosa ho vicino» ma «cosa incontro andando». Il confine
-  // lo da la deviazione, non la distanza da dove sei adesso.
-  const ranked = allRanked.filter((r) => {
-    if (homeActive && directHomeKm !== null) {
-      const limite = limiteDeviazioneKm(directHomeKm);
-      return (r.detourKm ?? 0) <= limite && r.distanceKm <= directHomeKm + limite;
-    }
-    return r.distanceKm <= i.radiusKm;
-  });
-
-  const best = pickBest(ranked);
-  const list = ranked.map((r) => toItem(r, best ? best.price : null));
-
-  const bestRank = best ? ranked.findIndex((r) => r.row.id === best.row.id) + 1 : null;
+  // Consiglio e ordine della lista escono dallo stesso conto: il primo
+  // della lista e sempre il consigliato.
+  const { best, lista } = classifica(ranked);
+  const list = lista.map((r) => toItem(r, best ? best.price : null));
   const eligibleCount = ranked.filter((r) => r.eligible).length;
 
   const spectrum: Spectrum | null = best
@@ -230,7 +220,7 @@ export function buildHomeModel(i: HomeInput): HomeModel {
     : null;
 
   // Math.min/max qui DESCRIVONO il range mostrato nel velo del tabellone.
-  // La scelta di dove conviene andare resta pickBest.
+  // La scelta di dove conviene andare resta classifica.
   const prices = list.map((x) => x.price);
   const board: BoardSummary = {
     count: list.length,
@@ -251,15 +241,8 @@ export function buildHomeModel(i: HomeInput): HomeModel {
   const adviceImpactEur =
     forecast && forecast.usable ? (-forecast.deltaC / 100) * i.liters : null;
 
-  const leader = ranked.find((r) => r.eligible) ?? null;
-  const tieSavedKm =
-    best && leader && leader.row.id !== best.row.id
-      ? leader.distanceKm - best.distanceKm
-      : null;
-
   return {
     best,
-    bestRank,
     eligibleCount,
     list,
     spectrum,
@@ -268,11 +251,5 @@ export function buildHomeModel(i: HomeInput): HomeModel {
     advice,
     adviceReason: reason,
     adviceImpactEur,
-    tieSavedKm,
-    homeMode: homeActive,
-    homeAddress: i.homeAddress ?? null,
-    homeLocation: i.home ?? null,
-    directHomeKm,
-    percorsoSuStrada: percorso !== null,
   };
 }

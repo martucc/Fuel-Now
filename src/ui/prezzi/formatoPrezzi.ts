@@ -1,5 +1,7 @@
 import { numero } from '../../lib/formato';
 import type { FuelKey } from '../../domain/raw';
+import { nomeMarchio } from '../kit/marchio';
+import { distanza } from '../kit/formatoUi';
 
 /**
  * Le poche forme che servono solo alla scheda Prezzi, costruite sopra
@@ -43,4 +45,13 @@ export function delCarburante(fuel: FuelKey): string {
 /** Il metano si vende a chilo. */
 export function unitaPrezzo(fuel: FuelKey): string {
   return fuel === 'metano' ? '€/kg' : '€/L';
+}
+
+/**
+ * «Eni · 1,2 km» sotto il piu conveniente della carta Oggi. Se il suo prezzo
+ * e al servito (qui intorno un self non c'e, o non conviene) lo si dice: la
+ * nota della carta parla di prezzi self.
+ */
+export function sottotitoloMigliore(m: { row: { brand: string }; distanceKm: number; alServito: boolean }): string {
+  return `${nomeMarchio(m.row.brand)} · ${distanza(m.distanceKm)}${m.alServito ? ' · solo servito' : ''}`;
 }

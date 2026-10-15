@@ -12,6 +12,7 @@ import type { HomeModel } from '../ui/home/homeModel';
 import { buildHomeModel } from '../ui/home/homeModel';
 import type { CollezionePunti } from '../domain/mappa';
 import { collezionePunti, puntiMappa } from '../domain/mappa';
+import { ultimoPrezzo } from '../domain/freshness';
 import type { StatoDataset } from '../data/dataset';
 
 /** Raggio della Home: oltre, un distributore non e piu «qui vicino». */
@@ -51,7 +52,10 @@ export interface Modello {
   posizione: StatoPosizione;
   impostazioni: Impostazioni;
   auto: Auto | null;
-  /** Litri di un pieno tipico e consumo, dall'auto scelta o dai default. */
+  /**
+   * Quantita di un pieno tipico e consumo, dall'auto scelta o dai default
+   * del carburante (vedi units.ts): col metano sono kg e km/kg.
+   */
   litri: number;
   kml: number;
   adesso: Date;
@@ -71,7 +75,7 @@ export function useModello(): Modello {
     () => (impostazioni.auto && elenco ? elenco.find((a) => a.model === impostazioni.auto) ?? null : null),
     [impostazioni.auto, elenco],
   );
-  const litri = litersFor(auto);
+  const litri = litersFor(auto, impostazioni.carburante);
   const kml = kmlFor(auto, impostazioni.carburante, null);
 
   return { dataset, base, posizione, impostazioni, auto, litri, kml, adesso, nascosti };
@@ -104,6 +108,6 @@ export function useHome(m: Modello): HomeModel | null {
 export function usePuntiMappa(m: Modello): CollezionePunti | null {
   return useMemo(() => {
     if (!m.base) return null;
-    return collezionePunti(puntiMappa(m.base.rows, m.base.cohorts, m.impostazioni.carburante, m.adesso, m.nascosti));
-  }, [m.base, m.impostazioni.carburante, m.adesso, m.nascosti]);
+    return collezionePunti(puntiMappa(m.base.rows, m.base.cohorts, m.impostazioni.carburante, ultimoPrezzo(m.base.rows), m.nascosti));
+  }, [m.base, m.impostazioni.carburante, m.nascosti]);
 }

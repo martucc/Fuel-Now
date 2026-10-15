@@ -14,7 +14,8 @@ import { Prezzo } from '../kit/Prezzo';
 import { LogoMarchio } from '../kit/LogoMarchio';
 import { nomeImpianto, nomeMarchio } from '../kit/marchio';
 import { ETICHETTA_LIVELLO, COLORE_LIVELLO } from '../kit/livelli';
-import { distanza, etaPrezzo, indirizzo, minutiGuida, oreDa } from '../kit/formatoUi';
+import { distanza, etaPrezzo, indirizzo, minutiGuida } from '../kit/formatoUi';
+import { etaNelLotto, ultimoPrezzo } from '../../domain/freshness';
 
 /**
  * La scheda di un distributore: tutti i suoi prezzi, self e servito, quanto
@@ -25,9 +26,9 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
   if (!r || !m.base) return null;
 
   const nascosto = m.nascosti.has(id);
-  const ore = oreDa(r.updated, m.adesso);
-  const vecchio = ore !== null && ore > 72;
-  const chiuso = ore !== null && ore > 168;
+  // Lo stesso metro della Home, della mappa e del Viaggio: l'eta rispetto
+  // agli ultimi prezzi arrivati, non all'orologio.
+  const { vecchio, forseChiuso: chiuso } = etaNelLotto(r.updated, ultimoPrezzo(m.base.rows));
   const lontano = m.posizione.punto ? haversineKm(m.posizione.punto, { lat: r.lat, lng: r.lng }) : null;
   const titolo = nomeMarchio(r.brand);
   const carburanti = FUEL_KEYS.filter((k) => r.prices[k] !== undefined || r.servito[k] !== undefined);

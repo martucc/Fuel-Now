@@ -6,7 +6,8 @@ import { LogoMarchio } from '../kit/LogoMarchio';
 import { Prezzo } from '../kit/Prezzo';
 import { Pulsante } from '../kit/Pulsante';
 import { nomeMarchio } from '../kit/marchio';
-import { distanza, etaPrezzo, indirizzo, oreDa } from '../kit/formatoUi';
+import { distanza, etaPrezzo, indirizzo } from '../kit/formatoUi';
+import { etaNelLotto } from '../../domain/freshness';
 import { litriDaMettere, unitaPrezzo } from './formatoViaggio';
 import type { SostaMostrata } from './useCalcoloViaggio';
 
@@ -14,6 +15,8 @@ interface Props {
   s: SostaMostrata;
   fuel: FuelKey;
   adesso: Date;
+  /** Il prezzo piu recente del lotto: l'arancio si misura su di lui, come nella Home. */
+  ultimo: string | null;
   onApri: () => void;
 }
 
@@ -24,13 +27,12 @@ const SULLA_STRADA_KM = 0.15;
  * Una sosta del piano: dove, a che prezzo, quanto mettere e il bottone per
  * andarci. Il numero e blu come sulla mappa: e un «vai qui».
  */
-export function SchedaSosta({ s, fuel, adesso, onApri }: Props) {
+export function SchedaSosta({ s, fuel, adesso, ultimo, onApri }: Props) {
   const r = s.row;
   const t = s.sosta.tappa;
   const titolo = nomeMarchio(r.brand);
   const via = indirizzo(r.address, r.city);
-  const ore = oreDa(r.updated, adesso);
-  const vecchio = ore !== null && ore > 72;
+  const { vecchio } = etaNelLotto(r.updated, ultimo);
   const servito = r.servito[fuel];
 
   return (
@@ -65,7 +67,7 @@ export function SchedaSosta({ s, fuel, adesso, onApri }: Props) {
         </div>
         <div className="text-right">
           <p className="mf-caption text-mf-ink-2">{s.sosta.pieno ? 'Fai il pieno' : 'Metti'}</p>
-          <p className="mf-num mf-headline">{litriDaMettere(s.sosta.litri)}</p>
+          <p className="mf-num mf-headline">{litriDaMettere(s.sosta.litri, fuel)}</p>
           <p className="mf-caption mf-num text-mf-ink-2">{euro(s.sosta.spesa)}</p>
         </div>
       </div>

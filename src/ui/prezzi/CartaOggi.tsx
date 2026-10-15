@@ -5,9 +5,8 @@ import { RAGGIO_HOME_KM } from '../../app/modello';
 import { numero } from '../../lib/formato';
 import { Gruppo, Riga } from '../kit/Gruppo';
 import { Prezzo } from '../kit/Prezzo';
-import { nomeMarchio } from '../kit/marchio';
-import { distanza, oreDa } from '../kit/formatoUi';
-import { unitaPrezzo } from './formatoPrezzi';
+import { ORE_PREZZO_VECCHIO } from '../../domain/freshness';
+import { sottotitoloMigliore, unitaPrezzo } from './formatoPrezzi';
 
 interface Props {
   fuel: FuelKey;
@@ -15,7 +14,6 @@ interface Props {
   /** Il consigliato della Home; null senza posizione o senza impianti vicini. */
   migliore: RankedStation | null;
   conPosizione: boolean;
-  adesso: Date;
 }
 
 /** Sotto questo scarto la provincia e «in linea» col paese: mezzo centesimo non e una notizia. */
@@ -25,9 +23,9 @@ const IN_LINEA_C = 0.5;
  * Oggi in tre righe: quanto costa in Italia, quanto nella tua provincia,
  * quanto dal piu conveniente vicino a te. Sotto, quanti prezzi sono freschi.
  */
-export function CartaOggi({ fuel, quadro, migliore, conPosizione, adesso }: Props) {
+export function CartaOggi({ fuel, quadro, migliore, conPosizione }: Props) {
   const { nazionale, provincia, freschezza } = quadro;
-  const vecchio = migliore ? (oreDa(migliore.row.updated, adesso) ?? Infinity) > 72 : false;
+  const vecchio = migliore ? (migliore.ritardoH ?? Infinity) > ORE_PREZZO_VECCHIO : false;
 
   return (
     <Gruppo nota={`${fuel === 'diesel' || fuel === 'benzina' ? 'Prezzi self' : 'Prezzi'} in ${unitaPrezzo(fuel)}, comunicati dai gestori al Ministero delle Imprese e del Made in Italy.`}>
@@ -52,11 +50,11 @@ export function CartaOggi({ fuel, quadro, migliore, conPosizione, adesso }: Prop
       {migliore ? (
         <Riga
           titolo="Il più conveniente qui vicino"
-          sottotitolo={`${nomeMarchio(migliore.row.brand)} · ${distanza(migliore.distanceKm)}`}
+          sottotitolo={sottotitoloMigliore(migliore)}
           valore={<Prezzo valore={migliore.price} livello={migliore.level} spento={vecchio} />}
         />
       ) : conPosizione ? (
-        <Riga titolo="Il più conveniente qui vicino" sottotitolo={`Nessun distributore entro ${RAGGIO_HOME_KM} km`} valore="—" />
+        <Riga titolo="Il più conveniente qui vicino" sottotitolo={`Nessuno da consigliare entro ${RAGGIO_HOME_KM} km`} valore="—" />
       ) : null}
       <Freschi f={freschezza} />
     </Gruppo>

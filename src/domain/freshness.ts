@@ -34,9 +34,14 @@ export function confidenceFor(ageH: number | null): number {
   return 0.3;
 }
 
+/** Oltre una settimana senza un prezzo nuovo l'impianto e quasi sempre chiuso. */
+export const ORE_FORSE_CHIUSO = 168;
+/** Oltre tre giorni il prezzo non e piu recente: si scrive in arancio e conta meno. */
+export const ORE_PREZZO_VECCHIO = 72;
+
 /** Oltre tre giorni il prezzo non e piu «di oggi» e va detto. */
 export function isStale(ageH: number | null): boolean {
-  return ageH === null || ageH > 72;
+  return ageH === null || ageH > ORE_PREZZO_VECCHIO;
 }
 
 /**
@@ -49,7 +54,88 @@ export function isStale(ageH: number | null): boolean {
  * sappiamo la data sarebbe punire noi, non loro.
  */
 export function isLikelyClosed(ageH: number | null): boolean {
-  return ageH !== null && ageH > 168;
+  return ageH !== null && ageH > ORE_FORSE_CHIUSO;
+}
+
+/*
+  L'eta che conta per giudicare un distributore si misura sul lotto, non
+  sull'orologio: il ritardo del suo prezzo rispetto al prezzo piu recente
+  del file. Col seme impacchettato di un mese fa, o col telefono senza rete
+  da giorni, vecchi sono i dati e non i distributori. Home, scheda, mappa e
+  Viaggio usano questo stesso metro, cosi nessuno dice «forse chiuso» di un
+  impianto che un altro consiglia.
+
+  L'eta scritta accanto al prezzo («4 giorni fa») resta quella vera,
+  dall'orologio: e un fatto, non un giudizio.
+*/
+
+const ultimoPerRighe = new WeakMap<readonly { updated: string | null }[], string | null>();
+
+/** Sotto questo numero di prezzi datati vale semplicemente il piu recente. */
+const MIN_PREZZI_PER_APPOGGIO = 100;
+/** Il punto d'appoggio: la data che si trova lasciando fuori l'1% piu recente del lotto. */
+const QUOTA_IN_CIMA = 0.01;
+/** Oltre un giorno dopo il punto d'appoggio una data e sbagliata, non recente. */
+const ORE_OLTRE_APPOGGIO = 24;
+
+/**
+ * Il prezzo piu recente del lotto. Si ricorda per array: le righe del
+ * dataset sono ventunomila e non cambiano finche non cambia il file.
+ *
+ * Non e il massimo grezzo: basterebbe un gestore che scrive una data di
+ * una settimana avanti per far sembrare «forse chiusi» tutti gli altri
+ * distributori d'Italia. Nei lotti veri gli ultimi prezzi arrivano a
+ * centinaia, a pochi minuti l'uno dall'altro; una data piu di un giorno
+ * avanti all'1% piu recente non e di quelle e non conta. Un lotto di poche
+ * righe non ha abbastanza date per accorgersene: li vale il piu recente.
+ */
+export function ultimoPrezzo(rows: readonly { updated: string | null }[]): string | null {
+  if (ultimoPerRighe.has(rows)) return ultimoPerRighe.get(rows) ?? null;
+  const date: { t: number; s: string }[] = [];
+  for (const r of rows) {
+    const at = parseUpdatedAt(r.updated);
+    if (at && r.updated) date.push({ t: at.getTime(), s: r.updated });
+  }
+  let ultimo: string | null = null;
+  if (date.length > 0) {
+    date.sort((a, b) => b.t - a.t);
+    let i = 0;
+    if (date.length >= MIN_PREZZI_PER_APPOGGIO) {
+      const limite = date[Math.floor(date.length * QUOTA_IN_CIMA)]!.t + ORE_OLTRE_APPOGGIO * 3_600_000;
+      while (date[i]!.t > limite) i++;
+    }
+    ultimo = date[i]!.s;
+  }
+  ultimoPerRighe.set(rows, ultimo);
+  return ultimo;
+}
+
+/** Ore di ritardo di un prezzo rispetto al piu recente del lotto; null senza data. */
+export function ritardoSulLotto(updated: string | null | undefined, ultimo: string | null): number | null {
+  const at = parseUpdatedAt(updated);
+  if (!at) return null;
+  const lotto = parseUpdatedAt(ultimo);
+  if (!lotto) return 0;
+  return Math.max(0, (lotto.getTime() - at.getTime()) / 3_600_000);
+}
+
+export interface EtaNelLotto {
+  /** Ore di ritardo sul lotto, null senza data. */
+  ritardoH: number | null;
+  /** Prezzo di oltre tre giorni prima degli ultimi arrivati: in arancio. */
+  vecchio: boolean;
+  /** Fermo da oltre una settimana mentre gli altri no: forse chiuso. */
+  forseChiuso: boolean;
+}
+
+/** Il giudizio sull'eta di un prezzo, con il metro del lotto. */
+export function etaNelLotto(updated: string | null | undefined, ultimo: string | null): EtaNelLotto {
+  const ritardoH = ritardoSulLotto(updated, ultimo);
+  return {
+    ritardoH,
+    vecchio: ritardoH !== null && ritardoH > ORE_PREZZO_VECCHIO,
+    forseChiuso: isLikelyClosed(ritardoH),
+  };
 }
 
 export function describeAge(ageH: number | null): string {

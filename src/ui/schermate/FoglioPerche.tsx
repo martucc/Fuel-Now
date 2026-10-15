@@ -1,58 +1,25 @@
 import type { Modello } from '../../app/modello';
 import type { RankedStation } from '../../domain/ranking';
-import { euro, litri, numero, prezzo } from '../../lib/formato';
+import { EURO_PER_MINUTO, FATTORE_STRADA, KM_ALTERNATIVA_VICINA, MAX_MINUTI_IN_PIU, TIE_EURO } from '../../domain/ranking';
+import { autoPerCarburante } from '../../domain/units';
+import { numero } from '../../lib/formato';
 import { Foglio } from '../kit/Foglio';
 import { nomeMarchio } from '../kit/marchio';
 import { etaPrezzo } from '../kit/formatoUi';
-
-interface Voce {
-  etichetta: string;
-  valore: string;
-  nota?: string;
-  forte?: boolean;
-}
+import { vociPerche } from '../home/perche';
 
 /**
  * Il conto del consiglio, riga per riga, con i numeri dell'utente. Viene
- * dallo stesso calcolo che ha deciso: niente scatole nere.
+ * dallo stesso calcolo che ha deciso: niente scatole nere. Le righe le
+ * scrive vociPerche (ui/home/perche.ts), che ha i suoi test.
  */
 export function FoglioPerche({ best, m, onChiudi }: { best: RankedStation; m: Modello; onChiudi: () => void }) {
-  const n = best.net;
-  const rif = n.riferimento;
-  const voci: Voce[] = [];
-
-  voci.push({
-    etichetta: 'Pieno considerato',
-    valore: litri(n.liters, 0),
-    nota: m.auto ? m.auto.model : 'Serbatoio medio: scegli la tua auto nelle impostazioni',
+  const fuel = m.impostazioni.carburante;
+  const voci = vociPerche(best, {
+    fuel,
+    auto: autoPerCarburante(m.auto, fuel)?.model ?? null,
+    eta: etaPrezzo(best.row.updated, m.adesso),
   });
-  voci.push({ etichetta: 'Prezzo qui', valore: `${prezzo(n.price)} €/L` });
-  if (rif) {
-    voci.push({
-      etichetta: 'Il più vicino a te',
-      valore: `${prezzo(rif.price)} €/L`,
-      nota: `a ${numero(rif.distanceKm, 1)} km: è lì che faresti il pieno senza pensarci`,
-    });
-  } else {
-    voci.push({ etichetta: 'Media della zona', valore: `${prezzo(n.cohortAvg)} €/L` });
-  }
-  voci.push({ etichetta: 'Risparmio sul carburante', valore: euro(n.gross) });
-  if (n.confidence < 1 && n.gross > 0) {
-    voci.push({
-      etichetta: 'Prezzo non di oggi',
-      valore: `× ${numero(n.confidence, 2)}`,
-      nota: `comunicato ${etaPrezzo(best.row.updated, m.adesso)}: il risparmio conta di meno`,
-    });
-  }
-
-  voci.push({
-    etichetta: 'Strada in più',
-    valore: `− ${euro(n.roadCost)}`,
-    nota: `circa ${numero(n.kmStrada, 1)} km di strada fra andata e ritorno, a ${numero(n.kml, 1)} km/L`,
-  });
-  if (n.highwayFriction > 0) voci.push({ etichetta: 'Uscita dall’autostrada', valore: `− ${euro(n.highwayFriction)}` });
-  if (n.detourFriction > 0) voci.push({ etichetta: 'Tempo e usura', valore: `− ${euro(n.detourFriction)}` });
-  voci.push({ etichetta: 'In tasca', valore: euro(n.net), forte: true });
 
   return (
     <Foglio titolo="Perché questo distributore" sottotitolo={nomeMarchio(best.row.brand)} onChiudi={onChiudi}>
@@ -70,9 +37,17 @@ export function FoglioPerche({ best, m, onChiudi }: { best: RankedStation; m: Mo
           </div>
         ))}
       </dl>
-      <p className="mf-footnote mt-3 text-mf-ink-3">
-        A parità di risparmio (entro 15 centesimi) vince il più vicino. I km di strada sono stimati dalla linea d’aria, aumentata del 30%.
-      </p>
+      <div className="mf-footnote mt-3 space-y-2 text-mf-ink-3">
+        <p>
+          Il risparmio si misura contro il pieno che faresti comunque: il distributore più vicino con un prezzo recente, cioè di non più di tre giorni prima degli ultimi arrivati quando qui intorno ce ne sono almeno tre. Se il più vicino ha solo il servito e un self a portata ti conviene, contando strada e tempo, il pieno lo faresti al self; e se al massimo {numero(KM_ALTERNATIVA_VICINA)} km più in là del self più vicino ce n’è uno che ti conviene già, il confronto si fa con quello. I km sono stimati dalla linea d’aria, aumentata del {numero((FATTORE_STRADA - 1) * 100)}%.
+        </p>
+        <p>
+          Il tempo non entra nel risparmio ma nella scelta: uno più lontano vince solo se ogni minuto in più ti fa risparmiare almeno {numero(EURO_PER_MINUTO * 100)} centesimi, e mai oltre {MAX_MINUTI_IN_PIU} minuti in più rispetto al più vicino, anche se ha solo il servito. A parità, entro {numero(TIE_EURO * 100)} centesimi, vince il più vicino. E il consigliato non costa mai più del pieno che faresti comunque.
+        </p>
+        <p>
+          Non consiglio distributori in autostrada (per i viaggi c’è la scheda Viaggio), quelli che da una settimana non comunicano prezzi mentre gli altri sì e i prezzi fuori mercato per la zona che nessun distributore vicino conferma.
+        </p>
+      </div>
     </Foglio>
   );
 }

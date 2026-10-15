@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { centesimiConSegno, dataBreve, dataConAnno, delCarburante, ora, unitaPrezzo } from './formatoPrezzi';
+import { centesimiConSegno, dataBreve, dataConAnno, delCarburante, ora, sottotitoloMigliore, unitaPrezzo } from './formatoPrezzi';
 
 describe('formatoPrezzi', () => {
   it('scrive le date corte in italiano, senza slittare di un giorno', () => {
@@ -24,5 +24,12 @@ describe('formatoPrezzi', () => {
     expect(delCarburante('gpl')).toBe('del GPL');
     expect(unitaPrezzo('metano')).toBe('€/kg');
     expect(unitaPrezzo('diesel')).toBe('€/L');
+  });
+
+  it('sotto il più conveniente dice quando il prezzo è al servito', () => {
+    // Ventotene: l'unica pompa ha il solo servito, e la carta Oggi lo
+    // mostrava sotto la nota «Prezzi self» come se fosse un self.
+    expect(sottotitoloMigliore({ row: { brand: 'Agip Eni' }, distanceKm: 0.4, alServito: true })).toBe('Eni · 400 m · solo servito');
+    expect(sottotitoloMigliore({ row: { brand: 'Q8' }, distanceKm: 2.34, alServito: false })).toBe('Q8 · 2,3 km');
   });
 });

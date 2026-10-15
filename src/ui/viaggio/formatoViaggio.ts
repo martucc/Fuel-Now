@@ -1,5 +1,5 @@
 import type { FuelKey } from '../../domain/raw';
-import { litri, numero } from '../../lib/formato';
+import { chili, litri, numero } from '../../lib/formato';
 
 /** «45 min», «1 h», «3 h 50 min». */
 export function durata(minuti: number): string {
@@ -16,10 +16,11 @@ export function soste(n: number): string {
   return n === 1 ? '1 sosta' : `${numero(n)} soste`;
 }
 
-/** Litri da mettere: un decimale sotto i dieci, interi sopra. Mai «0 L». */
-export function litriDaMettere(l: number): string {
+/** Quanto mettere: un decimale sotto i dieci, interi sopra. Mai «0 L». Col metano in kg. */
+export function litriDaMettere(l: number, fuel: FuelKey = 'diesel'): string {
   if (!Number.isFinite(l)) return '—';
-  return l < 10 ? litri(Math.max(0.1, l), 1) : litri(l, 0);
+  const f = fuel === 'metano' ? chili : litri;
+  return l < 10 ? f(Math.max(0.1, l), 1) : f(l, 0);
 }
 
 /** «€/L self», «€/L», «€/kg»: diesel e benzina si confrontano sul self. */

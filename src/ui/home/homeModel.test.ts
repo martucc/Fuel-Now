@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildHomeModel } from './homeModel';
+import { buildHomeModel, motivoDi } from './homeModel';
 import { realDataset } from '../../domain/__fixtures__/dataset';
 import { parseStations } from '../../domain/parse';
 import { buildCohorts } from '../../domain/market';
+import type { StationRow } from '../../domain/parse';
+import type { RawDataset } from '../../domain/raw';
+import { ADESSO, UTENTE, aKm, riga, coorte, cittaFinta, oreFa } from '../../domain/__fixtures__/sintetico';
 
 const data = realDataset();
 const rows = parseStations(data.stations);
@@ -32,7 +35,7 @@ describe('buildHomeModel — la risposta', () => {
     expect(m.best!.distanceKm).toBeLessThan(300);
   });
 
-  it('la lista mette gli eleggibili prima, e dentro ciascun gruppo ordina per netto', () => {
+  it('la lista mette gli eleggibili prima e parte dal consigliato', () => {
     const m = model();
     // Una stazione bloccata o dal prezzo assurdo non sale in cima solo
     // perche il suo netto e alto: prima viene l'eleggibilita.
@@ -40,26 +43,12 @@ describe('buildHomeModel — la risposta', () => {
     if (primoIneleggibile >= 0) {
       for (const i of m.list.slice(primoIneleggibile)) expect(i.eligible).toBe(false);
     }
-    const gruppi = [m.list.filter((i) => i.eligible), m.list.filter((i) => !i.eligible)];
-    for (const g of gruppi) {
-      for (let k = 1; k < g.length; k++) expect(g[k - 1]!.net).toBeGreaterThanOrEqual(g[k]!.net);
-    }
+    expect(m.list[0]!.id).toBe(m.best!.row.id);
   });
 
   it('dichiara quanti impianti ha confrontato', () => {
     const m = model();
-    expect(m.bestRank).toBeGreaterThanOrEqual(1);
     expect(m.eligibleCount).toBe(m.list.filter((i) => i.eligible).length);
-  });
-
-  it('se il migliore non guida la classifica, dice quanti km fa risparmiare', () => {
-    const m = model();
-    if (m.bestRank === 1) {
-      expect(m.tieSavedKm).toBeNull();
-    } else {
-      // Chi guida per netto e piu lontano: e per questo che non ha vinto.
-      expect(m.tieSavedKm).toBeGreaterThan(0);
-    }
   });
 
   it('ogni riga porta la differenza rispetto al migliore', () => {
@@ -207,5 +196,92 @@ describe('buildHomeModel — il tabellone', () => {
     expect(m.board.count).toBe(0);
     expect(m.board.best).toBeNull();
     expect(m.spectrum).toBeNull();
+  });
+});
+
+/* ── Il consigliato è il primo della lista (revisione, B7) ─────────────── */
+
+const datasetFinto = { forecast: {}, history: {}, national: {}, by_province: {}, fuels: ['diesel'], stations: [], extracted_at: '2026-10-13' } as unknown as RawDataset;
+const coorteFinta = buildCohorts(coorte('RA', 'diesel', 2.0));
+
+function vicino(righe: StationRow[]) {
+  return buildHomeModel({
+    rows: righe, cohorts: coorteFinta, dataset: datasetFinto, fuel: 'diesel', user: UTENTE,
+    now: ADESSO, liters: 40, kml: 18, blocked: new Set<string>(), radiusKm: 15, tankPct: null,
+  });
+}
+
+describe('buildHomeModel — il consigliato e la lista dicono la stessa cosa', () => {
+  it('anche quando il più conveniente ha un prezzo vecchio', () => {
+    // Prima: in cima alla lista un 1,86 di cinque giorni fa, consigliato un
+    // altro, e «km risparmiati» negativi.
+    const m = vicino([
+      riga({ id: 'vecchio', ...aKm(0.4), prices: { diesel: 1.86 }, updated: oreFa(130) }),
+      riga({ id: 'fresco', ...aKm(5.0), prices: { diesel: 1.98 } }),
+      riga({ id: 'rif', ...aKm(0.2), prices: { diesel: 2.05 } }),
+    ]);
+    expect(m.list[0]!.id).toBe(m.best!.row.id);
+  });
+
+  it('anche quando vince il più vicino per parità', () => {
+    const m = vicino([
+      riga({ id: 'a', ...aKm(0), prices: { diesel: 1.95 } }),
+      riga({ id: 'b', ...aKm(0, 0.64), prices: { diesel: 1.943 } }),
+    ]);
+    expect(m.best!.row.id).toBe('a');
+    expect(m.list[0]!.id).toBe('a');
+  });
+
+  it('su venti città finte', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const m = vicino(cittaFinta(seed));
+      expect(m.list[0]!.id, `città #${seed}`).toBe(m.best!.row.id);
+      expect(m.best!.net.net, `città #${seed}`).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe('buildHomeModel — chi non si consiglia resta in lista, col suo motivo', () => {
+  it('autostrada, forse chiuso, nascosto e prezzo fuori mercato si leggono nella riga', () => {
+    const altrove = riga({ id: 'altrove', ...aKm(0, 300) }); // il lotto è di adesso
+    const m = buildHomeModel({
+      rows: [
+        riga({ id: 'ok', ...aKm(1), prices: { diesel: 2.0 } }),
+        riga({ id: 'hw', ...aKm(0.3), isHighway: true, prices: { diesel: 1.95 } }),
+        riga({ id: 'chiuso', ...aKm(0.5), prices: { diesel: 1.96 }, updated: oreFa(240) }),
+        riga({ id: 'nascosto', ...aKm(0.7), prices: { diesel: 1.97 } }),
+        riga({ id: 'errore', ...aKm(0.9), prices: { diesel: 1.2 } }),
+        altrove,
+      ],
+      cohorts: coorteFinta, dataset: datasetFinto, fuel: 'diesel', user: UTENTE,
+      now: ADESSO, liters: 40, kml: 18, blocked: new Set(['nascosto']), radiusKm: 15, tankPct: null,
+    });
+    const motivo = (id: string) => m.list.find((i) => i.id === id)!.motivo;
+    expect(m.best!.row.id).toBe('ok');
+    expect(m.list[0]!.id).toBe('ok');
+    expect(motivo('ok')).toBeUndefined();
+    expect(motivo('hw')).toBe('in autostrada');
+    expect(motivo('chiuso')).toBe('forse chiuso');
+    expect(motivo('nascosto')).toBe('nascosto');
+    expect(motivo('errore')).toBe('prezzo fuori mercato');
+  });
+
+  it('se nessuno è consigliabile non c’è consiglio, ma la lista sì', () => {
+    const m = vicino([
+      riga({ id: 'hw', ...aKm(0.3), isHighway: true }),
+      riga({ id: 'hw2', ...aKm(2), isHighway: true }),
+    ]);
+    expect(m.best).toBeNull();
+    expect(m.list.map((i) => i.motivo)).toEqual(['in autostrada', 'in autostrada']);
+  });
+});
+
+describe('motivoDi', () => {
+  it('«troppa strada» non scrive mai un numero di minuti dentro il tetto', () => {
+    // 20,2 minuti sono oltre i venti: «+20 min, troppa strada» smentiva il
+    // foglio Perché («mai oltre 20 minuti in più»).
+    expect(motivoDi({ nonConsigliabile: 'troppa-strada', minutiInPiu: 20.2 })).toBe('+21 min, troppa strada');
+    expect(motivoDi({ nonConsigliabile: 'troppa-strada', minutiInPiu: 34 })).toBe('+34 min, troppa strada');
+    expect(motivoDi({ nonConsigliabile: 'prezzo-vecchio', minutiInPiu: 3 })).toBe('prezzo vecchio');
   });
 });

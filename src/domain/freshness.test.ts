@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseUpdatedAt, ageHours, confidenceFor, describeAge , descriviDati } from './freshness';
+import { parseUpdatedAt, ageHours, confidenceFor, describeAge , descriviDati, ultimoPrezzo, etaNelLotto } from './freshness';
+import { oreFa, rng } from './__fixtures__/sintetico';
 
 const NOW = new Date(2026, 5, 8, 12, 0); // 8 giugno 2026, 12:00 locali
 
@@ -107,5 +108,38 @@ describe('descriviDati', () => {
     const f = descriviDati({ extracted_at: '2026-08-20', source: { latest_price_at: '2026-08-20 12:30' } }, ora);
     expect(f.stantio).toBe(false);
     expect(f.giorni).toBe(0);
+  });
+});
+
+describe('ultimoPrezzo', () => {
+  /** Un lotto di `n` prezzi arrivati nelle ultime 40 ore, come quelli veri. */
+  function lotto(n: number) {
+    const r = rng(7);
+    return Array.from({ length: n }, () => ({ updated: oreFa(r() * 40) }));
+  }
+
+  it('è il prezzo più recente del lotto', () => {
+    const righe = [{ updated: oreFa(30) }, { updated: oreFa(2) }, { updated: null }, { updated: 'boh' }];
+    expect(ultimoPrezzo(righe)).toBe(oreFa(2));
+    expect(ultimoPrezzo([])).toBeNull();
+  });
+
+  it('una sola data sbagliata nel futuro non fa sembrare chiusi tutti gli altri', () => {
+    const righe = lotto(300);
+    const vero = ultimoPrezzo(lotto(300));
+    // Un gestore scrive una data di otto giorni avanti.
+    const conErrore = [...righe, { updated: oreFa(-8 * 24) }];
+    expect(ultimoPrezzo(conErrore)).toBe(vero);
+    expect(etaNelLotto(oreFa(20), ultimoPrezzo(conErrore)).forseChiuso).toBe(false);
+  });
+
+  it('anche con qualche data sbagliata in più', () => {
+    const conErrori = [...lotto(500), { updated: oreFa(-30) }, { updated: oreFa(-200) }, { updated: oreFa(-72) }];
+    expect(ultimoPrezzo(conErrori)).toBe(ultimoPrezzo(lotto(500)));
+  });
+
+  it('i prezzi arrivati per ultimi, a pochi minuti dagli altri, contano', () => {
+    const righe = [...lotto(300), { updated: oreFa(-0.5) }];
+    expect(ultimoPrezzo(righe)).toBe(oreFa(-0.5));
   });
 });

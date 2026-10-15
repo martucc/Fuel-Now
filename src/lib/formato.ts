@@ -43,3 +43,9 @@ export function litri(v: number, dec = 1): string {
   if (!Number.isFinite(v)) return '—';
   return `${numero(v, dec)} L`;
 }
+
+/** «15 kg»: il metano si vende a peso. */
+export function chili(v: number, dec = 1): string {
+  if (!Number.isFinite(v)) return '—';
+  return `${numero(v, dec)} kg`;
+}

@@ -1,6 +1,6 @@
 import type { FuelKey, RawStation } from './raw';
 import { FUEL_KEYS } from './raw';
-import { selectPrice } from './fuel';
+import { isPlausible, selectPrice } from './fuel';
 import { haversineKm } from './geo';
 
 export interface StationRow {
@@ -15,9 +15,12 @@ export interface StationRow {
   isHighway: boolean;
   lat: number;
   lng: number;
-  /** Prezzi confrontabili, già passati da selectPrice. */
+  /** Prezzi confrontabili, già passati da selectPrice: sono quelli delle statistiche. */
   prices: Partial<Record<FuelKey, number>>;
-  /** Prezzo servito, tenuto solo per mostrarlo. Mai usato per le statistiche. */
+  /**
+   * Prezzo servito, se plausibile. Mai usato per le statistiche; quando per
+   * un carburante manca il self, è il prezzo che si paga (prezzoAllaPompa).
+   */
   servito: Partial<Record<FuelKey, number>>;
   updated: string | null;
 }
@@ -38,9 +41,12 @@ export function parseStation(raw: RawStation): StationRow | null {
     const price = selectPrice(pair, f);
     if (price !== null) prices[f] = price;
     const s = pair?.[1];
-    if (s !== null && s !== undefined) servito[f] = s;
+    if (s !== null && s !== undefined && isPlausible(s, f)) servito[f] = s;
   }
-  if (Object.keys(prices).length === 0) return null;
+  // Una pompa che per il diesel ha solo il servito resta: fuori dalle
+  // statistiche, che per diesel e benzina usano il self, ma dentro la lista,
+  // al prezzo che si paga davvero. Prima spariva del tutto.
+  if (Object.keys(prices).length === 0 && Object.keys(servito).length === 0) return null;
 
   const prov = typeof raw.prov === 'string' && isValidProv(raw.prov) ? raw.prov : null;
 
@@ -59,6 +65,19 @@ export function parseStation(raw: RawStation): StationRow | null {
     servito,
     updated: raw.updated || null,
   };
+}
+
+/**
+ * Il prezzo che si paga per quel carburante: il self quando c'è, altrimenti
+ * il servito, dichiarato come tale. Per GPL e metano `prices` contiene già
+ * il servito quando manca il self (regola della pipeline), quindi qui il
+ * servito compare solo per diesel e benzina senza self.
+ */
+export function prezzoAllaPompa(row: StationRow, fuel: FuelKey): { prezzo: number; alServito: boolean } | null {
+  const self = row.prices[fuel];
+  if (self !== undefined) return { prezzo: self, alServito: false };
+  const servito = row.servito[fuel];
+  return servito !== undefined ? { prezzo: servito, alServito: true } : null;
 }
 
 export function parseStations(raw: RawStation[]): StationRow[] {

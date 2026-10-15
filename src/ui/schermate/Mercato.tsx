@@ -143,7 +143,7 @@ export function Mercato({ m, home, onApriImpostazioni }: Props) {
               <h2 className="mf-title">Oggi</h2>
               <span className="mf-footnote text-mf-ink-2">{descriviDati(dataset, m.adesso).etichetta}</span>
             </div>
-            <CartaOggi fuel={fuel} quadro={quadro} migliore={best} conPosizione={!!m.posizione.punto} adesso={m.adesso} />
+            <CartaOggi fuel={fuel} quadro={quadro} migliore={best} conPosizione={!!m.posizione.punto} />
           </section>
 
           <section className="mt-7">

@@ -69,7 +69,7 @@ Fatto nel commit `fix(dati)`:
 
 ## 6. Quali distributori, e in che ordine
 
-**Il consiglio (Home).** `rankStations` + `pickBest`, invariati nella sostanza. Il netto è il risparmio rispetto al distributore utilizzabile più vicino, meno il costo dei km in più, del tempo e dell'usura. Litri del pieno e consumo vengono dall'auto scelta; senza auto si usano i default dichiarati in `units.ts`, e la scheda lo dice.
+**Il consiglio (Home).** `rankStations` + `classifica`, rivisti il 13 ottobre (vedi `LEGGIMI-PRIMA.md` § 4). Il netto è il risparmio rispetto al pieno che faresti comunque, meno il carburante dei km in più; il tempo pesa nella scelta, non nel numero. Litri del pieno e consumo vengono dall'auto scelta; senza auto si usano i default dichiarati in `units.ts`, e la scheda lo dice.
 
 **La lista (Home).** Gli impianti entro 15 km, ordinabili per *Risparmio* (default), *Prezzo* o *Distanza*. Accanto al prezzo self, quando c'è, il servito.
 

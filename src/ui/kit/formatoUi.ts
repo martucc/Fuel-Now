@@ -1,5 +1,9 @@
-import { numero } from '../../lib/formato';
+import { chili, litri, numero } from '../../lib/formato';
+import type { FuelKey } from '../../domain/raw';
+import type { CarSpec } from '../../domain/units';
+import { eAMetano, unitaConsumo } from '../../domain/units';
 import { parseUpdatedAt } from '../../domain/freshness';
+import { FATTORE_STRADA, minutiStrada } from '../../domain/ranking';
 
 /** «850 m», «1,2 km», «14 km». */
 export function distanza(km: number): string {
@@ -9,11 +13,13 @@ export function distanza(km: number): string {
 }
 
 /**
- * Minuti di guida, a spanne: in linea d'aria per 1,3 (le strade non sono
- * dritte) a 35 km/h di media urbana. Serve a dare un'idea, non un orario.
+ * Minuti di guida, a spanne: in linea d'aria per il fattore strada (le
+ * strade non sono dritte) alla media urbana del ranking, cosi «circa N min»
+ * e i minuti in piu del consiglio sono lo stesso conto. Serve a dare
+ * un'idea, non un orario.
  */
 export function minutiGuida(km: number): number {
-  return Math.max(1, Math.round(((km * 1.3) / 35) * 60));
+  return Math.max(1, Math.round(minutiStrada(km * FATTORE_STRADA)));
 }
 
 /** «adesso», «alle 07:30», «ieri alle 18:00», «3 giorni fa». */
@@ -46,4 +52,16 @@ export function indirizzo(address: string, city: string): string {
   if (!a) return c;
   if (!c || a.toLowerCase().includes(c.toLowerCase())) return a;
   return `${a}, ${c}`;
+}
+
+/** «38 L» o, col metano, «15 kg». */
+export function quantita(v: number, fuel: FuelKey, dec = 0): string {
+  return fuel === 'metano' ? chili(v, dec) : litri(v, dec);
+}
+
+/** «Serbatoio 38 L · 19,0 km/L», o per un'auto a metano «Bombole da 12 kg · 22,0 km/kg». */
+export function descriviAuto(a: CarSpec): string {
+  return eAMetano(a)
+    ? `Bombole da ${chili(a.liters, 0)} · ${numero(a.kml, 1)} ${unitaConsumo('metano')}`
+    : `Serbatoio ${litri(a.liters, 0)} · ${numero(a.kml, 1)} ${unitaConsumo('benzina')}`;
 }

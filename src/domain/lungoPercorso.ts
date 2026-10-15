@@ -2,7 +2,7 @@ import type { LatLng } from './geo';
 import { haversineKm } from './geo';
 import type { FuelKey } from './raw';
 import type { StationRow } from './parse';
-import { ageHours, isLikelyClosed } from './freshness';
+import { isLikelyClosed, ritardoSulLotto, ultimoPrezzo } from './freshness';
 
 /**
  * I distributori lungo un percorso, in tutta Italia.
@@ -193,7 +193,6 @@ export interface ImpiantoSulPercorso {
 
 export interface OpzioniLungoPercorso {
   fuel: FuelKey;
-  adesso: Date;
   nascosti?: ReadonlySet<string>;
   /** Distanza massima dalla strada; predefinita 2,5 km. */
   maxScostamentoKm?: number;
@@ -209,8 +208,10 @@ export interface OpzioniLungoPercorso {
  * Gli impianti entro `maxScostamentoKm` dalla strada, in ordine di km.
  *
  * Restano fuori quelli nascosti dall'utente, quelli senza il carburante
- * scelto e quelli con il prezzo fermo da oltre una settimana (quasi sempre
- * chiusi). Un prezzo senza data resta: non sapere non vuol dire chiuso.
+ * scelto e quelli con il prezzo fermo da oltre una settimana mentre gli
+ * altri no (quasi sempre chiusi): l'eta si misura sul lotto, come nella Home
+ * e nella scheda, non sull'orologio. Un prezzo senza data resta: non sapere
+ * non vuol dire chiuso.
  *
  * Se la strada passa due volte vicino allo stesso impianto (andata e
  * ritorno, un tornante) conta il passaggio piu vicino, e a parita il primo.
@@ -248,6 +249,7 @@ export function impiantiLungoPercorso(
   const scala = o.kmStradali && o.kmStradali > 0 && indice.kmTotali > 0 ? o.kmStradali / indice.kmTotali : 1;
   const maxGradi = max / KM_PER_GRADO;
   const nascosti = o.nascosti;
+  const ultimo = ultimoPrezzo(rows);
   const out: ImpiantoSulPercorso[] = [];
 
   for (const r of rows) {
@@ -284,7 +286,7 @@ export function impiantiLungoPercorso(
     const gradi = Math.sqrt(migliore);
     if (gradi > maxGradi) continue;
     // La data si legge solo per i pochi impianti vicini alla strada.
-    if (isLikelyClosed(ageHours(r.updated, o.adesso))) continue;
+    if (isLikelyClosed(ritardoSulLotto(r.updated, ultimo))) continue;
 
     out.push({
       row: r,

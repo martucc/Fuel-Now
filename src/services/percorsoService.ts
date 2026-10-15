@@ -1,20 +1,10 @@
 import type { LatLng } from '../domain/geo';
-import type { Percorso } from '../domain/corridoio';
 
 /**
- * Il percorso stradale verso casa, chiesto allo stesso router che gia usa
- * la scheda Viaggio.
- *
- * Serve alla modalita rientro: senza, la deviazione si stima col triangolo
- * in linea d'aria, che su strade curve o con un fiume in mezzo sbaglia di
- * chilometri. Se il router non risponde non e un guaio — la Home ripiega
- * sulla stima e lo dichiara — quindi qui nessun errore viene rilanciato.
+ * Il percorso stradale della scheda Viaggio, chiesto al router OSRM.
  */
 
 const OSRM = 'https://router.project-osrm.org/route/v1/driving';
-
-/** Un solo percorso in memoria: quello che serve e sempre l'ultimo. */
-let cache: { chiave: string; percorso: Percorso } | null = null;
 
 /**
  * Le coordinate del GPS ballano di qualche metro anche da fermi. Arrotondate
@@ -45,40 +35,12 @@ function leggiRotta(dati: unknown): PercorsoViaggio | null {
   return { punti, km, minuti };
 }
 
-export function percorsoInCache(da: LatLng, a: LatLng): Percorso | null {
-  if (!cache) return null;
-  return cache.chiave === chiaveDi(da, a) ? cache.percorso : null;
-}
-
-export async function chiediPercorso(
-  da: LatLng,
-  a: LatLng,
-  segnale?: AbortSignal
-): Promise<Percorso | null> {
-  const chiave = chiaveDi(da, a);
-  if (cache && cache.chiave === chiave) return cache.percorso;
-
-  try {
-    const url = `${OSRM}/${da.lng},${da.lat};${a.lng},${a.lat}?overview=full&geometries=geojson`;
-    const risposta = await fetch(url, { signal: segnale });
-    if (!risposta.ok) return null;
-
-    const rotta = leggiRotta(await risposta.json());
-    if (!rotta) return null;
-
-    const percorso: Percorso = { punti: rotta.punti, km: rotta.km };
-    cache = { chiave, percorso };
-    return percorso;
-  } catch {
-    // Offline, router giu, richiesta annullata: la Home sa cavarsela senza.
-    return null;
-  }
-}
-
-/* ── Il viaggio della scheda Viaggio ─────────────────────────────────── */
-
 /** Un percorso da A a B qualunque, con la durata stimata dal router. */
-export interface PercorsoViaggio extends Percorso {
+export interface PercorsoViaggio {
+  /** Punti della spezzata, dalla partenza all'arrivo. */
+  punti: LatLng[];
+  /** Lunghezza stradale complessiva in km, dal router. */
+  km: number;
   /** Minuti di guida secondo il router: senza traffico, quindi un minimo. */
   minuti: number;
 }
@@ -96,9 +58,9 @@ export class ErrorePercorso extends Error {
 }
 
 /**
- * Gli ultimi viaggi chiesti, tenuti a parte da quello della Home: tornare a
- * una meta appena vista o scambiare due volte partenza e arrivo non
- * riscarica niente. Una risposta di mille km pesa un megabyte: ne bastano pochi.
+ * Gli ultimi viaggi chiesti: tornare a una meta appena vista o scambiare due
+ * volte partenza e arrivo non riscarica niente. Una risposta di mille km
+ * pesa un megabyte: ne bastano pochi.
  */
 const viaggi = new Map<string, PercorsoViaggio>();
 const VIAGGI_IN_MEMORIA = 6;
@@ -108,9 +70,9 @@ export function viaggioInCache(da: LatLng, a: LatLng): PercorsoViaggio | null {
 }
 
 /**
- * Il percorso stradale da `da` ad `a`. A differenza di `chiediPercorso`,
- * qui un errore si rilancia: la scheda Viaggio non ha un ripiego, deve dire
- * cosa e andato storto e lasciar riprovare.
+ * Il percorso stradale da `da` ad `a`. Un errore si rilancia: la scheda
+ * Viaggio non ha un ripiego, deve dire cosa e andato storto e lasciar
+ * riprovare.
  */
 export async function chiediViaggio(da: LatLng, a: LatLng, segnale?: AbortSignal): Promise<PercorsoViaggio> {
   const chiave = chiaveDi(da, a);

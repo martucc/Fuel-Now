@@ -1,51 +1,41 @@
 import type { FuelKey } from './raw';
 import type { StationRow } from './parse';
+import { prezzoAllaPompa } from './parse';
 import type { Cohort, CohortIndex } from './market';
 import { cohortFor } from './market';
 import type { PriceLevel } from './pricing';
-import { priceLevel, Z_ABSURD } from './pricing';
+import { priceLevel } from './pricing';
 import type { LatLng } from './geo';
 import { haversineKm } from './geo';
-import { ageHours, confidenceFor, isLikelyClosed } from './freshness';
-import type { Percorso } from './corridoio';
-import { proiettaSuPercorso, deviazioneDaScostamento } from './corridoio';
+import { ageHours, confidenceFor, isLikelyClosed, ritardoSulLotto, ultimoPrezzo } from './freshness';
+import type { Anomalia } from './anomalie';
+import { giudiceAnomalie } from './anomalie';
 
-/** Sotto questo scarto di netto due impianti sono pari e decide la distanza. */
+/*
+  Il consiglio della Home: dove conviene fare il pieno qui vicino.
+
+  Tre domande, in quest'ordine.
+  1. Di chi ci si puo fidare? Non dei bloccati, dei forse chiusi, degli
+     impianti in autostrada (chi e in citta non ci entra per fare benzina)
+     e dei prezzi che il mercato della zona smentisce (anomalie.ts). Fra
+     quelli, solo dei prezzi abbastanza recenti: vedi ORE_RIFERIMENTO_FRESCO.
+  2. Contro cosa si misura il risparmio? Contro il pieno che faresti
+     comunque: il distributore utilizzabile piu vicino. Se pero poco piu in
+     la ce n'e uno che conviene davvero, contando strada e tempo con lo
+     stesso conto del consiglio, e da quello che andresti: un vicino caro
+     non gonfia niente, e lo scambio non regala strada a nessuno. Il servito
+     e un altro prodotto: chi ha il self a portata guarda il self.
+  3. Chi vince? Quello che ti lascia piu soldi in tasca contando la strada in
+     piu, purche ne valga il tempo: ogni minuto in piu deve rendere almeno
+     EURO_PER_MINUTO, e oltre MAX_MINUTI_IN_PIU dal piu vicino (servito
+     compreso) non si va. Il tempo decide la scelta, ma nel numero mostrato
+     non entra: «risparmi X €» sono euro veri, carburante risparmiato meno
+     carburante della strada. E il consigliato non costa mai piu del pieno
+     che faresti comunque: «in tasca» non e mai negativo.
+*/
+
+/** Sotto questo scarto due impianti sono pari e vince il piu vicino. */
 export const TIE_EURO = 0.15;
-
-/** Deviazione minima ammessa per un rientro ordinario, in km. */
-export const MAX_COMMUTE_DETOUR_KM = 6.0;
-
-/**
- * Quanto puo allungare il rientro prima che smetta di essere «lungo la strada».
- *
- * Non e una costante secca: su un rientro da 4 km sei chilometri di deviazione
- * sono un altro viaggio, su uno da 80 km sono un'inezia. Sta qui, esportata,
- * perche la usano sia il ranking sia la Home: scritta due volte, divergerebbe.
- */
-export function limiteDeviazioneKm(percorsoDirettoKm: number): number {
-  return Math.max(MAX_COMMUTE_DETOUR_KM, percorsoDirettoKm * 0.25);
-}
-
-/**
- * Il costo di un chilometro in piu che non sia il carburante: gomme, freni,
- * tagliandi anticipati. Il carburante e contato a parte, col prezzo vero.
- */
-export const USURA_EURO_KM = 0.06;
-
-/**
- * Quanto vale un'ora del tuo tempo in questa app. Volutamente bassa: non e
- * uno stipendio, e la soglia oltre la quale ti gireresti dall'altra parte
- * invece di allungare. Con nove euro l'ora, dieci minuti di deviazione ne
- * valgono uno e mezzo — che e piu o meno quando uno smette di avere voglia.
- */
-export const VALORE_TEMPO_EURO_ORA = 9;
-
-/** Velocita media di una deviazione: rotonde, semafori, immissioni. */
-export const VELOCITA_DEVIAZIONE_KMH = 35;
-
-/** Rampe, casello, rientro in carreggiata: uscire dall'autostrada costa tempo. */
-export const MINUTI_USCITA_AUTOSTRADA = 8;
 
 /**
  * Le distanze sono in linea d'aria, le strade no: per arrivare a un
@@ -55,42 +45,89 @@ export const MINUTI_USCITA_AUTOSTRADA = 8;
  */
 export const FATTORE_STRADA = 1.3;
 
-/** Un prezzo piu vecchio di cosi non fa da riferimento: tre giorni. */
+/** Velocita media in citta per stimare i minuti: la stessa di «circa N min» nella Home. */
+export const VELOCITA_KMH = 35;
+
+/**
+ * Quanto deve farti risparmiare ogni minuto di strada in piu perche valga la
+ * pena: nove euro l'ora. Non e uno stipendio, e la soglia oltre la quale ti
+ * gireresti dall'altra parte. Pesa nella scelta e mai nel numero mostrato.
+ */
+export const EURO_PER_MINUTO = 0.15;
+
+/** Oltre questi minuti in piu fra andata e ritorno non si consiglia, qualunque sia il risparmio. */
+export const MAX_MINUTI_IN_PIU = 20;
+
+/** Il pieno che faresti comunque lo si cerca qui intorno, non dall'altra parte della provincia. */
+export const RAGGIO_ZONA_KM = 15;
+
+/**
+ * L'eta dei prezzi, sul lotto. Un prezzo di non piu di tre giorni prima
+ * degli ultimi arrivati e recente; fino a cinque e ancora buono. Se intorno
+ * al piu vicino (entro la strada che si fa in MAX_MINUTI_IN_PIU) ci sono
+ * almeno tre prezzi recenti, si sceglie fra quelli; altrimenti fino a cinque
+ * giorni, altrimenti qualunque. La regola vale insieme per il consiglio e
+ * per il pieno che faresti comunque.
+ */
 export const ORE_RIFERIMENTO_FRESCO = 72;
+const ORE_ANCORA_BUONO = 120;
+const MIN_RECENTI = 3;
+
+/**
+ * Il pieno «senza pensarci» lo faresti dal piu vicino, oppure da uno al
+ * massimo un km piu in la del self piu vicino quando ti conviene davvero:
+ * piu soldi in tasca di TIE_EURO, contati strada e tempo, come per il
+ * consiglio.
+ */
+export const KM_ALTERNATIVA_VICINA = 1;
+
 
 /** Consumo di riserva quando il veicolo non dichiara nulla, in km/l. */
 const KML_DI_RIPIEGO = 15;
 
-/**
- * L'attrito di una deviazione, in euro.
- *
- * Prima era una scala a tre gradini con dentro un termine quadratico scelto
- * a occhio. Adesso e tempo perso per il valore del tempo, piu usura: due
- * numeri che si possono discutere e, soprattutto, spiegare all'utente
- * («ti costa sei minuti»). Resta lineare — non serve la curva per bocciare
- * i venti chilometri per venti centesimi, ci pensa gia il prezzo dell'ora.
- */
-export function calculateDetourFriction(detourKm: number): number {
-  if (detourKm <= 0) return 0;
-  const oreperse = detourKm / VELOCITA_DEVIAZIONE_KMH;
-  return oreperse * VALORE_TEMPO_EURO_ORA + detourKm * USURA_EURO_KM;
+/** Minuti di guida per `km` di strada, alla velocita media di citta. */
+export function minutiStrada(km: number): number {
+  return km > 0 ? (km / VELOCITA_KMH) * 60 : 0;
 }
 
-/** Minuti persi per una deviazione: e il numero che finisce nella scheda. */
-export function minutiDeviazione(detourKm: number, isHighway = false): number {
-  if (detourKm <= 0 && !isHighway) return 0;
-  const guida = (Math.max(0, detourKm) / VELOCITA_DEVIAZIONE_KMH) * 60;
-  return guida + (isHighway ? MINUTI_USCITA_AUTOSTRADA : 0);
+/** Km di strada (andata e ritorno, col fattore strada) per arrivare `kmInPiu` in linea d'aria piu in la. */
+function stradaInPiu(kmInPiu: number): number {
+  return 2 * Math.max(0, kmInPiu) * FATTORE_STRADA;
 }
 
+/** Minuti in piu, andata e ritorno, per un impianto a `km` invece che a `daKm`. */
+function minutiDa(km: number, daKm: number): number {
+  return minutiStrada(stradaInPiu(km - daKm));
+}
+
+/** Quanti km in linea d'aria piu in la del piu vicino si puo andare restando nei MAX_MINUTI_IN_PIU. */
+export const KM_PORTATA = ((MAX_MINUTI_IN_PIU / 60) * VELOCITA_KMH) / (2 * FATTORE_STRADA);
+
 /**
- * Il pieno che faresti senza pensarci: il distributore utilizzabile piu
- * vicino. E il termine di paragone vero, perche il carburante lo compri
- * comunque — la scelta non e «andare o non andare», e «andare qui o li».
+ * Il pieno che faresti comunque: un distributore vero, col suo prezzo e la
+ * sua distanza. Vedi trovaRiferimento.
  */
 export interface Riferimento {
   price: number;
   distanceKm: number;
+  /** L'impianto che fa da riferimento. */
+  id?: string;
+  /** Il riferimento ha solo il servito: qui intorno non c'e un self utilizzabile. */
+  alServito?: boolean;
+  /**
+   * Il piu vicino, quando non e lui il riferimento: un km piu in la ce n'e
+   * uno che conviene davvero, contando strada e tempo.
+   */
+  vicinoCaro?: { price: number; distanceKm: number; id?: string };
+  /** Quanto piu vicino ci sono distributori utilizzabili esclusi: col prezzo vecchio, o col solo servito. */
+  piuVicini?: { vecchi: number; alServito: number };
+  /**
+   * La distanza del piu vicino con un prezzo recente, servito compreso: da
+   * li si contano i minuti in piu di tutti.
+   */
+  daKm?: number;
+  /** Il riferimento e al servito anche se un self recente c'e: contando strada e tempo non conviene di piu. */
+  selfNonConviene?: boolean;
 }
 
 export interface NetInput {
@@ -105,9 +142,6 @@ export interface NetInput {
   distanceKm: number;
   kml: number;
   confidence: number;
-  isHighway?: boolean;
-  /** Km in piu rispetto al percorso diretto. Presente solo in modalita rientro. */
-  detourKm?: number;
 }
 
 export interface NetBreakdown extends NetInput {
@@ -115,8 +149,6 @@ export interface NetBreakdown extends NetInput {
   /** Km di strada contati nel costo (andata e ritorno, gia col fattore strada). */
   kmStrada: number;
   roadCost: number;
-  detourFriction: number;
-  highwayFriction: number;
   net: number;
 }
 
@@ -125,122 +157,103 @@ export interface NetBreakdown extends NetInput {
  *
  * La domanda non e «conviene fare il pieno?», e «conviene farlo QUI invece
  * che dove lo farei comunque». Il carburante lo compri in ogni caso: il
- * confronto giusto e con il distributore utilizzabile piu vicino, e i
- * chilometri che contano sono solo quelli IN PIU rispetto a raggiungere lui.
+ * confronto giusto e col riferimento, e i chilometri che contano sono solo
+ * quelli IN PIU rispetto a raggiungere lui.
  *
- * Contando invece la distanza assoluta — come si faceva prima — ogni
- * candidato si portava dietro un viaggio intero, anche quello sotto casa.
- * Dove i prezzi della zona sono tutti uguali il guadagno lordo e quasi zero,
- * quindi tutti i netti finivano negativi e a decidere restava solo la
- * distanza: l'app consigliava sistematicamente il piu vicino, e lo chiamava
- * «miglior scelta netta» mostrando un «in tasca» sotto zero.
+ * Sono euro veri: carburante risparmiato meno carburante della strada. Il
+ * tempo non c'e — pesa nella scelta (rankStations), non in questo numero.
  *
- * Senza riferimento si ricade sul vecchio conto: media di provincia e andata
- * e ritorno dedicati. Serve a chi chiama netSaving per conto suo, e alla
- * scheda Mercato, che ragiona sul mercato e non su una scelta.
- *
- * In modalita rientro il riferimento non si usa: li il termine di paragone e
- * il tragitto verso casa, e la deviazione e gia di per se un costo marginale.
+ * Senza riferimento si ricade sulla media di provincia e su andata e
+ * ritorno dedicati: serve a chi chiama netSaving per conto suo.
  *
  * Per il metano kml e km/kg e il prezzo €/kg: la formula regge, cambia
  * l'unita di misura sotto e i conti restano coerenti.
  */
 export function netSaving(i: NetInput): NetBreakdown {
   const kml = i.kml > 0 ? i.kml : KML_DI_RIPIEGO;
-  const inRientro = i.detourKm !== undefined;
-  const rif = inRientro ? undefined : i.riferimento;
+  const rif = i.riferimento;
 
   const gross = ((rif ? rif.price : i.cohortAvg) - i.price) * i.liters;
 
-  let detourFriction = 0;
-
-  let kmStrada: number;
-  if (i.detourKm !== undefined) {
-    kmStrada = i.detourKm;
-    detourFriction = calculateDetourFriction(i.detourKm);
-  } else if (rif) {
-    // Solo i chilometri in piu, e andata e ritorno perche per il pieno si
-    // esce e si torna: fin dove arrivavi comunque non si paga niente.
-    kmStrada = 2 * Math.max(0, i.distanceKm - rif.distanceKm) * FATTORE_STRADA;
-  } else {
-    kmStrada = 2 * i.distanceKm * FATTORE_STRADA;
-  }
-  const roadFuelCost = (kmStrada / kml) * i.price;
-
-  const highwayFriction = i.isHighway
-    ? (MINUTI_USCITA_AUTOSTRADA / 60) * VALORE_TEMPO_EURO_ORA
-    : 0;
-  const totalRoadAndFriction = roadFuelCost + detourFriction + highwayFriction;
+  // Andata e ritorno, perche per il pieno si esce e si torna: fin dove
+  // arrivavi comunque non si paga niente.
+  const kmStrada = stradaInPiu(rif ? i.distanceKm - rif.distanceKm : i.distanceKm);
+  const roadCost = (kmStrada / kml) * i.price;
 
   // La fiducia sconta il guadagno, non la perdita: un prezzo vecchio puo
   // essere ottimista, ma i chilometri per andarci li fai comunque.
-  const net = gross >= 0 ? gross * i.confidence - totalRoadAndFriction : gross - totalRoadAndFriction;
+  const net = gross >= 0 ? gross * i.confidence - roadCost : gross - roadCost;
 
-  return {
-    ...i,
-    gross,
-    kmStrada,
-    roadCost: roadFuelCost,
-    detourFriction,
-    highwayFriction,
-    net,
-  };
+  return { ...i, gross, kmStrada, roadCost, net };
 }
 
-export type IneligibleReason =
-  | 'bloccato'
-  | 'prezzo-assurdo'
-  | 'prezzo-sospetto-stantio'
-  | 'deviazione-eccessiva';
+export type IneligibleReason = 'bloccato' | 'probabilmente-chiuso' | 'autostrada' | Anomalia;
+
+/**
+ * Utilizzabile ma non consigliabile: col prezzo troppo vecchio mentre qui
+ * intorno ce ne sono di recenti, o troppo lontano dal piu vicino.
+ */
+export type MotivoNonConsigliabile = 'prezzo-vecchio' | 'troppa-strada';
 
 export interface RankContext {
   fuel: FuelKey;
   user: LatLng;
-  /** Destinazione finale: se presente si ottimizza il viaggio utente -> pompa -> casa. */
-  home?: LatLng | null;
-  /**
-   * Il percorso stradale vero verso casa, se il router ha risposto. Quando
-   * c'e, la deviazione si misura proiettando la pompa sulla spezzata; quando
-   * manca si ripiega sul triangolo in linea d'aria.
-   */
-  percorso?: Percorso | null;
   cohorts: CohortIndex;
   now: Date;
   liters: number;
   kml: number;
   blocked: Set<string>;
+  /**
+   * Se c'e, si classificano solo gli impianti entro questo raggio. Il
+   * giudizio sui prezzi guarda comunque tutte le righe: la zona e le
+   * conferme non si fermano al bordo della lista.
+   */
+  raggioKm?: number;
 }
 
 export interface RankedStation {
   row: StationRow;
+  /** Il prezzo che si paga: il self, o il servito dove il self non c'e. */
   price: number;
+  /** true se `price` e il servito: l'impianto non ha il self per questo carburante. */
+  alServito: boolean;
   distanceKm: number;
   cohort: Cohort;
   z: number | null;
   level: PriceLevel;
   reliable: boolean;
   ageH: number | null;
+  /**
+   * Ore di ritardo rispetto al prezzo piu recente del lotto: col seme di un
+   * mese fa sono vecchi i dati, non i distributori. Decide chi e chiuso, chi
+   * fa da riferimento e chi si puo consigliare; null senza data.
+   */
+  ritardoH: number | null;
+  /** Quanto ci si fida del prezzo adesso, dall'eta vera: sconta il risparmio. */
   confidence: number;
   net: NetBreakdown;
+  /**
+   * Minuti di strada in piu rispetto al piu vicino utilizzabile con un
+   * prezzo recente, servito compreso (quello dove andresti senza pensarci),
+   * andata e ritorno.
+   */
+  minutiInPiu: number;
+  /**
+   * Il netto meno il valore del tempo in piu: serve solo a scegliere, non si
+   * mostra mai come euro.
+   */
+  punteggio: number;
   eligible: boolean;
   reason?: IneligibleReason;
-  /** Km in piu rispetto al rientro diretto. */
-  detourKm?: number;
-  /** Lunghezza complessiva del tragitto utente -> pompa -> casa. */
-  tripTotalKm?: number;
-  /** Minuti persi per la deviazione, uscita autostradale compresa. */
-  minutiPersi?: number;
-  /** Quanto sei avanti verso casa quando esci, da 0 a 1. Solo col percorso vero. */
-  progresso?: number;
-  /** true se la deviazione viene dal percorso stradale, false se dal triangolo. */
-  deviazioneSuStrada?: boolean;
+  /** Utilizzabile, abbastanza recente e entro MAX_MINUTI_IN_PIU: si puo consigliare. */
+  consigliabile: boolean;
+  /** Perche un utilizzabile non si consiglia. */
+  nonConsigliabile?: MotivoNonConsigliabile;
   /**
-   * Non comunica un prezzo da oltre una settimana: quasi sempre chiuso.
-   *
-   * E una segnalazione, non un'esclusione. Escluderlo qui svuoterebbe il
-   * pannello freschezza del Mercato, che esiste apposta per contare quanti
-   * prezzi sono vecchi; e comunque un impianto cosi non puo diventare il
-   * consiglio, perche pickBest pretende una fiducia che a quell'eta non c'e.
+   * Non comunica un prezzo da oltre una settimana mentre gli altri si: quasi
+   * sempre chiuso. Si mostra spento in lista, ma non si consiglia e non fa
+   * da metro. L'eta si misura sul lotto e non sull'orologio: col seme di un
+   * mese fa sono vecchi i dati, non i distributori.
    */
   probabilmenteChiuso: boolean;
 }
@@ -248,227 +261,283 @@ export interface RankedStation {
 interface Candidato {
   row: StationRow;
   price: number;
+  alServito: boolean;
   cohort: Cohort;
   distanceKm: number;
   ageH: number | null;
+  ritardoH: number | null;
   confidence: number;
-  detourKm?: number;
-  tripTotalKm?: number;
-  progresso?: number;
-  deviazioneSuStrada?: boolean;
+  chiuso: boolean;
 }
 
 /**
- * Il prezzo di riferimento della zona: la mediana delle cinque pompe
- * stradali piu vicine.
- *
- * Serve solo agli impianti autostradali, che hanno una coorte tutta loro e
- * quindi possono risultare «convenienti» fra altri impianti carissimi. Con
- * meno di tre campioni non lo si calcola: la mediana di uno solo non e una
- * mediana, e una pompa bianca fuori mercato sposterebbe le etichette di
- * tutta la lista.
+ * Il prezzo di riferimento della zona per gli autostradali: la mediana delle
+ * cinque pompe stradali piu vicine entro 15 km. Serve solo al livello di
+ * prezzo: fra impianti autostradali tutti cari, il meno caro non e un affare.
+ * Con meno di tre campioni non lo si calcola.
  */
 function baselineLocale(candidati: Candidato[]): number | null {
   const stradali = candidati
     .filter((c) => !c.row.isHighway && c.distanceKm <= 15)
     .sort((a, b) => a.distanceKm - b.distanceKm);
-
   if (stradali.length < 3) return null;
+  return mediana(stradali.slice(0, 5).map((x) => x.price));
+}
 
-  const campione = stradali
-    .slice(0, 5)
-    .map((x) => x.price)
-    .sort((a, b) => a - b);
-  return campione[Math.floor(campione.length / 2)]!;
+function mediana(valori: number[]): number {
+  const v = [...valori].sort((a, b) => a - b);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m]! : (v[m - 1]! + v[m]!) / 2;
+}
+
+/** L'eta massima, sul lotto, dei prezzi fra cui scegliere: vedi ORE_RIFERIMENTO_FRESCO. */
+function sogliaEta(utilizzabili: Candidato[]): number {
+  const primo = utilizzabili[0];
+  if (!primo) return Infinity;
+  const portata = primo.distanceKm + KM_PORTATA;
+  let recenti = 0;
+  let buoni = 0;
+  for (const c of utilizzabili) {
+    if (c.distanceKm > portata) break;
+    const r = c.ritardoH ?? Infinity;
+    if (r <= ORE_RIFERIMENTO_FRESCO) recenti++;
+    if (r <= ORE_ANCORA_BUONO) buoni++;
+  }
+  return recenti >= MIN_RECENTI ? ORE_RIFERIMENTO_FRESCO : buoni > 0 ? ORE_ANCORA_BUONO : Infinity;
 }
 
 export function rankStations(rows: StationRow[], ctx: RankContext): RankedStation[] {
+  // Chiuso e recente si misurano sul lotto (il prezzo piu recente fra tutte
+  // le righe); la fiducia invece sull'orologio, perche dice quanto un prezzo
+  // puo essere cambiato da allora.
+  const ultimo = ultimoPrezzo(rows);
+  const raggio = ctx.raggioKm ?? Infinity;
+
   const candidati: Candidato[] = [];
-
-  const percorso = ctx.percorso && ctx.percorso.punti.length >= 2 ? ctx.percorso : null;
-  const direttoKm = percorso ? percorso.km : ctx.home ? haversineKm(ctx.user, ctx.home) : null;
-  const limiteDeviazione = direttoKm !== null ? limiteDeviazioneKm(direttoKm) : null;
-
-  // Primo passaggio: distanze, deviazioni ed eta. Il livello di prezzo no,
-  // perche dipende dalla baseline che si conosce solo dopo aver visto tutti.
   for (const row of rows) {
-    const price = row.prices[ctx.fuel];
-    if (price === undefined) continue;
-
+    const distanceKm = haversineKm(ctx.user, row);
+    if (distanceKm > raggio) continue;
+    const pompa = prezzoAllaPompa(row, ctx.fuel);
+    if (!pompa) continue;
     const cohort = cohortFor(row, ctx.fuel, ctx.cohorts);
     if (!cohort) continue;
-
-    const stationLoc = { lat: row.lat, lng: row.lng };
-    const distanceKm = haversineKm(ctx.user, stationLoc);
     const ageH = ageHours(row.updated, ctx.now);
-    const confidence = confidenceFor(ageH);
-
-    const c: Candidato = { row, price, cohort, distanceKm, ageH, confidence };
-
-    if (percorso) {
-      const p = proiettaSuPercorso(percorso, stationLoc);
-      c.detourKm = deviazioneDaScostamento(p.scostamentoKm);
-      c.tripTotalKm = percorso.km + c.detourKm;
-      c.progresso = p.progresso;
-      c.deviazioneSuStrada = true;
-    } else if (ctx.home && direttoKm !== null) {
-      const distToHome = haversineKm(stationLoc, ctx.home);
-      c.tripTotalKm = distanceKm + distToHome;
-      c.detourKm = Math.max(0, c.tripTotalKm - direttoKm);
-      c.deviazioneSuStrada = false;
-    }
-
-    candidati.push(c);
+    const ritardoH = ritardoSulLotto(row.updated, ultimo);
+    candidati.push({
+      row,
+      price: pompa.prezzo,
+      alServito: pompa.alServito,
+      cohort,
+      distanceKm,
+      ageH,
+      ritardoH,
+      confidence: confidenceFor(ageH),
+      chiuso: isLikelyClosed(ritardoH),
+    });
   }
+  candidati.sort((a, b) => a.distanceKm - b.distanceKm);
 
   const baseline = baselineLocale(candidati);
+  const anomalia = giudiceAnomalie(rows, ctx.fuel, ctx.cohorts);
 
-  /*
-    Prima si stabilisce chi e utilizzabile, poi qual e il piu vicino fra
-    quelli, e solo alla fine si fanno i conti: il netto di ognuno si misura
-    rispetto a quel riferimento, quindi va conosciuto prima di calcolarlo.
-
-    Il riferimento deve essere ELEGGIBILE. Prendere il piu vicino e basta
-    vorrebbe dire misurare tutti contro una pompa bloccata dall'utente o con
-    un prezzo fantasma, cioe contro un pieno che non faresti mai.
-  */
-  const giudizio = candidati.map((item) => {
-    const { row, price, cohort, ageH, detourKm } = item;
-
+  const giudizio = candidati.map((c) => {
     const { level, z, reliable } = priceLevel(
-      price,
-      cohort,
-      row.isHighway && baseline !== null ? baseline : undefined
+      c.price,
+      c.cohort,
+      c.row.isHighway && baseline !== null ? baseline : undefined
     );
-
     let reason: IneligibleReason | undefined;
-
-    if (ctx.blocked.has(row.id)) {
-      reason = 'bloccato';
-    } else if (z !== null && Math.abs(z) > Z_ABSURD) {
-      reason = 'prezzo-assurdo';
-    } else if (z !== null && z < -2.5 && ageH !== null && ageH > 48) {
-      // Prezzo fuori mercato e pure vecchio: il classico dato fantasma che
-      // manda l'utente a fare venti chilometri per una pompa che costa
-      // come le altre.
-      reason = 'prezzo-sospetto-stantio';
-    } else if (detourKm !== undefined && limiteDeviazione !== null && detourKm > limiteDeviazione) {
-      reason = 'deviazione-eccessiva';
-    }
-
-    return { item, level, z, reliable, reason };
+    if (ctx.blocked.has(c.row.id)) reason = 'bloccato';
+    else if (c.chiuso) reason = 'probabilmente-chiuso';
+    else if (c.row.isHighway) reason = 'autostrada';
+    else reason = anomalia(c.row, c.price);
+    return { c, level, z, reliable, reason };
   });
 
-  // Il riferimento e il distributore utilizzabile piu vicino CON UN PREZZO
-  // RECENTE: misurare tutti contro un prezzo di cinque giorni fa vorrebbe
-  // dire promettere risparmi calcolati su un numero che forse non c'e piu.
-  // Solo se intorno non c'e niente di fresco si ripiega sul piu vicino.
-  let riferimento: Riferimento | undefined;
-  let riferimentoQualsiasi: Riferimento | undefined;
-  for (const g of giudizio) {
-    if (g.reason !== undefined) continue;
-    const d = g.item.distanceKm;
-    if (!riferimentoQualsiasi || d < riferimentoQualsiasi.distanceKm) {
-      riferimentoQualsiasi = { price: g.item.price, distanceKm: d };
-    }
-    const fresco = g.item.ageH !== null && g.item.ageH <= ORE_RIFERIMENTO_FRESCO;
-    if (fresco && (!riferimento || d < riferimento.distanceKm)) {
-      riferimento = { price: g.item.price, distanceKm: d };
-    }
-  }
-  riferimento ??= riferimentoQualsiasi;
+  // Gli utilizzabili, dal piu vicino; fra loro quelli abbastanza recenti.
+  const utilizzabili = giudizio.filter((g) => g.reason === undefined).map((g) => g.c);
+  const soglia = sogliaEta(utilizzabili);
+  const recente = (c: Candidato) => (c.ritardoH ?? Infinity) <= soglia;
+  const scelti = utilizzabili.filter(recente);
 
-  const out: RankedStation[] = [];
+  const rif = trovaRiferimento(scelti, utilizzabili, ctx);
+  const daKm = rif?.daKm ?? 0;
 
-  for (const { item, level, z, reliable, reason } of giudizio) {
-    const { row, price, cohort, distanceKm, ageH, confidence, detourKm, tripTotalKm } = item;
-
+  const out: RankedStation[] = giudizio.map(({ c, level, z, reliable, reason }) => {
     // Un impianto autostradale va confrontato col mercato che l'utente
-    // avrebbe davvero a disposizione, non con gli altri autostradali:
-    // fra impianti tutti cari, il meno caro non e un affare.
-    const effectiveCohortAvg = row.isHighway && baseline ? baseline : cohort.avg;
-
+    // avrebbe davvero a disposizione, non con gli altri autostradali.
+    const effectiveCohortAvg = c.row.isHighway && baseline ? baseline : c.cohort.avg;
     const net = netSaving({
-      price,
+      price: c.price,
       cohortAvg: effectiveCohortAvg,
-      riferimento,
+      riferimento: rif?.riferimento,
       liters: ctx.liters,
-      distanceKm,
+      distanceKm: c.distanceKm,
       kml: ctx.kml,
-      confidence,
-      isHighway: row.isHighway,
-      detourKm,
+      confidence: c.confidence,
     });
+    const minutiInPiu = rif ? minutiDa(c.distanceKm, daKm) : minutiStrada(net.kmStrada);
+    const eligible = reason === undefined;
+    const nonConsigliabile: MotivoNonConsigliabile | undefined = !eligible
+      ? undefined
+      : !recente(c)
+        ? 'prezzo-vecchio'
+        : minutiInPiu > MAX_MINUTI_IN_PIU
+          ? 'troppa-strada'
+          : undefined;
 
-    out.push({
-      row,
-      price,
-      distanceKm,
-      cohort,
+    return {
+      row: c.row,
+      price: c.price,
+      alServito: c.alServito,
+      distanceKm: c.distanceKm,
+      cohort: c.cohort,
       z,
       level,
       reliable,
-      ageH,
-      confidence,
+      ageH: c.ageH,
+      ritardoH: c.ritardoH,
+      confidence: c.confidence,
       net,
-      eligible: reason === undefined,
+      minutiInPiu,
+      punteggio: net.net - EURO_PER_MINUTO * minutiInPiu,
+      eligible,
       reason,
-      probabilmenteChiuso: isLikelyClosed(ageH),
-      detourKm,
-      tripTotalKm,
-      minutiPersi:
-        detourKm !== undefined ? minutiDeviazione(detourKm, row.isHighway) : undefined,
-      progresso: item.progresso,
-      deviazioneSuStrada: item.deviazioneSuStrada,
-    });
-  }
+      consigliabile: eligible && nonConsigliabile === undefined && rif !== null,
+      nonConsigliabile,
+      probabilmenteChiuso: c.chiuso,
+    };
+  });
 
   out.sort((a, b) => {
     if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
-    return b.net.net - a.net.net;
+    return b.punteggio - a.punteggio || a.distanceKm - b.distanceKm;
   });
-
   return out;
 }
 
 /**
- * Il migliore: netto piu alto, ma fra tutti quelli che gli stanno entro
- * TIE_EURO vince il piu comodo. Fatto in due passaggi e non nel comparatore,
- * perche un confronto con tolleranza non e un ordinamento totale e darebbe
- * risultati dipendenti dall'ordine di partenza.
+ * Il pieno che faresti comunque, fra i consigliabili (`scelti`, gia in
+ * ordine di distanza): le stesse regole di eta del consiglio, cosi il
+ * risparmio non si misura mai contro un prezzo che non si potrebbe
+ * consigliare.
  *
- * «Piu comodo» cambia significato fra le due modalita: uscendo apposta conta
- * la distanza da dove sei, tornando a casa conta quanto ti allunga. Non serve
- * altro: la deviazione e gia dentro al netto, con il suo costo in tempo.
+ * Si parte dal piu vicino, servito compreso: e li che andresti senza
+ * pensarci, e da lui si contano i minuti in piu di tutti (`daKm`). Nessun
+ * riferimento sta oltre MAX_MINUTI_IN_PIU da lui, quindi il riferimento si
+ * puo sempre consigliare.
+ *
+ * Poi le alternative, valutate col conto del consiglio rispetto al piu
+ * vicino: carburante risparmiato (scontato dalla fiducia), meno la strada e
+ * il tempo in piu. Il servito e un altro prodotto: se a portata c'e un self
+ * recente, le alternative sono lui e i self al massimo KM_ALTERNATIVA_VICINA
+ * piu in la (un vicino caro non fa da metro). Senza self, i serviti in
+ * quel km. Un'alternativa prende il posto del piu vicino solo se gli porta
+ * piu di TIE_EURO; fra quelle che convengono, a parita entro TIE_EURO, la
+ * piu vicina. Lo scambio non regala niente: la strada fino all'alternativa
+ * e gia pagata dal suo prezzo, e i minuti si contano comunque dal piu vicino.
  */
-export function pickBest(ranked: RankedStation[]): RankedStation | null {
-  // Un consiglio va dato su un prezzo in cui si crede. Se pero l'unica roba
-  // eleggibile e vecchia, meglio un consiglio incerto che nessun consiglio:
-  // l'eta e comunque scritta sotto al nome.
-  // Prima scelta: prezzi di non piu di tre giorni, se ce ne sono almeno
-  // tre fra cui scegliere; poi fino a cinque giorni; poi qualunque.
-  const freschissimi = ranked.filter((r) => r.eligible && r.confidence >= 0.75);
-  const freschi = ranked.filter((r) => r.eligible && r.confidence >= 0.5);
-  const eligible =
-    freschissimi.length >= 3 ? freschissimi : freschi.length > 0 ? freschi : ranked.filter((r) => r.eligible);
+function trovaRiferimento(
+  scelti: Candidato[],
+  utilizzabili: Candidato[],
+  ctx: RankContext
+): { riferimento: Riferimento; daKm: number } | null {
+  const primo = scelti[0];
+  if (!primo) return null;
+  const daKm = primo.distanceKm;
+  const aPortata = (c: Candidato) => minutiDa(c.distanceKm, daKm) <= MAX_MINUTI_IN_PIU;
 
-  const leader = eligible[0];
-  if (!leader) return null;
+  const kml = ctx.kml > 0 ? ctx.kml : KML_DI_RIPIEGO;
+  const valore = (c: Candidato) => {
+    const lordo = (primo.price - c.price) * ctx.liters;
+    const km = stradaInPiu(c.distanceKm - daKm);
+    return (lordo >= 0 ? lordo * c.confidence : lordo) - (km / kml) * c.price - EURO_PER_MINUTO * minutiStrada(km);
+  };
 
-  const inRientro = leader.detourKm !== undefined;
+  const selfVicino = scelti.find((c) => !c.alServito && aPortata(c));
+  const base = selfVicino ?? primo;
+  const finestra = scelti.filter(
+    (c) => c.alServito === base.alServito && c.distanceKm <= base.distanceKm + KM_ALTERNATIVA_VICINA && aPortata(c)
+  );
+  const migliore = Math.max(...finestra.map(valore));
+  // Fra quelle che convengono, a parita entro TIE_EURO, la piu vicina.
+  const scelto =
+    migliore > TIE_EURO ? (finestra.find((c) => valore(c) > TIE_EURO && valore(c) >= migliore - TIE_EURO) ?? primo) : primo;
+
+  // Il «piu vicino» che il foglio Perche mostra: il riferimento stesso, o
+  // quello da cui ci si e spostati (il self piu vicino, o il piu vicino).
+  const mostrato = scelto === primo || scelto === base ? scelto : base;
+  const vecchi = utilizzabili.filter((c) => c.distanceKm < mostrato.distanceKm && !scelti.includes(c)).length;
+  const alServito = scelti.filter((c) => c.distanceKm < mostrato.distanceKm && c.alServito).length;
+
+  return {
+    daKm,
+    riferimento: {
+      price: scelto.price,
+      distanceKm: scelto.distanceKm,
+      id: scelto.row.id,
+      alServito: scelto.alServito || undefined,
+      vicinoCaro:
+        scelto === mostrato ? undefined : { price: mostrato.price, distanceKm: mostrato.distanceKm, id: mostrato.row.id },
+      piuVicini: vecchi + alServito > 0 ? { vecchi, alServito } : undefined,
+      daKm,
+      selfNonConviene: (scelto.alServito && scelti.some((c) => !c.alServito)) || undefined,
+    },
+  };
+}
+
+export interface Classifica {
+  best: RankedStation | null;
+  /** Tutti, con il consigliato in testa: vedi classifica. */
+  lista: RankedStation[];
+}
+
+/**
+ * Il consiglio e l'ordine della lista, decisi insieme perche non possano
+ * dirsi cose diverse.
+ *
+ * Fra i consigliabili vince il punteggio piu alto (il netto meno il valore
+ * del tempo), ma fra tutti quelli che gli stanno entro TIE_EURO vince il piu
+ * vicino. Fatto in due passaggi e non nel comparatore, perche un confronto
+ * con tolleranza non e un ordinamento.
+ *
+ * Il consigliato non ti lascia mai meno del pieno che faresti comunque: chi
+ * ha un netto negativo non si consiglia, anche se ci mette meno minuti. Il
+ * riferimento e consigliabile e ha netto zero, quindi un consiglio c'e
+ * sempre. Succede con un prezzo meno recente fra il vicino caro e il
+ * riferimento: piu vicino, ma un mezzo centesimo piu caro.
+ *
+ * La lista: il consigliato; poi gli altri consigliabili per risparmio
+ * mostrato (quelli che rendono di piu del consigliato ci mettono piu minuti,
+ * e la riga lo dice); poi gli utilizzabili che non si consigliano (troppa
+ * strada, prezzo vecchio), poi gli esclusi, col loro motivo.
+ */
+export function classifica(ranked: RankedStation[]): Classifica {
+  const gruppo = (r: RankedStation) => (r.consigliabile ? 0 : r.eligible ? 1 : 2);
+  const ordinati = [...ranked].sort(
+    (a, b) => gruppo(a) - gruppo(b) || b.punteggio - a.punteggio || a.distanceKm - b.distanceKm
+  );
+
+  const consigliabili = ordinati.filter((r) => r.consigliabile);
+  const senzaPerdite = consigliabili.filter((r) => r.net.net >= 0);
+  const candidati = senzaPerdite.length > 0 ? senzaPerdite : consigliabili;
+  const leader = candidati[0];
+  if (!leader) return { best: null, lista: ordinati };
+
+  // A parita vince il piu vicino.
   let best = leader;
-
-  for (const r of eligible) {
-    if (leader.net.net - r.net.net > TIE_EURO) break;
-
-    if (inRientro) {
-      const suo = r.detourKm ?? Infinity;
-      const attuale = best.detourKm ?? Infinity;
-      if (suo < attuale) best = r;
-    } else if (r.distanceKm < best.distanceKm) {
-      best = r;
-    }
+  for (const r of candidati) {
+    if (leader.punteggio - r.punteggio > TIE_EURO) break;
+    if (r.distanceKm < best.distanceKm) best = r;
   }
 
-  return best;
+  const altri = consigliabili
+    .filter((r) => r !== best)
+    .sort((a, b) => b.net.net - a.net.net || a.distanceKm - b.distanceKm);
+  return { best, lista: [best, ...altri, ...ordinati.filter((r) => !r.consigliabile)] };
+}
+
+/** Il consigliato: vedi classifica. */
+export function pickBest(ranked: RankedStation[]): RankedStation | null {
+  return classifica(ranked).best;
 }

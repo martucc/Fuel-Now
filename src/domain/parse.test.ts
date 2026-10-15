@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStation, parseStations, isValidProv, dropMisgeocoded } from './parse';
+import { parseStation, parseStations, isValidProv, dropMisgeocoded, prezzoAllaPompa } from './parse';
 import type { StationRow } from './parse';
 import type { RawStation } from './raw';
 import { realDataset } from './__fixtures__/dataset';
@@ -43,9 +43,23 @@ describe('parseStation', () => {
     expect(r.prices.gpl).toBe(0.799);
   });
 
-  it('scarta la stazione senza alcun prezzo utilizzabile', () => {
-    // Solo servito su un carburante self-only: nulla di confrontabile.
-    expect(parseStation({ ...base, p: { diesel: [null, 2.19] } })).toBeNull();
+  it('tiene la stazione che per il diesel ha solo il servito (B6)', () => {
+    // Prima spariva: per diesel e benzina la statistica usa solo il self, e
+    // senza self la riga veniva buttata. Ma lì si fa benzina, al servito.
+    const r = parseStation({ ...base, p: { diesel: [null, 2.19] } })!;
+    expect(r).not.toBeNull();
+    expect(r.prices.diesel).toBeUndefined(); // fuori dalle statistiche
+    expect(r.servito.diesel).toBe(2.19);
+    expect(prezzoAllaPompa(r, 'diesel')).toEqual({ prezzo: 2.19, alServito: true });
+    expect(prezzoAllaPompa(r, 'benzina')).toBeNull();
+  });
+
+  it('il prezzo alla pompa è il self quando c’è', () => {
+    expect(prezzoAllaPompa(parseStation(base)!, 'benzina')).toEqual({ prezzo: 1.899, alServito: false });
+  });
+
+  it('scarta la stazione senza alcun prezzo plausibile', () => {
+    expect(parseStation({ ...base, p: { diesel: [null, 9.99], benzina: [0.01, null] } })).toBeNull();
   });
 
   it('scarta la stazione con coordinate non finite', () => {
@@ -76,9 +90,9 @@ describe('parseStations sul dataset reale', () => {
     expect(orphans.length).toBeLessThan(100);
   });
 
-  it('ogni riga conservata ha almeno un prezzo', () => {
+  it('ogni riga conservata ha almeno un prezzo, self o servito', () => {
     for (const r of rows) {
-      expect(Object.keys(r.prices).length, r.id).toBeGreaterThan(0);
+      expect(Object.keys(r.prices).length + Object.keys(r.servito).length, r.id).toBeGreaterThan(0);
     }
   });
 });

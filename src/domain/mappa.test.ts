@@ -3,7 +3,8 @@ import { puntiMappa, collezionePunti, prezzoBreve, PREZZO_ESCLUSO } from './mapp
 import { buildCohorts } from './market';
 import type { StationRow } from './parse';
 
-const ORA = new Date(2026, 9, 13, 10, 0);
+/** Il prezzo piu recente del lotto: e da lui che si misura l'eta. */
+const ORA = '2026-10-13 07:00';
 
 function row(over: Partial<StationRow>): StationRow {
   return {
@@ -41,6 +42,13 @@ describe('puntiMappa', () => {
     expect(p[0]!.vecchio).toBe(true);
   });
 
+  it('se è il lotto intero a essere vecchio, la mappa non diventa tutta grigia', () => {
+    // Il file ha otto giorni (telefono senza rete): l'impianto ha comunicato
+    // con gli altri, non è chiuso.
+    const p = puntiMappa([row({ id: 'v', updated: '2026-10-05 08:00' })], cohorts, 'diesel', '2026-10-05 09:00');
+    expect(p[0]!.vecchio).toBe(false);
+  });
+
   it('segna come sospetto un prezzo fuori scala', () => {
     const p = puntiMappa([row({ id: 's', prices: { diesel: 1.2 } })], cohorts, 'diesel', ORA);
     expect(p[0]!.sospetto).toBe(true);
@@ -49,6 +57,12 @@ describe('puntiMappa', () => {
   it('porta il servito quando c’e', () => {
     const p = puntiMappa([row({ id: 'sv', servito: { diesel: 1.85 } })], cohorts, 'diesel', ORA);
     expect(p[0]!.servito).toBe(1.85);
+  });
+
+  it('mostra anche chi ha solo il servito, al prezzo servito', () => {
+    const p = puntiMappa([row({ id: 'solo', prices: {}, servito: { diesel: 1.85 } })], cohorts, 'diesel', ORA);
+    expect(p.map((x) => x.id)).toEqual(['solo']);
+    expect(p[0]!.prezzo).toBe(1.85);
   });
 });
 

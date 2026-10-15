@@ -10,6 +10,7 @@ import type { StationRow } from '../../domain/parse';
 import { dropMisgeocoded } from '../../domain/parse';
 import type { CollezionePunti } from '../../domain/mappa';
 import { collezionePunti, puntiMappa } from '../../domain/mappa';
+import { ultimoPrezzo } from '../../domain/freshness';
 
 export interface SostaMostrata {
   numero: number;
@@ -47,7 +48,7 @@ export function useCalcoloViaggio(
 ): CalcoloViaggio {
   const fuel = m.impostazioni.carburante;
   const base = m.base;
-  const serbatoioL = serbatoioDi(m.auto);
+  const serbatoioL = serbatoioDi(m.auto, fuel);
   const livelloDifferito = useDeferredValue(livello);
   const strategiaDifferita = useDeferredValue(strategia);
 
@@ -58,21 +59,23 @@ export function useCalcoloViaggio(
     [indice],
   );
 
+  // Le righe con coordinate sbagliate restano fuori dalle scelte, come nella Home.
+  const righe = useMemo(() => (base ? dropMisgeocoded(base.rows) : null), [base]);
+
   const lungo = useMemo(() => {
-    if (!indice || !base || !percorso) return null;
-    // Le righe con coordinate sbagliate restano fuori dalle scelte, come nella Home.
-    return impiantiLungoPercorso(indice, dropMisgeocoded(base.rows), {
+    if (!indice || !righe || !percorso) return null;
+    return impiantiLungoPercorso(indice, righe, {
       fuel,
-      adesso: m.adesso,
       nascosti: m.nascosti,
       kmStradali: percorso.km,
     });
-  }, [indice, base, percorso, fuel, m.adesso, m.nascosti]);
+  }, [indice, righe, percorso, fuel, m.nascosti]);
 
   const esito = useMemo(() => {
-    if (!lungo || !base || !percorso) return null;
+    if (!lungo || !base || !righe || !percorso) return null;
     return calcolaViaggio({
       impianti: lungo,
+      rows: righe,
       cohorts: base.cohorts,
       fuel,
       adesso: m.adesso,
@@ -82,7 +85,7 @@ export function useCalcoloViaggio(
       serbatoioL,
       livello: livelloDifferito,
     });
-  }, [lungo, base, percorso, fuel, m.adesso, m.kml, serbatoioL, strategiaDifferita, livelloDifferito]);
+  }, [lungo, base, righe, percorso, fuel, m.adesso, m.kml, serbatoioL, strategiaDifferita, livelloDifferito]);
 
   const soste = useMemo(() => {
     if (!esito || !lungo) return [];
@@ -97,13 +100,13 @@ export function useCalcoloViaggio(
 
   const punti = useMemo(() => {
     if (!esito || !base) return null;
-    const righe: StationRow[] = [];
+    const scelte: StationRow[] = [];
     for (const t of esito.candidate) {
       const r = base.perId.get(t.id);
-      if (r) righe.push(r);
+      if (r) scelte.push(r);
     }
-    return collezionePunti(puntiMappa(righe, base.cohorts, fuel, m.adesso, m.nascosti));
-  }, [esito, base, fuel, m.adesso, m.nascosti]);
+    return collezionePunti(puntiMappa(scelte, base.cohorts, fuel, ultimoPrezzo(base.rows), m.nascosti, base.rows));
+  }, [esito, base, fuel, m.nascosti]);
 
   return { indice, linea, lungo, esito, soste, punti, serbatoioL };
 }

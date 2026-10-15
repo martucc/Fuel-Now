@@ -12,8 +12,29 @@ import { chiediModelli, provaChiave, MODELLI_DI_RIPIEGO } from '../../services/g
 import { Foglio } from '../kit/Foglio';
 import { Gruppo, Riga } from '../kit/Gruppo';
 import { Pulsante } from '../kit/Pulsante';
+import { descriviAuto, quantita } from '../kit/formatoUi';
+import { FUEL_LABEL } from '../../domain/fuel';
+import { autoPerCarburante, unitaQuantita } from '../../domain/units';
 
 type Vista = 'principale' | 'auto' | 'ia';
+
+/** «la benzina», «il diesel», «il GPL». */
+function nomeCarburante(fuel: Modello['impostazioni']['carburante']): string {
+  return fuel === 'benzina' ? 'la benzina' : `il ${fuel === 'gpl' ? FUEL_LABEL.gpl : FUEL_LABEL[fuel].toLowerCase()}`;
+}
+
+/** Con che numeri si fa il conto del risparmio, nelle unita del carburante scelto. */
+function notaAuto(m: Modello): string {
+  const fuel = m.impostazioni.carburante;
+  const unita = unitaQuantita(fuel) === 'kg' ? 'un kg' : 'un litro';
+  const conto = `Per il risparmio vero: un pieno da ${quantita(m.litri, fuel)} e ${numero(m.kml, 1)} km con ${unita}.`;
+  if (m.auto && !autoPerCarburante(m.auto, fuel)) {
+    return fuel === 'metano'
+      ? `${conto} La tua auto non va a metano: per il metano uso i valori medi.`
+      : `${conto} Della tua auto conosco le bombole del metano: per ${nomeCarburante(fuel)} uso i valori medi.`;
+  }
+  return conto;
+}
 
 /** Versione mostrata nelle impostazioni: tenerla allineata a android/app/build.gradle. */
 export const VERSIONE_APP = '2.0';
@@ -42,12 +63,12 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
       <div className="space-y-6 pb-2 pt-1">
         <Gruppo
           titolo="La tua auto"
-          nota={`Per il risparmio vero: un pieno da ${numero(m.litri, 0)} L e ${numero(m.kml, 1)} km con un litro.`}
+          nota={notaAuto(m)}
         >
           <Riga
             icona={<Car size={20} className="text-mf-ink-2" />}
             titolo={m.auto ? m.auto.model : 'Nessuna auto scelta'}
-            sottotitolo={m.auto ? `Serbatoio ${m.auto.liters} L · ${numero(m.auto.kml, 1)} km/L` : 'Uso i valori medi: scegli la tua per conti giusti'}
+            sottotitolo={m.auto ? descriviAuto(m.auto) : 'Uso i valori medi: scegli la tua per conti giusti'}
             freccia
             onClick={() => setVista('auto')}
           />
@@ -160,7 +181,7 @@ function SceltaAuto({ m, onIndietro }: { m: Modello; onIndietro: () => void }) {
           <Riga
             key={a.model}
             titolo={a.model}
-            sottotitolo={`Serbatoio ${a.liters} L · ${numero(a.kml, 1)} km/L`}
+            sottotitolo={descriviAuto(a)}
             valore={m.auto?.model === a.model ? <Check size={18} className="text-mf-ink" /> : undefined}
             onClick={() => scegli(a.model)}
           />

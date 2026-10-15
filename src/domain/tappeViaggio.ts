@@ -2,10 +2,11 @@ import type { FuelKey } from './raw';
 import type { CohortIndex } from './market';
 import { cohortFor } from './market';
 import type { PriceLevel } from './pricing';
-import { priceLevel, Z_ABSURD } from './pricing';
-import { ageHours } from './freshness';
+import { priceLevel } from './pricing';
+import type { StationRow } from './parse';
+import { giudiceAnomalie } from './anomalie';
 import type { CarSpec } from './units';
-import { DEFAULT_TANK_L } from './units';
+import { serbatoioPer } from './units';
 import type { ImpiantoSulPercorso } from './lungoPercorso';
 import { SCOSTAMENTO_MAX_KM } from './lungoPercorso';
 import type { Piano, TappaCandidata } from './viaggio';
@@ -48,37 +49,36 @@ export const FRAZIONE_SERBATOIO: Record<LivelloSerbatoio, number> = {
 /** Entro questi km dalla partenza un distributore e «quello sotto casa». */
 export const KM_PARTENZA = 10;
 
-/** Il serbatoio dell'auto scelta, o quello medio se l'auto non e nota o il dato non sta in piedi. */
-export function serbatoioDi(auto: CarSpec | null): number {
-  const l = auto?.liters;
-  return typeof l === 'number' && Number.isFinite(l) && l > 5 && l < 200 ? l : DEFAULT_TANK_L;
+/**
+ * Il serbatoio dell'auto scelta, o quello medio se l'auto non e nota, il
+ * dato non sta in piedi o l'auto non va a quel carburante. Col metano sono
+ * kg di bombole.
+ */
+export function serbatoioDi(auto: CarSpec | null, fuel: FuelKey = 'diesel'): number {
+  return serbatoioPer(auto, fuel);
 }
 
 /**
  * Le tappe da dare al piano: gli impianti entro la deviazione della
  * strategia, col livello di prezzo della loro coorte.
  *
- * Fuori, come nella Home, i prezzi fuori scala (quasi sempre un errore di
- * battitura) e quelli molto bassi e pure vecchi: il dato fantasma che fa
- * fermare per una pompa che in realta costa come le altre.
+ * Fuori i prezzi da non credere, con lo stesso giudice della Home
+ * (anomalie.ts): fuori scala per la zona, o bassi e vecchi, senza un vicino
+ * che li confermi. `rows` sono tutte le righe del dataset, per fare la zona
+ * anche oltre la strada; senza, la zona la fanno gli impianti del percorso.
  */
 export function tappeCandidate(
   impianti: readonly ImpiantoSulPercorso[],
-  o: { fuel: FuelKey; cohorts: CohortIndex; strategia: Strategia; adesso: Date },
+  o: { fuel: FuelKey; cohorts: CohortIndex; strategia: Strategia; adesso: Date; rows?: readonly StationRow[] },
 ): TappaCandidata[] {
   const max = SCOSTAMENTO_STRATEGIA[o.strategia];
+  const anomalia = giudiceAnomalie(o.rows ?? impianti.map((i) => i.row), o.fuel, o.cohorts);
   const out: TappaCandidata[] = [];
   for (const i of impianti) {
     if (i.scostamentoKm > max) continue;
+    if (anomalia(i.row, i.prezzo)) continue;
     const coorte = cohortFor(i.row, o.fuel, o.cohorts);
-    let level: PriceLevel = 'normal';
-    if (coorte) {
-      const g = priceLevel(i.prezzo, coorte);
-      if (g.z !== null && Math.abs(g.z) > Z_ABSURD) continue;
-      const ore = ageHours(i.row.updated, o.adesso);
-      if (g.z !== null && g.z < -2.5 && ore !== null && ore > 48) continue;
-      level = g.level;
-    }
+    const level: PriceLevel = coorte ? priceLevel(i.prezzo, coorte).level : 'normal';
     out.push({
       id: i.row.id,
       nome: i.row.name,
@@ -102,6 +102,8 @@ function mediana(v: number[]): number | null {
 
 export interface DatiViaggio {
   impianti: readonly ImpiantoSulPercorso[];
+  /** Tutte le righe del dataset: fanno la zona per giudicare i prezzi. */
+  rows?: readonly StationRow[];
   cohorts: CohortIndex;
   fuel: FuelKey;
   adesso: Date;
