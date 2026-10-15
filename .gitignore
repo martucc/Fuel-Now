@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.superpowers/
+
+# Copiati da node_modules a ogni build: vedi scripts/copia-worker-maplibre.mjs
+public/maplibre/
