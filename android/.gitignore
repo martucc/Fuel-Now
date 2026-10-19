@@ -99,3 +99,9 @@ app/src/main/assets/public
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
+
+# Firma della release: la chiave e la sua password non vanno mai su git
+keystore.properties
+*.p12
+*.jks
+*.keystore

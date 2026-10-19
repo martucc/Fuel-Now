@@ -1,0 +1,232 @@
+/*
+ * Martucc Fuel 2.0 — tema scuro minimal.
+ *
+ * Unica fonte di verita di colori, caratteri e misure. I token stanno dentro
+ * @theme con il prefisso mf-: Tailwind ne ricava le classi (bg-mf-surface,
+ * text-mf-ink-2, rounded-mf-lg…) e nessun suo default li puo sovrascrivere.
+ *
+ * Regole:
+ *  - il blu vuol dire «vai qui»: il distributore consigliato, le soste del
+ *    viaggio, il bottone Portami lì. Mai schede, link, interruttori o grafici;
+ *  - verde, bianco, ambra e rosso appartengono ai prezzi e a nient'altro;
+ *  - le cifre sono sempre tabulari (classe .mf-num).
+ */
+@import 'tailwindcss';
+
+/* Solo il sottoinsieme latino di Inter (accenti ed € compresi): gli altri
+   sei pesavano 170 KB per niente. */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme {
+  /* Fondi: nero vero per l'OLED, grafite per le superfici (iOS dark). */
+  --color-mf-bg: #000000;
+  --color-mf-surface: #1c1c1e;
+  --color-mf-surface-2: #2c2c2e;
+  --color-mf-surface-3: #3a3a3c;
+  --color-mf-hairline: rgb(255 255 255 / 0.09);
+  --color-mf-veil: rgb(0 0 0 / 0.72);
+
+  /* Testo */
+  --color-mf-ink: #f5f5f7;
+  --color-mf-ink-2: rgb(235 235 245 / 0.62);
+  --color-mf-ink-3: rgb(235 235 245 / 0.34);
+
+  /* Azione e consigliato */
+  --color-mf-accent: #0a84ff;
+  --color-mf-accent-soft: rgb(10 132 255 / 0.16);
+  --color-mf-accent-ink: #ffffff;
+
+  /* Scala dei prezzi */
+  --color-mf-best: #30d158;
+  --color-mf-good: #9ee37d;
+  --color-mf-normal: #f5f5f7;
+  --color-mf-high: #ff9f0a;
+  --color-mf-worst: #ff453a;
+  /* Prezzo vecchio o impianto probabilmente chiuso */
+  --color-mf-stale: #8e8e93;
+
+  --color-mf-warn: #ffd60a;
+  --color-mf-danger: #ff453a;
+
+  /* Carattere */
+  --font-mf: 'Inter Variable', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  /* Raggi */
+  --radius-mf-sm: 10px;
+  --radius-mf-md: 14px;
+  --radius-mf-lg: 20px;
+  --radius-mf-xl: 28px;
+
+  /* Movimento */
+  --ease-mf: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root {
+  color-scheme: dark;
+  /* Altezza della barra delle schede, per i contenuti che devono starle sopra. */
+  --mf-tabbar-h: 64px;
+  /* Capacitor 8 (SystemBars) inietta --safe-area-inset-*: le WebView Android
+     piu vecchie non danno valori giusti a env(). Sul web vale env(). */
+  --mf-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --mf-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+}
+
+/* Basi dentro il layer di Tailwind: fuori dai layer vincerebbero sulle
+   classi di utilita (un `button { background: none }` sciolto spegneva
+   bg-mf-accent su ogni bottone). */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    background: var(--color-mf-bg);
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-mf-bg);
+    color: var(--color-mf-ink);
+    font-family: var(--font-mf);
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  /* Barre di scorrimento invisibili: e un'app, non una pagina. */
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  /* Ogni cifra mostrata all'utente: tabulare, cosi le colonne non ballano. */
+  .mf-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Titolo grande di schermata, come le Large Title di iOS. */
+  .mf-large-title {
+    font-size: 32px;
+    line-height: 38px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .mf-title {
+    font-size: 20px;
+    line-height: 25px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+
+  .mf-headline {
+    font-size: 17px;
+    line-height: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .mf-body {
+    font-size: 16px;
+    line-height: 21px;
+  }
+
+  .mf-subhead {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  .mf-footnote {
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .mf-caption {
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  /* Etichetta di sezione sopra un gruppo. Niente maiuscolo: LEGGIMI § 7. */
+  .mf-section-label {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--color-mf-ink-2);
+  }
+
+  /* I gruppi di righe: grafite sul nero, un tono piu chiaro dentro un foglio. */
+  .mf-gruppo {
+    background-color: var(--color-mf-surface);
+  }
+  .mf-foglio .mf-gruppo {
+    background-color: var(--color-mf-surface-2);
+  }
+
+  /* Un tocco deve sentirsi: leggero rimpicciolimento, niente bagliori. */
+  .mf-press {
+    transition: transform 160ms var(--ease-mf), opacity 160ms var(--ease-mf);
+  }
+  .mf-press:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+/* MapLibre: l'attribuzione resta, ma discreta e in tinta. */
+.maplibregl-ctrl-attrib {
+  background: rgb(0 0 0 / 0.5) !important;
+  color: var(--color-mf-ink-3) !important;
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-mf-ink-2) !important;
+}
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
+.maplibregl-canvas:focus {
+  outline: none;
+}
