@@ -11,7 +11,7 @@ import type { ImpiantoSulPercorso } from './lungoPercorso';
 import { SCOSTAMENTO_MAX_KM } from './lungoPercorso';
 import type { Piano, TappaCandidata } from './viaggio';
 import { MOTIVO_TESTO, pianificaViaggio } from './viaggio';
-import { numero } from '../lib/formato';
+import { litri, numero } from '../lib/formato';
 
 /**
  * Dagli impianti lungo la strada al piano del viaggio: quali si possono
@@ -66,6 +66,11 @@ export function serbatoioDi(auto: CarSpec | null, fuel: FuelKey = 'diesel'): num
  * (anomalie.ts): fuori scala per la zona, o bassi e vecchi, senza un vicino
  * che li confermi. `rows` sono tutte le righe del dataset, per fare la zona
  * anche oltre la strada; senza, la zona la fanno gli impianti del percorso.
+ *
+ * Fuori anche le aree di servizio dell'autostrada a sinistra della strada:
+ * sono sull'altra carreggiata, a quaranta metri in linea d'aria ma
+ * raggiungibili solo tornando indietro dall'uscita dopo. Il piano, che
+ * conta la deviazione al metro, le preferiva proprio perche «vicine».
  */
 export function tappeCandidate(
   impianti: readonly ImpiantoSulPercorso[],
@@ -76,6 +81,7 @@ export function tappeCandidate(
   const out: TappaCandidata[] = [];
   for (const i of impianti) {
     if (i.scostamentoKm > max) continue;
+    if (i.row.isHighway && i.aSinistra) continue;
     if (anomalia(i.row, i.prezzo)) continue;
     const coorte = cohortFor(i.row, o.fuel, o.cohorts);
     const level: PriceLevel = coorte ? priceLevel(i.prezzo, coorte).level : 'normal';
@@ -131,12 +137,10 @@ export interface EsitoViaggio {
 /**
  * Il piano del viaggio, pronto da mostrare.
  *
- * Il piano confronta ogni distributore col prezzo di «quello che hai in
- * pancia». All'inizio e il prezzo a cui faresti il pieno sotto casa; se
- * vicino alla partenza non c'e niente, si usa la mediana della strada —
- * senza un riferimento il piano si fermerebbe al primo distributore
- * qualunque. In quel caso pero il confronto col «pieno prima di partire»
- * non si fa: sarebbe un confronto con una pompa che non esiste.
+ * Il piano sceglie da solo, col conto del costo minimo: il prezzo di
+ * partenza serve solo al confronto col «pieno prima di partire». Se
+ * vicino alla partenza non c'e un distributore quel confronto non si fa:
+ * sarebbe un confronto con una pompa che non esiste.
  */
 export function calcolaViaggio(d: DatiViaggio): EsitoViaggio {
   const candidate = tappeCandidate(d.impianti, d);
@@ -147,19 +151,20 @@ export function calcolaViaggio(d: DatiViaggio): EsitoViaggio {
     if (t.kmDaPartenza > KM_PARTENZA) break;
     if (prezzoPartenza === null || t.prezzo < prezzoPartenza) prezzoPartenza = t.prezzo;
   }
-  const riferimento = prezzoPartenza ?? mediana(candidate.map((t) => t.prezzo));
 
-  const grezzo = pianificaViaggio({
+  const piano = pianificaViaggio({
     distanzaKm: d.distanzaKm,
     kml: d.kml,
     serbatoioL: d.serbatoioL,
     litriAdesso,
     candidate,
-    prezzoPartenza: riferimento,
+    prezzoPartenza,
   });
-  const piano = prezzoPartenza === null ? { ...grezzo, spesaPienoPrima: null, risparmioEur: null } : grezzo;
 
+  // Il valore del carburante bruciato: al prezzo medio pagato nelle soste,
+  // o, senza soste, a quello di partenza o alla mediana della strada.
   const litriConsumati = d.kml > 0 ? d.distanzaKm / d.kml + piano.litriDeviazione : 0;
+  const riferimento = prezzoPartenza ?? mediana(candidate.map((t) => t.prezzo));
   const prezzoMedio = piano.litriComprati > 0 ? piano.spesaCarburante / piano.litriComprati : riferimento;
 
   return {
@@ -180,7 +185,26 @@ export function testoImpossibile(piano: Piano, strategia: Strategia): string {
   const dove = km !== null ? ` intorno al km ${numero(km)}` : '';
   const base =
     piano.soste.length === 0
-      ? `Con il carburante che hai resti a secco${dove}, prima di un distributore lungo la strada.`
-      : `${MOTIVO_TESTO['buco-troppo-lungo']} Il tratto scoperto inizia${dove}.`;
+      ? `Con il carburante che hai resti a secco${dove}, prima di arrivare a un distributore lungo la strada.`
+      : `${MOTIVO_TESTO['buco-troppo-lungo']} Anche col pieno all’ultimo distributore che raggiungi resti a secco${dove}.`;
   return strategia === 'risparmio' ? base : `${base} Prova con Risparmio: conta anche i distributori più lontani dalla strada.`;
+}
+
+/**
+ * Quando ci si arriva sotto la riserva: succede solo se nessun piano la
+ * tiene, perche non c'e un distributore dove servirebbe o perche un pieno
+ * non basta per l'ultimo tratto. Dice quanto resta e cosa fare, senza
+ * negare distributori che magari ci sono.
+ */
+export function testoSottoRiserva(piano: Piano, strategia: Strategia): string {
+  const n = piano.soste.length;
+  const arrivi = `arrivi con circa ${litri(piano.litriAllArrivo, 1)}, sotto la riserva. Fai benzina appena puoi.`;
+  const base =
+    n === 0 ? `Senza fermarti ${arrivi}` : `${n === 1 ? 'Con la sosta qui sotto' : `Con le ${numero(n)} soste qui sotto`} ${arrivi}`;
+  return strategia === 'risparmio' ? base : `${base} Con Risparmio il piano guarda anche i distributori più lontani dalla strada.`;
+}
+
+/** «Alla prima sosta ci arrivi in riserva.», «Alla sosta 2 ci arrivi in riserva.» */
+export function testoSostaInRiserva(numeroSosta: number): string {
+  return numeroSosta === 1 ? 'Alla prima sosta ci arrivi in riserva.' : `Alla sosta ${numero(numeroSosta)} ci arrivi in riserva.`;
 }

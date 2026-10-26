@@ -19,13 +19,36 @@ import { isLikelyClosed, ritardoSulLotto, ultimoPrezzo } from './freshness';
  *     ciascuno in tutte le celle che stanno entro il margine;
  *  3. ogni impianto guarda solo i tratti della propria cella e si proietta
  *     sul piu vicino: distanza laterale vera e km dalla partenza, dalle
- *     lunghezze cumulate calcolate una volta sola.
+ *     lunghezze cumulate calcolate una volta sola;
+ *  4. chi sta a meno di cento metri si rimisura sulla spezzata vera, quella
+ *     non semplificata: li trenta metri di semplificazione bastano a
+ *     spostare un'area di servizio da una carreggiata all'altra.
  *
  * Ventunomila impianti su un percorso di mille km: pochi millisecondi.
  */
 
 /** Oltre questa distanza dalla strada un impianto non e piu «lungo il percorso». */
 export const SCOSTAMENTO_MAX_KM = 2.5;
+/**
+ * Sotto questa distanza dalla linea della strada non si dice da che lato
+ * sta un impianto: e sulla strada.
+ *
+ * La linea di OSRM, in autostrada, corre in mezzo alla nostra carreggiata,
+ * e il bordo sinistro sta a sei-otto metri; oltre ci sono lo spartitraffico
+ * e, a quindici-venti metri, l'altra carreggiata. Un impianto piu a
+ * sinistra di cosi non e sulla nostra strada. Con 25 m, come nella prima
+ * versione, restava dentro Lucignano Est (A1, carreggiata nord), che
+ * andando verso Roma sta 11 m a sinistra e costa meno del gemello giusto.
+ * Sui diciassette percorsi veri provati, passare da 25 a 8 m cambia solo
+ * quella.
+ */
+export const SULLA_LINEA_KM = 0.008;
+/**
+ * Entro questa distanza dalla spezzata semplificata un impianto si
+ * rimisura su quella vera: il lato conta, e la semplificazione lo puo
+ * cambiare fino a TOLLERANZA_SEMPLIFICAZIONE_KM.
+ */
+const RIMISURA_KM = 0.1;
 /** Tolleranza della semplificazione: sotto i 30 m la forma della strada non cambia. */
 export const TOLLERANZA_SEMPLIFICAZIONE_KM = 0.03;
 /** Lato delle celle della griglia, in gradi. */
@@ -57,8 +80,13 @@ function distanzaPianaKm(p: LatLng, a: LatLng, b: LatLng): number {
  * solo quelli che si allontanano dalla corda piu della tolleranza.
  */
 export function semplificaPercorso(punti: readonly LatLng[], tolleranzaKm = TOLLERANZA_SEMPLIFICAZIONE_KM): LatLng[] {
+  return indiciSemplificati(punti, tolleranzaKm).map((i) => punti[i]!);
+}
+
+/** Come semplificaPercorso, ma dice quali punti tiene: i loro indici, in ordine. */
+function indiciSemplificati(punti: readonly LatLng[], tolleranzaKm: number): number[] {
   const n = punti.length;
-  if (n <= 2 || !(tolleranzaKm > 0)) return punti.slice();
+  if (n <= 2 || !(tolleranzaKm > 0)) return Array.from({ length: n }, (_, i) => i);
 
   const tieni = new Uint8Array(n);
   tieni[0] = 1;
@@ -86,8 +114,8 @@ export function semplificaPercorso(punti: readonly LatLng[], tolleranzaKm = TOLL
     }
   }
 
-  const out: LatLng[] = [];
-  for (let i = 0; i < n; i++) if (tieni[i]) out.push(punti[i]!);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) if (tieni[i]) out.push(i);
   return out;
 }
 
@@ -96,6 +124,12 @@ export function semplificaPercorso(punti: readonly LatLng[], tolleranzaKm = TOLL
 export interface IndicePercorso {
   /** La spezzata semplificata. */
   punti: LatLng[];
+  /** La spezzata vera, com'e arrivata dal router. */
+  grezzi: readonly LatLng[];
+  /** Per ogni vertice della semplificata, il suo indice nella spezzata vera. */
+  daGrezzi: Uint32Array;
+  /** Quanto la semplificata puo scostarsi dalla vera, in km. */
+  tolleranzaKm: number;
   /** Km dalla partenza a ogni vertice, lungo la spezzata. */
   cumulateKm: Float64Array;
   /** Lunghezza della spezzata in km (in linea d'aria fra vertice e vertice). */
@@ -133,7 +167,9 @@ export function indicizzaPercorso(
   opzioni: { tolleranzaKm?: number; margineKm?: number } = {},
 ): IndicePercorso {
   const margineKm = opzioni.margineKm ?? SCOSTAMENTO_MAX_KM;
-  const semplici = semplificaPercorso(punti, opzioni.tolleranzaKm ?? TOLLERANZA_SEMPLIFICAZIONE_KM);
+  const tolleranzaKm = opzioni.tolleranzaKm ?? TOLLERANZA_SEMPLIFICAZIONE_KM;
+  const daGrezzi = Uint32Array.from(indiciSemplificati(punti, tolleranzaKm));
+  const semplici = Array.from(daGrezzi, (i) => punti[i]!);
   const n = semplici.length;
   const cumulateKm = new Float64Array(Math.max(1, n));
   const celle = new Map<number, number[]>();
@@ -176,7 +212,17 @@ export function indicizzaPercorso(
     }
   }
 
-  return { punti: semplici, cumulateKm, kmTotali: n > 1 ? cumulateKm[n - 1]! : 0, margineKm, celle, riquadro };
+  return {
+    punti: semplici,
+    grezzi: punti,
+    daGrezzi,
+    tolleranzaKm: Math.max(0, tolleranzaKm),
+    cumulateKm,
+    kmTotali: n > 1 ? cumulateKm[n - 1]! : 0,
+    margineKm,
+    celle,
+    riquadro,
+  };
 }
 
 /* ── Ricerca ──────────────────────────────────────────────────────────── */
@@ -185,10 +231,20 @@ export interface ImpiantoSulPercorso {
   row: StationRow;
   /** Prezzo del carburante scelto (self quando c'e). */
   prezzo: number;
-  /** Distanza in linea d'aria fra l'impianto e il punto piu vicino della strada. */
+  /**
+   * Distanza in linea d'aria fra l'impianto e il punto piu vicino della
+   * strada: sulla spezzata vera entro RIMISURA_KM, altrimenti su quella
+   * semplificata (al piu trenta metri di differenza).
+   */
   scostamentoKm: number;
   /** Km dalla partenza al punto in cui si lascia la strada. */
   kmDaPartenza: number;
+  /**
+   * true quando l'impianto sta a sinistra della strada, guardando nel verso
+   * di marcia, ad almeno SULLA_LINEA_KM. In autostrada vuol dire l'altra
+   * carreggiata: non ci si entra.
+   */
+  aSinistra: boolean;
 }
 
 export interface OpzioniLungoPercorso {
@@ -224,9 +280,9 @@ export function impiantiLungoPercorso(
   const max = o.maxScostamentoKm ?? SCOSTAMENTO_MAX_KM;
   let indice = 'celle' in percorso ? percorso : indicizzaPercorso(percorso, { margineKm: max });
   // Un indice preparato per un margine piu stretto non vedrebbe tutto.
-  if (indice.margineKm < max) indice = indicizzaPercorso(indice.punti, { tolleranzaKm: 0, margineKm: max });
+  if (indice.margineKm < max) indice = indicizzaPercorso(indice.grezzi, { tolleranzaKm: indice.tolleranzaKm, margineKm: max });
 
-  const { punti, cumulateKm, celle, riquadro } = indice;
+  const { punti, grezzi, daGrezzi, cumulateKm, celle, riquadro } = indice;
   const tratti = punti.length - 1;
   if (tratti < 1) return [];
 
@@ -248,6 +304,35 @@ export function impiantiLungoPercorso(
 
   const scala = o.kmStradali && o.kmStradali > 0 && indice.kmTotali > 0 ? o.kmStradali / indice.kmTotali : 1;
   const maxGradi = max / KM_PER_GRADO;
+  const rimisuraGradi = RIMISURA_KM / KM_PER_GRADO;
+  const tolleranzaGradi = indice.tolleranzaKm / KM_PER_GRADO;
+
+  /**
+   * Il punto piu vicino sulla spezzata vera, fra i punti che la
+   * semplificata ha tolto dal tratto s: distanza al quadrato e lato, in
+   * gradi come sopra.
+   */
+  let veraD2 = Infinity;
+  let veraLato = 0;
+  const rimisura = (s: number, lat: number, lng: number, k: number) => {
+    for (let g = daGrezzi[s]!; g < daGrezzi[s + 1]!; g++) {
+      const a = grezzi[g]!;
+      const b = grezzi[g + 1]!;
+      const vx = (b.lng - a.lng) * k;
+      const vy = b.lat - a.lat;
+      const px = (lng - a.lng) * k;
+      const py = lat - a.lat;
+      const l2 = vx * vx + vy * vy;
+      const t = l2 > 0 ? Math.max(0, Math.min(1, (px * vx + py * vy) / l2)) : 0;
+      const ex = px - t * vx;
+      const ey = py - t * vy;
+      const d2 = ex * ex + ey * ey;
+      if (d2 < veraD2) {
+        veraD2 = d2;
+        veraLato = vx * py - vy * px;
+      }
+    }
+  };
   const nascosti = o.nascosti;
   const ultimo = ultimoPrezzo(rows);
   const out: ImpiantoSulPercorso[] = [];
@@ -265,6 +350,7 @@ export function impiantiLungoPercorso(
     let migliore = Infinity;
     let tratto = -1;
     let piede = 0;
+    let lato = 0;
     for (let c = 0; c < candidati.length; c++) {
       const s = candidati[c]!;
       const vx = dLng[s]! * k;
@@ -280,19 +366,46 @@ export function impiantiLungoPercorso(
         migliore = d2;
         tratto = s;
         piede = t;
+        // Il prodotto vettoriale fra il verso del tratto e l'impianto:
+        // positivo a sinistra, con l'est sulle x e il nord sulle y.
+        lato = vx * py - vy * px;
       }
     }
     if (tratto < 0) continue;
-    const gradi = Math.sqrt(migliore);
+    let gradi = Math.sqrt(migliore);
     if (gradi > maxGradi) continue;
     // La data si legge solo per i pochi impianti vicini alla strada.
     if (isLikelyClosed(ritardoSulLotto(r.updated, ultimo))) continue;
 
+    if (gradi < rimisuraGradi && tolleranzaGradi > 0) {
+      // Sulla spezzata vera: prima il tratto piu vicino, poi ogni altro
+      // tratto che, tolleranza compresa, potrebbe nascondere un punto piu
+      // vicino (un tornante, un raccordo).
+      veraD2 = Infinity;
+      rimisura(tratto, lat, lng, k);
+      for (let c = 0; c < candidati.length; c++) {
+        const s = candidati[c]!;
+        if (s === tratto) continue;
+        const vx = dLng[s]! * k;
+        const vy = dLat[s]!;
+        const px = (lng - aLng[s]!) * k;
+        const py = lat - aLat[s]!;
+        const l2 = vx * vx + vy * vy;
+        const t = l2 > 0 ? Math.max(0, Math.min(1, (px * vx + py * vy) / l2)) : 0;
+        const d = Math.hypot(px - t * vx, py - t * vy);
+        if (d - tolleranzaGradi < Math.sqrt(veraD2)) rimisura(s, lat, lng, k);
+      }
+      gradi = Math.sqrt(veraD2);
+      lato = veraLato;
+    }
+
+    const scostamentoKm = gradi * KM_PER_GRADO;
     out.push({
       row: r,
       prezzo,
-      scostamentoKm: gradi * KM_PER_GRADO,
+      scostamentoKm,
       kmDaPartenza: (cumulateKm[tratto]! + piede * lunghezza[tratto]!) * scala,
+      aSinistra: lato > 0 && scostamentoKm >= SULLA_LINEA_KM,
     });
   }
 

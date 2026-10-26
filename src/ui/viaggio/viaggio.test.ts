@@ -18,6 +18,9 @@ describe('formatoViaggio', () => {
   });
 
   it('non dice mai di mettere zero litri', () => {
+    // Vale per la scheda della sosta e per il totale del Riepilogo, che
+    // con litri(…, 0) diceva «Metti 0 L in tutto» per 0,2 L.
+    expect(litriDaMettere(0.2)).toBe('0,2 L');
     expect(litriDaMettere(0.02)).toBe('0,1 L');
     expect(litriDaMettere(6.44)).toBe('6,4 L');
     expect(litriDaMettere(31.6)).toBe('32 L');

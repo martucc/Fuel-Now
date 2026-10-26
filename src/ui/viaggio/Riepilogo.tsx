@@ -1,12 +1,12 @@
 import type { FuelKey } from '../../domain/raw';
 import { FUEL_LABEL } from '../../domain/fuel';
 import type { EsitoViaggio, Strategia } from '../../domain/tappeViaggio';
-import { testoImpossibile } from '../../domain/tappeViaggio';
+import { testoImpossibile, testoSostaInRiserva, testoSottoRiserva } from '../../domain/tappeViaggio';
 import { chilometri, euro, numero } from '../../lib/formato';
 import { quantita } from '../kit/formatoUi';
 import type { PercorsoViaggio } from '../../services/percorsoService';
 import { Segnaposto } from '../kit/Stato';
-import { durata } from './formatoViaggio';
+import { durata, litriDaMettere } from './formatoViaggio';
 
 interface Props {
   percorso: PercorsoViaggio;
@@ -56,6 +56,11 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
                 <p className="mf-headline text-mf-warn">Così non ci arrivi</p>
                 <p className="mf-subhead mt-1 text-mf-ink-2">{testoImpossibile(p, strategia)}</p>
               </>
+            ) : p.arrivoSottoRiserva ? (
+              <>
+                <p className="mf-headline text-mf-warn">Ci arrivi, ma in riserva</p>
+                <p className="mf-subhead mt-1 text-mf-ink-2">{testoSottoRiserva(p, strategia)}</p>
+              </>
             ) : p.soste.length === 0 ? (
               <>
                 <p className="mf-headline">Ci arrivi senza fare rifornimento</p>
@@ -67,8 +72,9 @@ export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lun
                   {p.soste.length === 1 ? 'Ti fermi una volta' : `Ti fermi ${numero(p.soste.length)} volte`}
                 </p>
                 <p className="mf-subhead mt-1 text-mf-ink-2">
-                  Metti <span className="mf-num text-mf-ink">{quantita(p.litriComprati, fuel)}</span> in tutto, per{' '}
+                  Metti <span className="mf-num text-mf-ink">{litriDaMettere(p.litriComprati, fuel)}</span> in tutto, per{' '}
                   <span className="mf-num text-mf-ink">{euro(p.spesaCarburante)}</span>.
+                  {p.sostaInRiserva !== null && ` ${testoSostaInRiserva(p.sostaInRiserva)}`}
                   {p.risparmioEur !== null && p.risparmioEur >= RISPARMIO_MINIMO && (
                     <>
                       {' '}Risparmi <span className="mf-num font-semibold text-mf-best">{euro(p.risparmioEur)}</span> rispetto al

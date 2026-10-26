@@ -5,6 +5,7 @@ import {
   indicizzaPercorso,
   semplificaPercorso,
   SCOSTAMENTO_MAX_KM,
+  SULLA_LINEA_KM,
   vistaPercorso,
 } from './lungoPercorso';
 import type { LatLng } from './geo';
@@ -219,6 +220,110 @@ describe('impiantiLungoPercorso: chi e sulla strada', () => {
     const out = impiantiLungoPercorso([a, b], righe, opz);
     expect(out).toHaveLength(19);
     for (const x of out) expect(x.scostamentoKm).toBeCloseTo(2, 1);
+  });
+});
+
+describe('impiantiLungoPercorso: da che lato della strada', () => {
+  it('sa se un impianto sta a destra o a sinistra nel verso di marcia', () => {
+    // Due aree di servizio speculari, come Sillaro Est e Ovest: verso est la
+    // destra e a sud. Al ritorno, verso ovest, si scambiano.
+    const andata = rettaEst(60, 20);
+    const sud = riga('sud', sposta(andata[0]!, -0.045, 33));
+    const nord = riga('nord', sposta(andata[0]!, 0.045, 33.1));
+    const lato = (strada: LatLng[]) =>
+      Object.fromEntries(impiantiLungoPercorso(strada, [sud, nord], opz).map((x) => [x.row.id, x.aSinistra]));
+    expect(lato(andata)).toEqual({ sud: false, nord: true });
+    expect(lato([...andata].reverse())).toEqual({ sud: true, nord: false });
+  });
+
+  it('regge anche su una strada in diagonale e dopo una curva', () => {
+    // Verso nord-est, poi verso nord-ovest: a destra c'e sempre il lato est.
+    const a = { lat: 44, lng: 11 };
+    const b = sposta(a, 20, 20);
+    const c = sposta(b, 20, -20);
+    const righe = [
+      riga('primo-destra', sposta(sposta(a, 10, 10), -0.05, 0.05)),
+      riga('primo-sinistra', sposta(sposta(a, 10.2, 10.2), 0.05, -0.05)),
+      riga('secondo-destra', sposta(sposta(b, 10, -10), 0.05, 0.05)),
+      riga('secondo-sinistra', sposta(sposta(b, 10.2, -10.2), -0.05, -0.05)),
+    ];
+    const out = impiantiLungoPercorso([a, b, c], righe, opz);
+    expect(Object.fromEntries(out.map((x) => [x.row.id, x.aSinistra]))).toEqual({
+      'primo-destra': false,
+      'primo-sinistra': true,
+      'secondo-destra': false,
+      'secondo-sinistra': true,
+    });
+  });
+
+  it('a undici metri a sinistra e gia l altra carreggiata; a quattro e sulla strada', () => {
+    // Come Lucignano Est sull A1: verso Roma sta 11 m a sinistra della linea,
+    // sull altra carreggiata; verso Milano 1 m a destra. Con la fascia di
+    // 25 m di prima restava buona nei due versi.
+    const andata = rettaEst(60, 0.1);
+    const oltre = riga('oltre', sposta(andata[0]!, 0.011, 30));
+    const sulla = riga('sulla', sposta(andata[0]!, 0.004, 40));
+    const lato = (strada: LatLng[]) =>
+      Object.fromEntries(impiantiLungoPercorso(strada, [oltre, sulla], opz).map((x) => [x.row.id, x.aSinistra]));
+    expect(SULLA_LINEA_KM).toBeLessThan(0.011);
+    expect(lato(andata)).toEqual({ oltre: true, sulla: false });
+    expect(lato([...andata].reverse())).toEqual({ oltre: false, sulla: false });
+  });
+
+  it('lato e distanza si misurano sulla strada vera, non su quella semplificata', () => {
+    // Verso est, fra il km 20 e il km 24 la strada scende di 25 m verso sud:
+    // meno dei 30 m della semplificazione, che la raddrizza. L impianto sta
+    // 10 m a sud della retta: sulla semplificata sarebbe a destra, ma la
+    // strada vera passa 15 m piu a sud, e lui le sta a sinistra.
+    const giu = (km: number) => (km < 19 || km > 25 ? 0 : km < 20 ? 19 - km : km > 24 ? km - 25 : -1) * 0.025;
+    const strada = Array.from({ length: 601 }, (_, i) => sposta({ lat: 44, lng: 11 }, giu(i / 10), i / 10));
+    expect(semplificaPercorso(strada).length).toBeLessThan(5);
+    const impianto = riga('in-mezzo', sposta(strada[0]!, -0.01, 22));
+    const [andata] = impiantiLungoPercorso(strada, [impianto], opz);
+    expect(andata!.aSinistra).toBe(true);
+    expect(andata!.scostamentoKm).toBeCloseTo(0.015, 3);
+    const [ritorno] = impiantiLungoPercorso([...strada].reverse(), [impianto], opz);
+    expect(ritorno!.aSinistra).toBe(false);
+    expect(ritorno!.scostamentoKm).toBeCloseTo(0.015, 3);
+  });
+
+  it('vicino alla strada lato e distanza sono quelli di una ricerca a forza bruta sulla spezzata vera', () => {
+    // Una strada mossa con un tremolio di qualche metro, che la
+    // semplificazione toglie, e impianti entro cento metri: anche dove la
+    // strada torna su se stessa conta il passaggio vero piu vicino.
+    const r = casuale(7);
+    const punti: LatLng[] = [{ lat: 44.2, lng: 11.1 }];
+    let dir = 0.3;
+    for (let i = 0; i < 3000; i++) {
+      dir += (r() - 0.5) * 0.25;
+      const base = sposta(punti[i]!, Math.sin(dir) * 0.05, Math.cos(dir) * 0.05);
+      punti.push(sposta(base, (r() - 0.5) * 0.02, (r() - 0.5) * 0.02));
+    }
+    const indice = indicizzaPercorso(punti);
+    expect(indice.punti.length).toBeLessThan(punti.length / 3);
+    const righe = Array.from({ length: 2000 }, (_, i) => {
+      const base = punti[Math.floor(r() * punti.length)]!;
+      return riga(`v${i}`, sposta(base, (r() - 0.5) * 0.16, (r() - 0.5) * 0.16));
+    });
+    const out = impiantiLungoPercorso(indice, righe, opz);
+    let confrontati = 0;
+    for (const x of out) {
+      if (x.scostamentoKm > 0.06) continue;
+      let migliore = { km: Infinity, lato: 0 };
+      for (let i = 0; i < punti.length - 1; i++) {
+        const a = punti[i]!;
+        const b = punti[i + 1]!;
+        const d = oracolo(x.row, a, b);
+        if (d.km < migliore.km) {
+          const k = Math.cos(x.row.lat * RAD);
+          migliore = { km: d.km, lato: (b.lng - a.lng) * k * (x.row.lat - a.lat) - (b.lat - a.lat) * (x.row.lng - a.lng) * k };
+        }
+      }
+      confrontati++;
+      expect(x.scostamentoKm).toBeCloseTo(migliore.km, 6);
+      expect(x.aSinistra).toBe(migliore.lato > 0 && migliore.km >= SULLA_LINEA_KM);
+    }
+    expect(confrontati).toBeGreaterThan(300);
   });
 });
 
