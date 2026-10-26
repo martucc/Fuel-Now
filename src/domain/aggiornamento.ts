@@ -129,13 +129,15 @@ export const DATI_VECCHI_MS = 12 * 60 * 60_000;
  * `verificatoIl` e l'ultima volta che il telefono ha controllato con
  * successo che i prezzi fossero quelli di oggi (anche se il file non era
  * cambiato). `datiDel` e la data dei prezzi inclusi nell'app, quando sono
- * loro a schermo.
+ * loro a schermo. `dalMinistero`: i prezzi li ha chiesti il telefono col
+ * piano B, perche il file su GitHub era fermo.
  */
 export function descriviStatoDati(
   fase: FaseDati,
   verificatoIl: number | null,
   adesso: number,
   datiDel: number | null = null,
+  dalMinistero = false,
 ): DescrizioneDati {
   if (fase === 'carico') return { testo: 'Carico i prezzi…', avviso: false };
   if (fase === 'aggiorno') return { testo: 'Aggiorno i prezzi…', avviso: false };
@@ -149,7 +151,8 @@ export function descriviStatoDati(
   if (fase === 'errore') {
     return { testo: `Senza rete: prezzi controllati ${quando(verificatoIl, adesso)}`, avviso: true };
   }
-  return { testo: `Aggiornato ${quando(verificatoIl, adesso)}`, avviso: adesso - verificatoIl > DATI_VECCHI_MS };
+  const testo = dalMinistero ? `Presi dal Ministero ${quando(verificatoIl, adesso)}` : `Aggiornato ${quando(verificatoIl, adesso)}`;
+  return { testo, avviso: adesso - verificatoIl > DATI_VECCHI_MS };
 }
 
 /** Oltre quest'eta del prezzo piu recente, e la fonte a essere ferma, non il telefono. */

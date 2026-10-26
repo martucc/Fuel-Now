@@ -81,6 +81,12 @@ describe('descriviStatoDati', () => {
     expect(descriviStatoDati('errore', null, ADESSO).testo).toContain('Senza rete');
   });
 
+  it('i prezzi chiesti dal telefono lo dicono', () => {
+    const d = descriviStatoDati('pronto', ADESSO - 20 * 60_000, ADESSO, null, true);
+    expect(d.testo).toBe('Presi dal Ministero alle 09:10');
+    expect(d.avviso).toBe(false);
+  });
+
   it('un download riuscito ma vecchio avvisa', () => {
     expect(descriviStatoDati('pronto', ADESSO - DATI_VECCHI_MS - 1, ADESSO).avviso).toBe(true);
   });

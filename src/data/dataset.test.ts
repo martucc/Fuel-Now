@@ -245,3 +245,102 @@ describe('il negozio dei prezzi', () => {
     expect(nome(n.stato())).toBe('rete-0');
   });
 });
+
+describe('il piano B: prezzi chiesti al Ministero dal telefono', () => {
+  /** Un file fermo: l'ultimo prezzo e di due giorni prima di ORA. */
+  function fermo(nome: string, ora = 8, ultimo = '2026-10-11 08:00'): string {
+    const d = JSON.parse(file(nome, ora)) as { source: Record<string, unknown>; stations: Array<Record<string, unknown>> };
+    d.source.latest_price_at = ultimo;
+    for (const s of d.stations) {
+      s.updated = ultimo;
+      s.p = { diesel: [2.3, 2.4] };
+    }
+    return JSON.stringify(d);
+  }
+  const risposta = (insertDate = '2026-10-13T08:30:00') => [1, 2, 3].map((id) => ({
+    id, name: `M${id}`, brand: '', address: '', location: { lat: 41.9, lng: 12.5 },
+    fuels: [{ fuelId: 2, price: 2.05, isSelf: true }], insertDate,
+  }));
+
+  it('con il file fermo chiede i prezzi al Ministero, li mostra e li salva', async () => {
+    const a = archivio();
+    const ministero = vi.fn(async () => risposta());
+    const n = creaNegozioDataset(dipendenze({ archivio: a, scarica: vi.fn(async () => fermo('rete')), ministero }));
+    await n.avvia();
+    await n.aggiorna('manuale'); // si aggancia al giro gia partito
+    expect(ministero).toHaveBeenCalledTimes(1);
+    const s = n.stato();
+    expect(s.origine).toBe('ministero');
+    expect(s.fase).toBe('pronto');
+    expect(s.dati?.stations[0].p.diesel).toEqual([2.05, null]);
+    expect(s.dati?.stations[0].name).toBe('rete-0'); // l'anagrafica resta quella del file
+    expect(s.dati?.source?.kind).toBe('telefono');
+    expect(JSON.parse(a.copia()!.testo).source.kind).toBe('telefono');
+  });
+
+  it('con il file fresco il Ministero non si disturba', async () => {
+    const ministero = vi.fn(async () => risposta());
+    const n = creaNegozioDataset(dipendenze({ scarica: vi.fn(async () => fermo('rete', 8, '2026-10-13 07:45')), ministero }));
+    await n.avvia();
+    expect(ministero).not.toHaveBeenCalled();
+    expect(n.stato().origine).toBe('rete');
+  });
+
+  it('senza rete non ci prova e non consuma la pausa', async () => {
+    let su = false;
+    const scarica = vi.fn(async () => { if (!su) throw new Error('offline'); return fermo('rete'); });
+    const ministero = vi.fn(async () => risposta());
+    const n = creaNegozioDataset(dipendenze({ scarica, ministero, archivio: archivio({ testo: fermo('s'), scaricatoIl: ORA - 86_400_000 }) }));
+    await n.avvia();
+    await n.aggiorna('manuale');
+    expect(ministero).not.toHaveBeenCalled();
+    expect(n.stato().fase).toBe('errore');
+    su = true;
+    await n.aggiorna('rete');
+    expect(ministero).toHaveBeenCalledTimes(1);
+    expect(n.stato().origine).toBe('ministero');
+  });
+
+  it('se il Ministero non risponde resta tutto com’era e non insiste', async () => {
+    const ministero = vi.fn(async () => { throw new Error('timeout'); });
+    const n = creaNegozioDataset(dipendenze({ scarica: vi.fn(async () => fermo('rete')), ministero }));
+    await n.avvia();
+    await n.aggiorna('manuale');
+    expect(n.stato().origine).toBe('rete');
+    expect(n.stato().fase).toBe('pronto');
+    await n.aggiorna('manuale');
+    expect(ministero).toHaveBeenCalledTimes(1);
+  });
+
+  it('se il Ministero e fermo anche lui non cambia niente', async () => {
+    const ministero = vi.fn(async () => risposta('2026-10-11T07:00:00'));
+    const n = creaNegozioDataset(dipendenze({ scarica: vi.fn(async () => fermo('rete')), ministero }));
+    await n.avvia();
+    expect(ministero).toHaveBeenCalledTimes(1);
+    expect(n.stato().origine).toBe('rete');
+    expect(n.stato().dati?.stations[0].p.diesel).toEqual([2.3, 2.4]);
+  });
+
+  it('il file vecchio di GitHub non copre i prezzi del Ministero, il primo file nuovo si', async () => {
+    let t = ORA;
+    let versione = fermo('rete', 8);
+    const n = creaNegozioDataset(dipendenze({
+      adesso: () => (t += 1000),
+      scarica: vi.fn(async () => versione),
+      ministero: vi.fn(async () => risposta()),
+    }));
+    await n.avvia();
+    await n.aggiorna('manuale');
+    expect(n.stato().origine).toBe('ministero');
+
+    t += 120_000;
+    await n.aggiorna('manuale'); // GitHub rimanda lo stesso file fermo
+    expect(n.stato().origine).toBe('ministero');
+
+    t += 3_600_000;
+    versione = fermo('github-ripartito', 23, '2026-10-13 09:50'); // generato dopo il piano B
+    await n.aggiorna('manuale');
+    expect(n.stato().origine).toBe('rete');
+    expect(nome(n.stato())).toBe('github-ripartito-0');
+  });
+});

@@ -6,6 +6,7 @@ import { cercaAuto, impostaNascosto, useElencoAuto } from '../../app/dati';
 import { usaGps } from '../../app/posizione';
 import { datasetStore } from '../../data/dataset';
 import { descriviStatoDati } from '../../domain/aggiornamento';
+import { presiDalTelefono } from '../../domain/ministero';
 import { numero } from '../../lib/formato';
 import type { ModelloIa } from '../../services/geminiService';
 import { chiediModelli, provaChiave, MODELLI_DI_RIPIEGO } from '../../services/geminiService';
@@ -45,7 +46,7 @@ export const VERSIONE_APP = '2.1.2';
  */
 export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello; onChiudi: () => void; onScegliLuogo: () => void }) {
   const [vista, setVista] = useState<Vista>('principale');
-  const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime());
+  const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime(), null, presiDalTelefono(m.dataset.dati));
 
   const indietro = () => setVista('principale');
   const titolo =
@@ -96,7 +97,7 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
           <Riga icona={<Search size={20} className="text-mf-ink-2" />} titolo="Scegli una città" freccia onClick={onScegliLuogo} />
         </Gruppo>
 
-        <Gruppo titolo="Prezzi" nota="Si aggiornano da soli ogni volta che apri l’app. Fonte: Ministero delle Imprese e del Made in Italy.">
+        <Gruppo titolo="Prezzi" nota="Si aggiornano da soli ogni volta che apri l’app. Se il file su GitHub resta fermo, il telefono li chiede direttamente al Ministero. Fonte: Ministero delle Imprese e del Made in Italy.">
           <Riga
             icona={<RefreshCw size={20} className={`text-mf-ink-2 ${m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''}`} />}
             titolo="Aggiorna adesso"

@@ -1,6 +1,8 @@
 import type { RawDataset } from '../domain/raw';
 import { attesePerTentativo, confronta, serveAggiornare } from '../domain/aggiornamento';
 import type { FaseDati, MotivoAggiornamento } from '../domain/aggiornamento';
+import { cuciPrezzi, leggiRisultati, prezziFermi, ultimoPrezzoIl } from '../domain/ministero';
+import { ministeroDisponibile, scaricaDalMinistero } from '../services/ministero';
 import { archivioPredefinito } from './archivio';
 import type { Archivio } from './archivio';
 
@@ -31,8 +33,13 @@ export const MIN_STAZIONI = 1000;
  * Il download continua e li sostituisce appena arriva.
  */
 export const ATTESA_PRIMO_AVVIO_MS = 2500;
+/** Il piano B scarica una decina di MB: se non ha funzionato, si riprova fra qualche ora. */
+export const PAUSA_PIANO_B_MS = 3 * 3_600_000;
+/** Venti regioni con una rete da telefono: oltre questo tempo si lascia perdere. */
+export const TIMEOUT_PIANO_B_MS = 90_000;
 
-export type OrigineDati = 'rete' | 'archivio' | 'pacchetto';
+/** `ministero`: prezzi chiesti dal telefono al Ministero perche il file era fermo. */
+export type OrigineDati = 'rete' | 'archivio' | 'pacchetto' | 'ministero';
 
 export interface StatoDataset {
   dati: RawDataset | null;
@@ -58,6 +65,11 @@ export interface DipendenzeDataset {
   attendi: (ms: number) => Promise<void>;
   minStazioni: number;
   attesaPrimoAvvioMs: number;
+  /**
+   * Il piano B: i `results` dell'API live del Ministero, tutte le regioni.
+   * Assente dove non si può chiamare (nel browser, per il CORS).
+   */
+  ministero?: (signal: AbortSignal) => Promise<unknown[]>;
 }
 
 export interface NegozioDataset {
@@ -87,6 +99,7 @@ export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
   };
   let ultimoSuccesso: number | null = null;
   let ultimoEsito: 'ok' | 'errore' | null = null;
+  let ultimoPianoB: number | null = null;
   let inCorso: Promise<boolean> | null = null;
   let avvio: Promise<void> | null = null;
   const ascoltatori = new Set<() => void>();
@@ -117,7 +130,7 @@ export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
     return dati ? { dati, testo } : null;
   }
 
-  async function dallaRete(motivo: MotivoAggiornamento): Promise<boolean> {
+  async function dalFile(motivo: MotivoAggiornamento): Promise<boolean> {
     imposta({ ultimoTentativo: dip.adesso(), fase: stato.dati ? 'aggiorno' : 'carico' });
 
     let esito: { dati: RawDataset; testo: string } | null = null;
@@ -153,6 +166,65 @@ export function creaNegozioDataset(dip: DipendenzeDataset): NegozioDataset {
       await dip.archivio.scrivi({ testo: esito.testo, scaricatoIl: quando });
     } catch { /* senza archivio si riscarica al prossimo avvio, niente di grave */ }
     return true;
+  }
+
+  /**
+   * Il piano B. Se anche dopo il controllo i prezzi a schermo sono fermi da
+   * ore (lo script su GitHub non gira o non arriva al Ministero), li si
+   * chiede al Ministero dal telefono e li si cuce sul file che si ha.
+   *
+   * Il risultato porta l'ora del telefono come `generated_at`: il file di
+   * GitHub vecchio risulta «più vecchio» e non lo sostituisce, il primo
+   * file nuovo di GitHub sì.
+   */
+  function serveIlPianoB(): boolean {
+    const adesso = dip.adesso();
+    // GitHub che non risponde di solito vuol dire niente rete: si aspetta
+    // che torni, senza bruciare la pausa del piano B.
+    return Boolean(dip.ministero) && stato.dati !== null && ultimoEsito === 'ok'
+      && prezziFermi(stato.dati, adesso)
+      && (ultimoPianoB === null || adesso - ultimoPianoB >= PAUSA_PIANO_B_MS);
+  }
+
+  async function pianoB(chiedi: NonNullable<DipendenzeDataset['ministero']>, base: RawDataset): Promise<boolean> {
+    ultimoPianoB = dip.adesso();
+
+    const fasePrima = stato.fase;
+    imposta({ fase: 'aggiorno' });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_PIANO_B_MS);
+    let risultati: unknown[];
+    try {
+      risultati = await chiedi(controller.signal);
+    } catch {
+      imposta({ fase: fasePrima });
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const letti = leggiRisultati(risultati);
+    const quando = dip.adesso();
+    const cucito = cuciPrezzi(base, letti, new Date(quando));
+    const piuFresco = (ultimoPrezzoIl(cucito) ?? 0) > (ultimoPrezzoIl(base) ?? 0);
+    if (letti.size < dip.minStazioni || !piuFresco || stato.dati !== base) {
+      // Risposta troppo corta, il Ministero fermo anche lui, o nel frattempo
+      // e arrivato un file: si resta con quello che c'e.
+      imposta({ fase: fasePrima });
+      return false;
+    }
+
+    pubblica(cucito, 'ministero', quando, 'pronto');
+    try {
+      await dip.archivio.scrivi({ testo: JSON.stringify(cucito), scaricatoIl: quando });
+    } catch { /* al prossimo avvio si rifa */ }
+    return true;
+  }
+
+  async function dallaRete(motivo: MotivoAggiornamento): Promise<boolean> {
+    const dalGithub = await dalFile(motivo);
+    if (!serveIlPianoB() || !dip.ministero || !stato.dati) return dalGithub;
+    return (await pianoB(dip.ministero, stato.dati)) || dalGithub;
   }
 
   function aggiorna(motivo: MotivoAggiornamento): Promise<boolean> {
@@ -241,6 +313,7 @@ function predefinito(): NegozioDataset {
     attendi: (ms) => new Promise((r) => setTimeout(r, ms)),
     minStazioni: MIN_STAZIONI,
     attesaPrimoAvvioMs: ATTESA_PRIMO_AVVIO_MS,
+    ministero: ministeroDisponibile() ? scaricaDalMinistero : undefined,
   });
 }
 

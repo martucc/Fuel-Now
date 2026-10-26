@@ -9,6 +9,7 @@ import { aggiornaImpostazioni } from '../../app/impostazioni';
 import { aggiornaPosizione } from '../../app/posizione';
 import { datasetStore } from '../../data/dataset';
 import { avvisoFonte, descriviStatoDati } from '../../domain/aggiornamento';
+import { presiDalTelefono } from '../../domain/ministero';
 import { FUEL_LABEL } from '../../domain/fuel';
 import type { FuelKey } from '../../domain/raw';
 import { FUEL_KEYS } from '../../domain/raw';
@@ -96,7 +97,7 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idBest, utente?.lat, utente?.lng]);
 
-  const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime(), datiDel(m));
+  const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime(), datiDel(m), presiDalTelefono(m.dataset.dati));
   const fonteFerma = m.dataset.origine === 'pacchetto' ? null : avvisoFonte(datiDel(m), m.adesso.getTime());
 
   return (
