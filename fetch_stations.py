@@ -365,16 +365,54 @@ def fetch_prices_primary_live():
     return by_id, source, snapshot_date
 
 
+def anagrafica_salvata():
+    """L'anagrafica dell'ultimo stations.json, con le stesse chiavi del CSV."""
+    try:
+        with open(OUT_JSON, encoding="utf-8") as f:
+            vecchio = json.load(f)
+    except Exception as exc:
+        print(f"  nessuna anagrafica salvata: {exc}", file=sys.stderr, flush=True)
+        return {}
+    meta = {}
+    for st in vecchio.get("stations") or []:
+        meta[str(st.get("id"))] = {
+            "Nome Impianto": st.get("name") or "",
+            "Bandiera": st.get("brand") or "",
+            "Gestore": st.get("operator") or "",
+            "Tipo Impianto": st.get("type") or "",
+            "Indirizzo": st.get("address") or "",
+            "Comune": st.get("city") or "",
+            "Provincia": st.get("prov") or "",
+            "Latitudine": str(st.get("lat") or ""),
+            "Longitudine": str(st.get("lng") or ""),
+        }
+    return meta
+
+
 def main():
     by_id, source, snapshot_date = fetch_prices_primary_live()
 
-    print("Scarico anagrafica...", flush=True)
-    _, stations_raw = parse_mimit_csv(download(STATIONS_URL))
-    print(f"  impianti: {len(stations_raw)}", flush=True)
-
     # Metadata CSV: dettagli stabili (comune, provincia, tipo impianto, gestore).
     # I prezzi restano quelli della fonte primaria scelta sopra.
-    stations_meta = {str(s.get("idImpianto") or "").strip(): s for s in stations_raw}
+    #
+    # Il sito dei CSV (www.mimit.gov.it) da meta ottobre 2026 non risponde ai
+    # server di GitHub, mentre l'API live si. L'anagrafica cambia di rado:
+    # se il CSV non arriva si usa quella dell'ultimo stations.json buono, e per
+    # gli impianti nuovi bastano nome, insegna, indirizzo e coordinate della
+    # live. Prima un CSV irraggiungibile buttava anche i prezzi appena scaricati.
+    stations_meta = {}
+    try:
+        print("Scarico anagrafica...", flush=True)
+        _, stations_raw = parse_mimit_csv(download(STATIONS_URL))
+        print(f"  impianti: {len(stations_raw)}", flush=True)
+        stations_meta = {str(s.get("idImpianto") or "").strip(): s for s in stations_raw}
+        source["registry"] = "csv"
+    except Exception as exc:
+        print(f"Anagrafica CSV non disponibile, uso quella salvata: {exc}", file=sys.stderr, flush=True)
+        stations_meta = anagrafica_salvata()
+        source["registry"] = "saved"
+        source["registry_error"] = str(exc)
+        print(f"  impianti dall'anagrafica salvata: {len(stations_meta)}", flush=True)
 
     # Join con anagrafica
     stations = []
