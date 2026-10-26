@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="100%" height="100%">
+  <defs>
+    <radialGradient id="g1" cx="22" cy="18" r="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2ff0a8"/><stop offset="0.55" stop-color="#14b8a6" stop-opacity="0.55"/><stop offset="1" stop-color="#14b8a6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g2" cx="96" cy="100" r="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5cf6"/><stop offset="0.5" stop-color="#6d5dfc" stop-opacity="0.6"/><stop offset="1" stop-color="#6d5dfc" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g3" cx="92" cy="10" r="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.55"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="lucido" x1="0" y1="0" x2="0" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.10"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="108" height="108" fill="#070a12"/>
+  <rect width="108" height="108" fill="url(#g2)"/>
+  <rect width="108" height="108" fill="url(#g1)"/>
+  <rect width="108" height="108" fill="url(#g3)"/>
+  <rect width="108" height="108" fill="url(#lucido)"/>
+  <defs>
+    <linearGradient id="bianco" x1="0" y1="30" x2="0" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e3f2ff"/>
+    </linearGradient>
+    <filter id="ombra" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2.2" stdDeviation="2.6" flood-color="#020308" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <path d="
+  M54 77.5
+  C 50.2 72.2 36 60.5 36 46.5
+  A 18 18 0 1 1 72 46.5
+  C 72 60.5 57.8 72.2 54 77.5 Z
+  M54 34.5
+  C 51.4 38.8 46.6 43.6 46.6 49.4
+  A 7.4 7.4 0 0 0 61.4 49.4
+  C 61.4 43.6 56.6 38.8 54 34.5 Z" fill-rule="evenodd" fill="url(#bianco)" filter="url(#ombra)"/><circle cx="54" cy="83.2" r="2.6" fill="#2ff0a8"/><circle cx="54" cy="83.2" r="5" fill="#2ff0a8" opacity="0.18"/></svg>

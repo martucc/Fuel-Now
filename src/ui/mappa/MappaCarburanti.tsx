@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import type { GeoJSONSource, Map as MlMap, MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
-import type { FeatureCollection, Point } from 'geojson';
+import type { GeoJSONSource, Map as MlMap, MapLayerMouseEvent, StyleSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import type { FeatureCollection } from 'geojson';
 import { maplibregl } from '../../lib/maplibre';
 import type { CollezionePunti } from '../../domain/mappa';
 import type { LatLng } from '../../domain/geo';
@@ -20,9 +20,11 @@ import {
  * cui la mappa di settembre ne mostrava solo una manciata.
  *
  * Cosa si vede:
- *  - da lontano, gruppi col numero di impianti e il prezzo piu basso;
- *  - da vicino, un pallino per ogni impianto e la targhetta col prezzo dove
- *    c'e posto, dando precedenza ai piu economici;
+ *  - da lontano, un puntino colorato per ogni impianto e un alone morbido
+ *    dove si spende poco: si vede dove conviene senza leggere niente. Niente
+ *    gruppi: cerchi con «da 2,190» ovunque coprivano la mappa e dicevano poco;
+ *  - a meta zoom, la targhetta col prezzo solo per i piu economici;
+ *  - da vicino, la targhetta per tutti dove c'e posto, prima i piu economici;
  *  - il consigliato in blu, sempre visibile; quello toccato in bianco;
  *  - i prezzi vecchi (oltre una settimana) spenti.
  */
@@ -60,12 +62,6 @@ interface Props {
   vistaIniziale?: { centro: LatLng; zoom: number };
   /** false per la mini mappa della Home: niente gesti, niente tocchi sui punti. */
   interattiva?: boolean;
-  /**
-   * false per il viaggio: gli impianti lungo la strada restano pallini anche
-   * da lontano, perche i gruppi grandi coprirebbero il percorso. Si legge
-   * solo alla creazione della mappa.
-   */
-  gruppi?: boolean;
   onScegli?: (id: string | null) => void;
   onMossa?: (v: { centro: LatLng; zoom: number }) => void;
   comandi?: Ref<ComandiMappa | null>;
@@ -73,10 +69,12 @@ interface Props {
 }
 
 const ITALIA = { centro: { lat: 42.4, lng: 12.6 }, zoom: 5.2 };
-/** Sotto questo zoom gli impianti si raggruppano. */
-const ZOOM_GRUPPI = 9;
-/** Da qui compaiono le targhette col prezzo. */
-const ZOOM_TARGHETTE = 10;
+/** Da qui compaiono le targhette, ma solo dei piu economici. */
+const ZOOM_TARGHETTE_ECONOMICHE = 9.5;
+/** Da qui le targhette di tutti, dove c'e posto. */
+const ZOOM_TARGHETTE = 12;
+/** Sotto questo zoom toccare un puntino avvicina invece di aprire la scheda. */
+const ZOOM_TOCCO_AVVICINA = 10.5;
 
 const VUOTA = { type: 'FeatureCollection' as const, features: [] };
 
@@ -89,7 +87,7 @@ function collezioneDi(feature: ReturnType<typeof puntoGeo> | null) {
 }
 
 export function MappaCarburanti({
-  punti, consigliato, scelto, utente, percorso, soste, vistaIniziale, interattiva = true, gruppi = true,
+  punti, consigliato, scelto, utente, percorso, soste, vistaIniziale, interattiva = true,
   onScegli, onMossa, comandi, className = '',
 }: Props) {
   const contenitore = useRef<HTMLDivElement>(null);
@@ -161,7 +159,7 @@ export function MappaCarburanti({
     });
 
     m.on('style.load', () => {
-      preparaStile(m, gruppi);
+      preparaStile(m);
       setPronta(false);
       // Il render che segue ripopola le sorgenti appena create.
       requestAnimationFrame(() => setPronta(true));
@@ -182,24 +180,20 @@ export function MappaCarburanti({
         }
       };
       m.on('click', 'mf-targhette', tocca);
-      m.on('click', 'mf-pallini', tocca);
+      m.on('click', 'mf-targhette-economiche', tocca);
       m.on('click', 'mf-consigliato', tocca);
-      m.on('click', 'mf-gruppi', (e) => {
-        const f = e.features?.[0];
-        const sorgente = m.getSource('mf-impianti') as GeoJSONSource | undefined;
-        const idGruppo = f?.properties?.cluster_id;
-        if (!f || !sorgente || idGruppo === undefined) return;
+      // Da lontano un puntino e largo un paio di pixel: toccarlo vuol dire
+      // «fammi vedere qui», non «aprimi questo distributore».
+      m.on('click', 'mf-pallini', (e) => {
+        if (m.getZoom() >= ZOOM_TOCCO_AVVICINA) return tocca(e);
         e.preventDefault();
-        void sorgente.getClusterExpansionZoom(idGruppo).then((z) => {
-          const [lng, lat] = (f.geometry as Point).coordinates as [number, number];
-          m.easeTo({ center: [lng, lat], zoom: Math.min(z + 0.3, 16), duration: 500 });
-        });
+        m.easeTo({ center: e.lngLat, zoom: Math.min(m.getZoom() + 2.5, 13), duration: 600 });
       });
       m.on('click', (e) => {
         if (e.defaultPrevented) return;
         richiami.current.onScegli?.(null);
       });
-      for (const strato of ['mf-targhette', 'mf-pallini', 'mf-gruppi', 'mf-consigliato']) {
+      for (const strato of ['mf-targhette', 'mf-targhette-economiche', 'mf-pallini', 'mf-consigliato']) {
         m.on('mouseenter', strato, () => { m.getCanvas().style.cursor = 'pointer'; });
         m.on('mouseleave', strato, () => { m.getCanvas().style.cursor = ''; });
       }
@@ -267,7 +261,38 @@ function imposta(m: MlMap | null, sorgente: string, dati: unknown): void {
 }
 
 /** Ripulisce lo stile di base e aggiunge sorgenti e strati dell'app. */
-function preparaStile(m: MlMap, gruppi: boolean): void {
+/** Il colore di un puntino: il suo livello di prezzo, grigio se spento. */
+const COLORE_PUNTO = [
+  'case', ['==', ['get', 'spento'], 1], HEX.stale,
+  ['match', ['get', 'livello'],
+    'best', TESTO_TARGHETTA.best, 'good', TESTO_TARGHETTA.good, 'high', TESTO_TARGHETTA.high,
+    'worst', TESTO_TARGHETTA.worst, TESTO_TARGHETTA.normal],
+] as unknown as string;
+
+/** Il testo di una targhetta: come il puntino, ma grigio chiaro se spento. */
+const COLORE_TESTO = [
+  'case', ['==', ['get', 'spento'], 1], TESTO_TARGHETTA.spento,
+  ['match', ['get', 'livello'],
+    'best', TESTO_TARGHETTA.best, 'good', TESTO_TARGHETTA.good, 'high', TESTO_TARGHETTA.high,
+    'worst', TESTO_TARGHETTA.worst, TESTO_TARGHETTA.normal],
+] as unknown as string;
+
+/** La targhetta col prezzo, uguale nei due strati. */
+const TARGHETTA: NonNullable<SymbolLayerSpecification['layout']> = {
+  'symbol-sort-key': ['get', 'ordine'],
+  'icon-image': ['case', ['==', ['get', 'spento'], 1], 'mf-t-spento', ['concat', 'mf-t-', ['get', 'livello']]],
+  'icon-text-fit': 'both',
+  'icon-text-fit-padding': [3, 7, 3, 7],
+  'text-field': ['get', 'testo'],
+  'text-font': FONT_GRASSETTO,
+  'text-size': 12.5,
+  'text-offset': [0, -1.25],
+  'icon-offset': [0, 0],
+  'text-anchor': 'center',
+  'icon-anchor': 'center',
+};
+
+function preparaStile(m: MlMap): void {
   const stile = m.getStyle();
   for (const strato of stile.layers ?? []) {
     const sl = 'source-layer' in strato ? (strato['source-layer'] as string | undefined) : undefined;
@@ -290,10 +315,6 @@ function preparaStile(m: MlMap, gruppi: boolean): void {
   m.addSource('mf-impianti', {
     type: 'geojson',
     data: VUOTA,
-    cluster: gruppi,
-    clusterMaxZoom: ZOOM_GRUPPI,
-    clusterRadius: 48,
-    clusterProperties: { minimo: ['min', ['get', 'minimo']] },
   });
   m.addSource('mf-utente', { type: 'geojson', data: VUOTA });
   m.addSource('mf-consigliato', { type: 'geojson', data: VUOTA });
@@ -312,84 +333,56 @@ function preparaStile(m: MlMap, gruppi: boolean): void {
     paint: { 'line-color': HEX.ink, 'line-width': 5, 'line-opacity': 0.85 },
   });
 
-  // Gruppi: un cerchio scuro col prezzo minimo e quanti impianti contiene.
+  // Da lontano, un alone morbido dove i prezzi sono bassi: le zone che
+  // convengono si accendono senza bisogno di leggere un numero.
   m.addLayer({
-    id: 'mf-gruppi', type: 'circle', source: 'mf-impianti', filter: ['has', 'point_count'],
+    id: 'mf-alone', type: 'circle', source: 'mf-impianti', maxzoom: 12,
+    filter: ['all', ['==', ['get', 'livello'], 'best'], ['!=', ['get', 'spento'], 1]],
     paint: {
-      'circle-color': HEX.surface,
-      'circle-opacity': 0.94,
-      'circle-stroke-color': 'rgba(255,255,255,0.22)',
-      'circle-stroke-width': 1.5,
-      'circle-radius': ['step', ['get', 'point_count'], 27, 100, 30, 500, 33],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 5, 8, 8, 11, 14],
+      'circle-color': TESTO_TARGHETTA.best,
+      'circle-blur': 1,
+      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.16, 10, 0.2, 12, 0],
     },
-  });
-  m.addLayer({
-    id: 'mf-gruppi-testo', type: 'symbol', source: 'mf-impianti', filter: ['has', 'point_count'],
-    layout: {
-      'text-field': [
-        'case',
-        ['<', ['get', 'minimo'], 50],
-        ['format',
-          ['concat', 'da ', ['number-format', ['get', 'minimo'], { locale: 'it-IT', 'min-fraction-digits': 3, 'max-fraction-digits': 3 }]],
-          { 'font-scale': 1 },
-          '\n', {},
-          ['to-string', ['get', 'point_count']],
-          { 'font-scale': 0.78, 'text-color': HEX.ink2 },
-        ],
-        ['to-string', ['get', 'point_count']],
-      ],
-      'text-font': FONT_GRASSETTO,
-      'text-size': 11,
-      'text-line-height': 1.2,
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-    },
-    paint: { 'text-color': HEX.ink },
   });
 
-  // Ogni impianto e un pallino: nessuno sparisce, anche se la targhetta non ci sta.
+  // Ogni impianto e un puntino del colore del suo prezzo: piccolo da lontano,
+  // piu grande avvicinandosi. Nessuno sparisce, anche se la targhetta non ci sta.
   m.addLayer({
-    id: 'mf-pallini', type: 'circle', source: 'mf-impianti', filter: ['!', ['has', 'point_count']],
+    id: 'mf-pallini', type: 'circle', source: 'mf-impianti',
+    layout: { 'circle-sort-key': ['get', 'ordine'] },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3, 13, 4.5, 16, 6],
-      'circle-color': [
-        'case', ['==', ['get', 'spento'], 1], HEX.stale,
-        ['match', ['get', 'livello'],
-          'best', TESTO_TARGHETTA.best, 'good', TESTO_TARGHETTA.good, 'high', TESTO_TARGHETTA.high,
-          'worst', TESTO_TARGHETTA.worst, TESTO_TARGHETTA.normal],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 1.4, 8, 2.2, 10, 3, 13, 4.5, 16, 6],
+      'circle-color': COLORE_PUNTO,
+      // Da lontano quelli nella media si fanno da parte: devono risaltare i
+      // verdi e i rossi, che sono la notizia.
+      // (Lo zoom va al primo livello dell'espressione: MapLibre non lo
+      // accetta dentro un case.)
+      'circle-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        6, ['case', ['==', ['get', 'spento'], 1], 0.35, ['==', ['get', 'livello'], 'normal'], 0.45, 0.95],
+        11, ['case', ['==', ['get', 'spento'], 1], 0.35, ['==', ['get', 'livello'], 'normal'], 0.9, 0.95],
       ],
-      'circle-opacity': ['case', ['==', ['get', 'spento'], 1], 0.5, 0.9],
       'circle-stroke-color': '#000000',
-      'circle-stroke-width': 1,
+      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 9, 0, 12, 1],
     },
   });
 
-  // Targhette col prezzo, dove c'e posto: vincono i piu economici.
+  // A meta zoom, la targhetta solo per chi costa poco: vincono i piu economici
+  // e restano larghe, cosi si legge una mappa e non un elenco.
+  m.addLayer({
+    id: 'mf-targhette-economiche', type: 'symbol', source: 'mf-impianti',
+    minzoom: ZOOM_TARGHETTE_ECONOMICHE, maxzoom: ZOOM_TARGHETTE,
+    filter: ['all', ['match', ['get', 'livello'], ['best', 'good'], true, false], ['!=', ['get', 'spento'], 1]],
+    layout: { ...TARGHETTA, 'icon-padding': 10, 'text-padding': 10 },
+    paint: { 'text-color': COLORE_PUNTO },
+  });
+
+  // Da vicino, le targhette di tutti dove c'e posto: prima i piu economici.
   m.addLayer({
     id: 'mf-targhette', type: 'symbol', source: 'mf-impianti', minzoom: ZOOM_TARGHETTE,
-    filter: ['!', ['has', 'point_count']],
-    layout: {
-      'symbol-sort-key': ['get', 'ordine'],
-      'icon-image': ['case', ['==', ['get', 'spento'], 1], 'mf-t-spento', ['concat', 'mf-t-', ['get', 'livello']]],
-      'icon-text-fit': 'both',
-      'icon-text-fit-padding': [3, 7, 3, 7],
-      'text-field': ['get', 'testo'],
-      'text-font': FONT_GRASSETTO,
-      'text-size': 12.5,
-      'text-offset': [0, -1.25],
-      'icon-offset': [0, 0],
-      'text-anchor': 'center',
-      'icon-anchor': 'center',
-      'text-padding': 3,
-    },
-    paint: {
-      'text-color': [
-        'case', ['==', ['get', 'spento'], 1], TESTO_TARGHETTA.spento,
-        ['match', ['get', 'livello'],
-          'best', TESTO_TARGHETTA.best, 'good', TESTO_TARGHETTA.good, 'high', TESTO_TARGHETTA.high,
-          'worst', TESTO_TARGHETTA.worst, TESTO_TARGHETTA.normal],
-      ],
-    },
+    layout: { ...TARGHETTA, 'text-padding': 3 },
+    paint: { 'text-color': COLORE_TESTO },
   });
 
   // La posizione dell'utente.
