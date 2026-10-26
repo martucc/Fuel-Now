@@ -37,7 +37,7 @@ function notaAuto(m: Modello): string {
 }
 
 /** Versione mostrata nelle impostazioni: tenerla allineata a android/app/build.gradle. */
-export const VERSIONE_APP = '2.1.1';
+export const VERSIONE_APP = '2.1.2';
 
 /**
  * Le impostazioni: poche, e tutte cose che cambiano i conti. L'auto (litri

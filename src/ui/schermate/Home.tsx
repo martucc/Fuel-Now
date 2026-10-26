@@ -80,12 +80,17 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
   const miniMappa = useRef<ComandiMappa | null>(null);
   const utente = m.posizione.punto;
 
-  // La mini mappa inquadra sempre te e il consigliato: e la risposta alla
-  // domanda «dov'e?», e non deve restare fuori dal riquadro.
+  // La mini mappa parte inquadrando te e il consigliato, la risposta alla
+  // domanda «dov'e?»; dopo la si puo muovere, e il bottone la riporta li.
   const idBest = best?.row.id;
+  const inquadra = () => {
+    if (!utente) return;
+    if (best) miniMappa.current?.inquadra([utente, { lat: best.row.lat, lng: best.row.lng }], 40, 40);
+    else miniMappa.current?.vola(utente, 12.6);
+  };
   useEffect(() => {
     if (!utente || !best) return;
-    const t = setTimeout(() => miniMappa.current?.inquadra([utente, { lat: best.row.lat, lng: best.row.lng }], 46), 250);
+    const t = setTimeout(() => miniMappa.current?.inquadra([utente, { lat: best.row.lat, lng: best.row.lng }], 40, 40), 250);
     return () => clearTimeout(t);
     // si rifa solo se cambiano il consigliato o la posizione
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,22 +176,40 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
         )}
       </section>
 
-      {/* La mappa intorno: un tocco apre la scheda Mappa. */}
+      {/*
+        La mappa intorno, viva: si trascina e si allarga con le dita, e un
+        tocco su un distributore apre la sua scheda. Mentre il dito e sulla
+        mappa muove la mappa, non la pagina: per scorrere si tocca fuori.
+      */}
       {m.posizione.punto && (
-        <section className="relative mt-4 h-[188px] overflow-hidden rounded-mf-lg ring-1 ring-[rgb(255_255_255/0.08)] shadow-[0_18px_40px_-26px_rgb(0_0_0/0.9)]">
+        <section className="relative mt-4 h-[232px] overflow-hidden rounded-mf-lg ring-1 ring-[rgb(255_255_255/0.08)] shadow-[0_18px_40px_-26px_rgb(0_0_0/0.9)]">
           <MappaCarburanti
             comandi={miniMappa}
             punti={punti}
             utente={m.posizione.punto}
             consigliato={best ? { id: best.row.id, lat: best.row.lat, lng: best.row.lng, testo: prezzoBreve(best.price) } : null}
             vistaIniziale={{ centro: m.posizione.punto, zoom: 12.6 }}
-            interattiva={false}
+            onScegli={(id) => { if (id) onApriImpianto(id); }}
+            attribuzione={false}
           />
-          <button type="button" onClick={onApriMappa} className="absolute inset-0" aria-label="Apri la mappa" />
-          <span className="pointer-events-none absolute left-2 top-2 rounded bg-mf-veil px-1.5 py-0.5 text-[10px] text-mf-ink-2">© OpenStreetMap</span>
-          <span className="mf-vetro pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold text-mf-ink">
-            Mappa <ChevronRight size={14} />
-          </span>
+          <span className="pointer-events-none absolute right-2.5 top-2.5 rounded bg-mf-veil px-1.5 py-0.5 text-[10px] text-mf-ink-2">© OpenStreetMap</span>
+          <div className="pointer-events-none absolute bottom-2.5 left-2.5 flex gap-2">
+            <button
+              type="button"
+              aria-label="Torna a te e al consigliato"
+              onClick={inquadra}
+              className="mf-press mf-vetro pointer-events-auto grid h-9 w-9 place-items-center rounded-full text-mf-ink"
+            >
+              <LocateFixed size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={onApriMappa}
+              className="mf-press mf-vetro pointer-events-auto flex h-9 items-center gap-1 rounded-full pl-3.5 pr-2.5 text-[13px] font-semibold text-mf-ink"
+            >
+              Mappa <ChevronRight size={15} />
+            </button>
+          </div>
         </section>
       )}
 

@@ -47,7 +47,8 @@ export interface ComandiMappa {
   /** Porta la vista su un punto. */
   vola(p: LatLng, zoom?: number): void;
   /** Inquadra un insieme di punti. */
-  inquadra(punti: LatLng[], margine?: number): void;
+  /** Inquadra i punti; `sotto` lascia spazio in piu in basso, per i bottoni sopra la mappa. */
+  inquadra(punti: LatLng[], margine?: number, sotto?: number): void;
   centro(): { centro: LatLng; zoom: number } | null;
 }
 
@@ -60,8 +61,10 @@ interface Props {
   percorso?: [number, number][] | null;
   soste?: Sosta[];
   vistaIniziale?: { centro: LatLng; zoom: number };
-  /** false per la mini mappa della Home: niente gesti, niente tocchi sui punti. */
+  /** false per una mappa da guardare e basta: niente gesti, niente tocchi sui punti. */
   interattiva?: boolean;
+  /** false quando i crediti della mappa li scrive chi la ospita (la mini mappa della Home). */
+  attribuzione?: boolean;
   onScegli?: (id: string | null) => void;
   onMossa?: (v: { centro: LatLng; zoom: number }) => void;
   comandi?: Ref<ComandiMappa | null>;
@@ -87,7 +90,7 @@ function collezioneDi(feature: ReturnType<typeof puntoGeo> | null) {
 }
 
 export function MappaCarburanti({
-  punti, consigliato, scelto, utente, percorso, soste, vistaIniziale, interattiva = true,
+  punti, consigliato, scelto, utente, percorso, soste, vistaIniziale, interattiva = true, attribuzione = interattiva,
   onScegli, onMossa, comandi, className = '',
 }: Props) {
   const contenitore = useRef<HTMLDivElement>(null);
@@ -105,7 +108,7 @@ export function MappaCarburanti({
       if (!m) return;
       m.easeTo({ center: [p.lng, p.lat], zoom: zoom ?? Math.max(m.getZoom(), 13), duration: 650 });
     },
-    inquadra(lista, margine = 60) {
+    inquadra(lista, margine = 60, sotto = 0) {
       const m = mappa.current;
       if (!m || lista.length === 0) return;
       if (lista.length === 1) {
@@ -114,7 +117,9 @@ export function MappaCarburanti({
       }
       const b = new maplibregl.LngLatBounds();
       for (const p of lista) b.extend([p.lng, p.lat]);
-      m.fitBounds(b, { padding: margine, duration: 650, maxZoom: 15 });
+      // Le targhette stanno sopra il loro punto: in alto serve piu spazio,
+      // o quella del punto piu a nord esce dal riquadro.
+      m.fitBounds(b, { padding: { top: margine + 32, bottom: margine + sotto, left: margine, right: margine }, duration: 650, maxZoom: 15 });
     },
     centro() {
       const m = mappa.current;
@@ -136,8 +141,8 @@ export function MappaCarburanti({
       center: [vista.centro.lng, vista.centro.lat],
       zoom: vista.zoom,
       interactive: interattiva,
-      // La mini mappa della Home non ha spazio: l'attribuzione la scrive la Home.
-      attributionControl: interattiva ? { compact: true } : false,
+      // Nella mini mappa della Home non c'e spazio: i crediti li scrive la Home.
+      attributionControl: attribuzione ? { compact: true } : false,
       dragRotate: false,
       pitchWithRotate: false,
       touchPitch: false,
