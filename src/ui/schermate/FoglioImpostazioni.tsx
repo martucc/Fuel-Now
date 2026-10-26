@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Car, Sparkles, MapPin, RefreshCw, EyeOff, Info, Check, Search, ChevronLeft, KeyRound, LocateFixed } from 'lucide-react';
+import { Car, Sparkles, MapPin, RefreshCw, EyeOff, Info, Check, Search, ChevronLeft, KeyRound, LocateFixed, Download } from 'lucide-react';
 import type { Modello } from '../../app/modello';
 import { aggiornaImpostazioni } from '../../app/impostazioni';
 import { cercaAuto, impostaNascosto, useElencoAuto } from '../../app/dati';
 import { usaGps } from '../../app/posizione';
 import { datasetStore } from '../../data/dataset';
 import { descriviStatoDati } from '../../domain/aggiornamento';
+import { useNuovaVersione } from '../../app/nuovaVersione';
+import { apriDownload } from '../../services/rilasci';
 import { presiDalTelefono } from '../../domain/ministero';
 import { numero } from '../../lib/formato';
 import type { ModelloIa } from '../../services/geminiService';
@@ -38,7 +40,7 @@ function notaAuto(m: Modello): string {
 }
 
 /** Versione mostrata nelle impostazioni: tenerla allineata a android/app/build.gradle. */
-export const VERSIONE_APP = '2.1.2';
+export const VERSIONE_APP = '2.2.0';
 
 /**
  * Le impostazioni: poche, e tutte cose che cambiano i conti. L'auto (litri
@@ -47,6 +49,7 @@ export const VERSIONE_APP = '2.1.2';
 export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello; onChiudi: () => void; onScegliLuogo: () => void }) {
   const [vista, setVista] = useState<Vista>('principale');
   const stato = descriviStatoDati(m.dataset.fase, m.dataset.verificatoIl, m.adesso.getTime(), null, presiDalTelefono(m.dataset.dati));
+  const versione = useNuovaVersione();
 
   const indietro = () => setVista('principale');
   const titolo =
@@ -115,7 +118,15 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
         </Gruppo>
 
         <Gruppo titolo="Informazioni">
-          <Riga icona={<Info size={20} className="text-mf-ink-2" />} titolo="Martucc Fuel" valore={`Versione ${VERSIONE_APP}`} />
+          <Riga icona={<Info size={20} className="text-mf-ink-2" />} titolo="Martucc Fuel" valore={`Versione ${versione.installata ?? VERSIONE_APP}`} />
+          {versione.proposta && (
+            <Riga
+              icona={<Download size={20} className="text-mf-ink-2" />}
+              titolo={`Scarica la versione ${versione.proposta.versione}`}
+              freccia
+              onClick={() => void apriDownload(versione.proposta!.apk)}
+            />
+          )}
         </Gruppo>
         <p className="mf-caption px-4 text-mf-ink-2">
           Mappa © OpenStreetMap, OpenFreeMap. Percorsi OSRM. Ricerca luoghi Nominatim.

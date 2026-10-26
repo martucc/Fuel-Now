@@ -35,6 +35,12 @@ export interface Rilascio {
   note: string;
 }
 
+/**
+ * Si scarica solo dai rilasci di questo repository: l'app apre il link nel
+ * browser e Android installa quel che arriva, non deve poter puntare altrove.
+ */
+export const PREFISSO_APK = 'https://github.com/martucc/Fuel-Now/releases/download/';
+
 /** Oltre questa lunghezza le note si tagliano: l'avviso è una riga, non un changelog. */
 const NOTE_MAX = 280;
 
@@ -54,7 +60,9 @@ export function leggiRilascio(json: unknown): Rilascio | null {
   const allegati = Array.isArray(o.assets) ? o.assets : [];
   const apk = allegati
     .map((a) => a as Record<string, unknown>)
-    .find((a) => typeof a?.name === 'string' && a.name.toLowerCase().endsWith('.apk') && typeof a.browser_download_url === 'string');
+    .find((a) =>
+      typeof a?.name === 'string' && a.name.toLowerCase().endsWith('.apk')
+      && typeof a.browser_download_url === 'string' && a.browser_download_url.startsWith(PREFISSO_APK));
   if (!apk) return null;
 
   const corpo = typeof o.body === 'string' ? o.body.trim() : '';

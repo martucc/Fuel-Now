@@ -4,6 +4,7 @@ import { datasetStore } from '../data/dataset';
 import { avviaAggiornamentiAutomatici } from '../services/aggiornamentiAutomatici';
 import { aggiornaPosizione, scegliLuogo, usaGps } from './posizione';
 import { caricaAuto } from './dati';
+import { controllaNuovaVersione } from './nuovaVersione';
 import { useHome, useModello, usePuntiMappa } from './modello';
 import { useUmore } from './umore';
 import { BarraSchede } from './BarraSchede';
@@ -40,13 +41,17 @@ export function App() {
   const [impostazioni, setImpostazioni] = useState(false);
   const [luogo, setLuogo] = useState(false);
 
-  // All'avvio: prezzi, posizione e auto partono insieme. Alla ripresa si
-  // ricontrollano prezzi e posizione.
+  // All'avvio: prezzi, posizione, auto e versione nuova partono insieme.
+  // Alla ripresa si ricontrollano prezzi, posizione e versione.
   useEffect(() => {
     void datasetStore().avvia();
     void aggiornaPosizione();
     void caricaAuto();
-    return avviaAggiornamentiAutomatici(datasetStore(), () => void aggiornaPosizione());
+    void controllaNuovaVersione();
+    return avviaAggiornamentiAutomatici(datasetStore(), () => {
+      void aggiornaPosizione();
+      void controllaNuovaVersione();
+    });
   }, []);
 
   const cambiaScheda = useCallback((s: Scheda) => {

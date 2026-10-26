@@ -48,7 +48,12 @@ L'APK esce in `android/app/build/outputs/apk/release/app-release.apk`.
   ```
   Senza quel file la release esce firmata con la chiave di debug del computer. **Per aggiornare l'app installata serve sempre la stessa chiave**: con un'altra Android rifiuta l'aggiornamento e bisogna disinstallare.
 - **`npm run seed` prima di una build che va su un telefono.** Mette in `public/stations.json` i prezzi di oggi: sono quelli che l'app mostra al primo avvio senza rete.
-- **Versione.** `versionCode`/`versionName` in `android/app/build.gradle`. `VERSIONE_APP` in `src/ui/schermate/FoglioImpostazioni.tsx` va tenuta uguale.
+- **Versione.** `versionCode`/`versionName` in `android/app/build.gradle`. `VERSIONE_APP` in `src/ui/schermate/FoglioImpostazioni.tsx` va tenuta uguale (sul telefono la versione mostrata la dice Android, nel browser quella costante).
+- **Il rilascio lo fa GitHub.** Un tag `vX.Y.Z` uguale a `versionName` fa partire `.github/workflows/rilascio_apk.yml`: test, seme di oggi, build, APK firmato coi segreti `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` e rilascio con l'APK allegato. Il messaggio del tag diventa la nota del rilascio:
+  ```bash
+  git tag -a v2.2.0 -m "Cosa c'è di nuovo, in una riga" && git push origin v2.2.0
+  ```
+  L'app chiede l'ultimo rilascio a GitHub all'avvio e alla ripresa (al più ogni sei ore, `domain/versione.ts`) e, se è più nuovo, mostra in Home «È uscita la versione…» con «Scarica e installa»: il download si apre nel browser del telefono e Android chiede di installare. Senza i segreti l'Action si ferma invece di pubblicare un APK con la chiave di debug, che non si installerebbe sopra l'app.
 
 ## 4. Com'è fatto
 

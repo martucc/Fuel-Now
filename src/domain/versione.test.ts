@@ -54,6 +54,10 @@ describe('leggiRilascio', () => {
     expect(leggiRilascio(null)).toBeNull();
   });
 
+  it('un APK fuori dai rilasci del repository non si propone', () => {
+    expect(leggiRilascio(rilascio({ assets: [{ name: 'x.apk', browser_download_url: 'https://example.com/x.apk' }] }))).toBeNull();
+  });
+
   it('accorcia le note lunghe', () => {
     const r = leggiRilascio(rilascio({ body: 'a'.repeat(1000) }));
     expect(r?.note.length).toBeLessThanOrEqual(280);

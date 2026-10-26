@@ -42,4 +42,26 @@ public class NavigazionePlugin extends Plugin {
             call.reject("Nessun navigatore installato", "NESSUNA_APP");
         }
     }
+
+    /**
+     * Apre un indirizzo nel browser del telefono: il download del rilascio
+     * nuovo, che poi Android propone di installare. Solo https, e la scelta
+     * di cosa aprire sta in `domain/versione.ts` (solo i rilasci del repo).
+     */
+    @PluginMethod
+    public void apriLink(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !url.startsWith("https://")) {
+            call.reject("Indirizzo non valido");
+            return;
+        }
+        Intent vedi = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        vedi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getActivity().startActivity(vedi);
+            call.resolve();
+        } catch (ActivityNotFoundException e) {
+            call.reject("Nessun browser installato", "NESSUNA_APP");
+        }
+    }
 }

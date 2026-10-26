@@ -35,6 +35,8 @@ import { Termometro } from '../kit/Termometro';
 import { righePreferiti } from '../../domain/preferiti';
 import { FoglioPerche } from './FoglioPerche';
 import { MieiDistributori } from './MieiDistributori';
+import { useNuovaVersione } from '../../app/nuovaVersione';
+import { AvvisoVersione } from '../kit/AvvisoVersione';
 
 interface Props {
   m: Modello;
@@ -80,6 +82,7 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
   }, [home, ordine]);
 
   const best = home?.best ?? null;
+  const { proposta } = useNuovaVersione();
   const utenteLat = m.posizione.punto?.lat;
   const utenteLng = m.posizione.punto?.lng;
   const preferiti = useMemo(() => {
@@ -152,6 +155,8 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
         <RefreshCw size={13} className={`text-mf-ink-3 ${m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''}`} />
       </button>
       {fonteFerma && <p className="mf-footnote mt-1 pl-4 text-mf-warn">{fonteFerma}</p>}
+
+      {proposta && <AvvisoVersione className="mt-4" rilascio={proposta} />}
 
       {/* Il consiglio */}
       <section className="mt-4">

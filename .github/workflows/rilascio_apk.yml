@@ -1,0 +1,143 @@
+name: Rilascio APK
+
+# Costruisce l'APK firmato e lo pubblica come rilascio su GitHub quando si
+# spinge un tag di versione, per esempio:
+#
+#   git tag -a v2.2.0 -m "Preferiti e prezzi dal Ministero se GitHub si ferma"
+#   git push origin v2.2.0
+#
+# Il tag deve essere uguale a versionName in android/app/build.gradle.
+# L'app installata vede il rilascio nuovo e propone di scaricarlo.
+#
+# La firma arriva dai segreti del repository (Settings > Secrets and
+# variables > Actions), mai da file su git:
+#   ANDROID_KEYSTORE_BASE64   il file .p12 in base64 (base64 -w0 martucc-fuel.p12)
+#   ANDROID_KEYSTORE_PASSWORD la password del file
+#   ANDROID_KEY_ALIAS         martucc-fuel
+#   ANDROID_KEY_PASSWORD      la password della chiave (col .p12 è la stessa)
+#
+# Deve essere sempre la stessa chiave: con un'altra Android rifiuta di
+# installare l'aggiornamento sopra l'app che c'è.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rilascio-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Codice del tag
+        uses: actions/checkout@v4
+
+      - name: Il tag corrisponde alla versione dell'app
+        id: versione
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          NOME=$(sed -n 's/^ *versionName "\(.*\)"/\1/p' android/app/build.gradle)
+          echo "Tag: $TAG, versionName: $NOME"
+          if [ "$TAG" != "$NOME" ]; then
+            echo "::error::Il tag v$TAG non corrisponde a versionName \"$NOME\" in android/app/build.gradle"
+            exit 1
+          fi
+          echo "numero=$NOME" >> "$GITHUB_OUTPUT"
+
+      - name: Segreti della firma presenti
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Manca il segreto ANDROID_$v: senza, l'APK uscirebbe con la chiave di debug e non si installerebbe sopra l'app"
+              exit 1
+            fi
+          done
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Dipendenze
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Prezzi di oggi nel seme
+        run: npm run seed
+
+      - name: Build web
+        run: npm run build
+
+      - name: Sync Android
+        run: npx cap sync android
+
+      - name: Firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/martucc-fuel.p12"
+          {
+            echo "storeFile=$RUNNER_TEMP/martucc-fuel.p12"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/keystore.properties
+
+      - name: APK release
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Controllo della firma
+        id: apk
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          STRUMENTI=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$STRUMENTI/apksigner" verify --print-certs "$APK" | tee firma.txt
+          if grep -qi "CN=Android Debug" firma.txt; then
+            echo "::error::L'APK e firmato con la chiave di debug"
+            exit 1
+          fi
+          FINALE="MartuccFuel-${{ steps.versione.outputs.numero }}.apk"
+          cp "$APK" "$FINALE"
+          echo "file=$FINALE" >> "$GITHUB_OUTPUT"
+
+      - name: Pulizia della firma
+        if: always()
+        run: rm -f android/keystore.properties "$RUNNER_TEMP/martucc-fuel.p12"
+
+      - name: Rilascio
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > note.md
+          if [ ! -s note.md ]; then echo "Martucc Fuel ${{ steps.versione.outputs.numero }}" > note.md; fi
+          gh release create "$GITHUB_REF_NAME" "${{ steps.apk.outputs.file }}" \
+            --title "Martucc Fuel ${{ steps.versione.outputs.numero }}" \
+            --notes-file note.md
