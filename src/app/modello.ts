@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LatLng } from '../domain/geo';
 import type { Base } from './dati';
-import { baseDi, useDataset, useElencoAuto, useNascosti } from './dati';
+import { baseDi, useDataset, useElencoAuto, useNascosti, usePreferiti } from './dati';
 import { useImpostazioni } from './impostazioni';
 import type { Impostazioni } from './impostazioni';
 import { usePosizione } from './posizione';
@@ -60,6 +60,8 @@ export interface Modello {
   kml: number;
   adesso: Date;
   nascosti: ReadonlySet<string>;
+  /** «I miei distributori», salvati con la stella. */
+  preferiti: ReadonlySet<string>;
 }
 
 export function useModello(): Modello {
@@ -68,6 +70,7 @@ export function useModello(): Modello {
   const impostazioni = useImpostazioni();
   const elenco = useElencoAuto();
   const nascosti = useNascosti();
+  const preferiti = usePreferiti();
   const adesso = useAdesso();
 
   const base = useMemo(() => (dataset.dati ? baseDi(dataset.dati) : null), [dataset.dati]);
@@ -78,7 +81,7 @@ export function useModello(): Modello {
   const litri = litersFor(auto, impostazioni.carburante);
   const kml = kmlFor(auto, impostazioni.carburante, null);
 
-  return { dataset, base, posizione, impostazioni, auto, litri, kml, adesso, nascosti };
+  return { dataset, base, posizione, impostazioni, auto, litri, kml, adesso, nascosti, preferiti };
 }
 
 /** Il consiglio e la lista della Home. Null finche mancano dati o posizione. */

@@ -1,6 +1,7 @@
-import { Navigation, EyeOff, Eye } from 'lucide-react';
+import { Navigation, EyeOff, Eye, Star } from 'lucide-react';
 import type { Modello } from '../../app/modello';
-import { impostaNascosto } from '../../app/dati';
+import { impostaNascosto, impostaPreferito } from '../../app/dati';
+import { triggerHaptic } from '../../lib/haptics';
 import { cohortFor } from '../../domain/market';
 import { priceLevel } from '../../domain/pricing';
 import { FUEL_LABEL } from '../../domain/fuel';
@@ -26,6 +27,7 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
   if (!r || !m.base) return null;
 
   const nascosto = m.nascosti.has(id);
+  const preferito = m.preferiti.has(id);
   // Lo stesso metro della Home, della mappa e del Viaggio: l'eta rispetto
   // agli ultimi prezzi arrivati, non all'orologio.
   const { vecchio, forseChiuso: chiuso } = etaNelLotto(r.updated, ultimoPrezzo(m.base.rows));
@@ -53,7 +55,7 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
     >
       <div className="flex items-center gap-3 pb-4">
         <LogoMarchio marchio={r.brand} misura={52} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           {nomeImpianto(r.name, r.brand) && <p className="mf-subhead truncate text-mf-ink">{nomeImpianto(r.name, r.brand)}</p>}
           <p className="mf-footnote text-mf-ink-2">
             {lontano !== null ? `${distanza(lontano)} · circa ${minutiGuida(lontano)} min · ` : ''}
@@ -64,6 +66,19 @@ export function FoglioImpianto({ id, m, onChiudi }: { id: string; m: Modello; on
             {chiuso ? ' · forse chiuso' : ''}
           </p>
         </div>
+        {/* La stella: lo mette fra «I miei distributori» della Home. */}
+        <button
+          type="button"
+          aria-pressed={preferito}
+          onClick={() => {
+            void triggerHaptic(preferito ? 'light' : 'success');
+            impostaPreferito(id, !preferito);
+          }}
+          className={`mf-press flex shrink-0 flex-col items-center gap-0.5 rounded-mf-md px-2 py-1.5 ${preferito ? 'text-mf-ink' : 'text-mf-ink-2'}`}
+        >
+          <Star size={24} strokeWidth={preferito ? 2 : 1.8} fill={preferito ? 'currentColor' : 'none'} aria-hidden />
+          <span className="text-[11px] font-semibold">{preferito ? 'Salvato' : 'Salva'}</span>
+        </button>
       </div>
 
       <div className="overflow-hidden rounded-mf-md bg-mf-surface-2">

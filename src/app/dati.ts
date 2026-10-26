@@ -93,39 +93,60 @@ export function cercaAuto(elenco: Auto[], testo: string): Auto[] {
   });
 }
 
-/* ── Distributori nascosti dall'utente ───────────────────────────────── */
+/* ── Distributori nascosti e preferiti ───────────────────────────────── */
 
-const CHIAVE_NASCOSTI = 'mf2_nascosti';
-let nascosti: ReadonlySet<string> | null = null;
-const ascoltatoriNascosti = new Set<() => void>();
+/** Un insieme di id salvato sul telefono, osservabile da React. */
+function insiemeSalvato(chiave: string) {
+  let valore: ReadonlySet<string> | null = null;
+  const ascoltatori = new Set<() => void>();
 
-function leggiNascosti(): ReadonlySet<string> {
-  if (nascosti) return nascosti;
-  try {
-    const v = JSON.parse(localStorage.getItem(CHIAVE_NASCOSTI) ?? '[]');
-    nascosti = new Set(Array.isArray(v) ? v.map(String) : []);
-  } catch {
-    nascosti = new Set();
+  function leggi(): ReadonlySet<string> {
+    if (valore) return valore;
+    try {
+      const v = JSON.parse(localStorage.getItem(chiave) ?? '[]');
+      valore = new Set(Array.isArray(v) ? v.map(String) : []);
+    } catch {
+      valore = new Set();
+    }
+    return valore;
   }
-  return nascosti;
+
+  function imposta(id: string, dentro: boolean): void {
+    const s = new Set(leggi());
+    if (dentro) s.add(id);
+    else s.delete(id);
+    valore = s;
+    try {
+      localStorage.setItem(chiave, JSON.stringify([...s]));
+    } catch { /* resta in memoria */ }
+    for (const cb of ascoltatori) cb();
+  }
+
+  function iscriviti(cb: () => void): () => void {
+    ascoltatori.add(cb);
+    return () => { ascoltatori.delete(cb); };
+  }
+
+  return { leggi, imposta, iscriviti };
 }
+
+/** Quelli che l'utente non vuole più vedere consigliati. */
+const nascosti = insiemeSalvato('mf2_nascosti');
+/** «I miei distributori»: quelli con la stella. */
+const preferiti = insiemeSalvato('mf2_preferiti');
 
 export function impostaNascosto(id: string, nascosto: boolean): void {
-  const s = new Set(leggiNascosti());
-  if (nascosto) s.add(id);
-  else s.delete(id);
-  nascosti = s;
-  try {
-    localStorage.setItem(CHIAVE_NASCOSTI, JSON.stringify([...s]));
-  } catch { /* resta in memoria */ }
-  for (const cb of ascoltatoriNascosti) cb();
-}
-
-function iscrivitiNascosti(cb: () => void): () => void {
-  ascoltatoriNascosti.add(cb);
-  return () => { ascoltatoriNascosti.delete(cb); };
+  nascosti.imposta(id, nascosto);
 }
 
 export function useNascosti(): ReadonlySet<string> {
-  return useSyncExternalStore(iscrivitiNascosti, leggiNascosti, leggiNascosti);
+  return useSyncExternalStore(nascosti.iscriviti, nascosti.leggi, nascosti.leggi);
+}
+
+export function impostaPreferito(id: string, preferito: boolean): void {
+  preferiti.imposta(id, preferito);
+}
+
+export function usePreferiti(): ReadonlySet<string> {
+  return useSyncExternalStore(preferiti.iscriviti, preferiti.leggi, preferiti.leggi);
 }

@@ -15,7 +15,7 @@ import type { FuelKey } from '../../domain/raw';
 import { FUEL_KEYS } from '../../domain/raw';
 import { prezzoBreve } from '../../domain/mappa';
 import type { RankedStation } from '../../domain/ranking';
-import { ORE_PREZZO_VECCHIO, parseUpdatedAt } from '../../domain/freshness';
+import { ORE_PREZZO_VECCHIO, parseUpdatedAt, ultimoPrezzo } from '../../domain/freshness';
 import { euro, prezzo as formatoPrezzo } from '../../lib/formato';
 import { portamiLi } from '../../services/navigazione';
 import type { ListItem } from '../home/homeModel';
@@ -32,7 +32,9 @@ import { unitaPrezzo } from '../prezzi/formatoPrezzi';
 import type { QuadroUmore } from '../../domain/umore';
 import { fraseUmore } from '../../domain/umore';
 import { Termometro } from '../kit/Termometro';
+import { righePreferiti } from '../../domain/preferiti';
 import { FoglioPerche } from './FoglioPerche';
+import { MieiDistributori } from './MieiDistributori';
 
 interface Props {
   m: Modello;
@@ -78,6 +80,13 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
   }, [home, ordine]);
 
   const best = home?.best ?? null;
+  const utenteLat = m.posizione.punto?.lat;
+  const utenteLng = m.posizione.punto?.lng;
+  const preferiti = useMemo(() => {
+    if (!m.base || !m.preferiti.size) return [];
+    const punto = utenteLat !== undefined && utenteLng !== undefined ? { lat: utenteLat, lng: utenteLng } : null;
+    return righePreferiti(m.preferiti, m.base.perId, m.base.cohorts, fuel, punto, ultimoPrezzo(m.base.rows));
+  }, [m.preferiti, m.base, fuel, utenteLat, utenteLng]);
   const miniMappa = useRef<ComandiMappa | null>(null);
   const utente = m.posizione.punto;
 
@@ -213,6 +222,15 @@ export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApr
           </div>
         </section>
       )}
+
+      {/* I distributori con la stella, anche lontani. */}
+      <MieiDistributori
+        className="mt-7"
+        righe={preferiti}
+        m={m}
+        prezzoConsigliato={best?.price ?? null}
+        onApri={onApriImpianto}
+      />
 
       {/* La zona: dove sta la mediana qui intorno rispetto all'Italia. */}
       {umore.umore !== 'neutro' && umore.mediana !== null && umore.scarto !== null && (
