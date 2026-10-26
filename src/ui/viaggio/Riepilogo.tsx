@@ -27,7 +27,7 @@ const RISPARMIO_MINIMO = 0.5;
 export function Riepilogo({ percorso, esito, nomeDa, nomeA, fuel, strategia, lungoStrada }: Props) {
   const p = esito?.piano ?? null;
   return (
-    <article className="rounded-mf-lg bg-mf-surface p-4">
+    <article className="mf-carta p-4">
       <p className="mf-footnote truncate text-mf-ink-2">
         {nomeDa} → {nomeA}
       </p>

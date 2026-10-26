@@ -36,7 +36,7 @@ export function SchedaSosta({ s, fuel, adesso, ultimo, onApri }: Props) {
   const servito = r.servito[fuel];
 
   return (
-    <article className="rounded-mf-lg bg-mf-surface p-4">
+    <article className="mf-carta p-4">
       <button type="button" onClick={onApri} className="mf-press flex w-full items-center gap-3 text-left">
         <span
           className="mf-num grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mf-accent text-[15px] font-bold text-mf-accent-ink"

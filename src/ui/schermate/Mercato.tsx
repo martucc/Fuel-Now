@@ -111,7 +111,7 @@ export function Mercato({ m, home, onApriImpostazioni }: Props) {
 
   return (
     <div ref={radice} className="mx-auto max-w-xl px-4 pb-6" style={{ paddingTop: 'calc(var(--mf-safe-top) + 8px)' }}>
-      <h1 className="mf-large-title">Prezzi</h1>
+      <h1 className="mf-large-title"><span className="mf-titolo-umore">Prezzi</span></h1>
 
       <Segmentato
         className="mt-3"
@@ -123,7 +123,7 @@ export function Mercato({ m, home, onApriImpostazioni }: Props) {
 
       {!base || !quadro ? (
         m.dataset.fase === 'errore' && !m.dataset.dati ? (
-          <div className="mt-6 rounded-mf-lg bg-mf-surface">
+          <div className="mt-6 mf-carta">
             <Vuoto
               icona={<LineChart size={30} />}
               titolo="Prezzi non disponibili"

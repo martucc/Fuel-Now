@@ -9,7 +9,7 @@ import { Segnaposto, Vuoto } from '../kit/Stato';
  */
 
 function Riquadro({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-mf-lg bg-mf-surface">{children}</div>;
+  return <div className="mf-carta">{children}</div>;
 }
 
 export function SenzaPartenza({ cerco, onUsaPosizione, onScegli }: { cerco: boolean; onUsaPosizione: () => void; onScegli: () => void }) {

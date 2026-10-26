@@ -22,7 +22,7 @@ interface Props {
 /** Da dove a dove: due righe da toccare e il bottone che le scambia. */
 export function Tragitto({ partenza, arrivo, onPartenza, onArrivo, onInverti }: Props) {
   return (
-    <div className="relative overflow-hidden rounded-mf-lg bg-mf-surface">
+    <div className="relative overflow-hidden mf-carta">
       <Campo
         segno={<span className="block h-3 w-3 rounded-full border-2 border-mf-ink-2" />}
         etichetta="Partenza"

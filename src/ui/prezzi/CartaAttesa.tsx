@@ -19,7 +19,7 @@ const ICONA: Record<VersoAttesa, LucideIcon> = {
 export function CartaAttesa({ r, affidabilita, giorno }: { r: RispostaAttesa; affidabilita: string | null; giorno: string | null }) {
   const Icona = ICONA[r.verso];
   return (
-    <div className="rounded-mf-lg bg-mf-surface p-4">
+    <div className="mf-carta p-4">
       <div className="flex gap-3">
         <Icona size={22} className="mt-0.5 shrink-0 text-mf-ink-2" aria-hidden />
         <div className="min-w-0">
@@ -51,7 +51,7 @@ export function BarraTasse({ s }: { s: Scomposizione }) {
     { nome: 'IVA', valore: s.iva, classe: 'bg-mf-surface-3' },
   ];
   return (
-    <div className="rounded-mf-lg bg-mf-surface p-4">
+    <div className="mf-carta p-4">
       <p className="mf-subhead text-mf-ink">
         Su <span className="mf-num">{formatoPrezzo(s.prezzo)} €</span>, le tasse sono{' '}
         <span className="mf-num font-semibold">{formatoPrezzo(s.tasse)} €</span>: il {numero(s.quotaTasse * 100, 0)}% del prezzo.

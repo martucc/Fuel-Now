@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, Settings, Navigation, RefreshCw, LocateFixed, ChevronRight, Info } from 'lucide-react';
+import { MapPin, Settings, Navigation, RefreshCw, LocateFixed, ChevronRight, Info, Clock, Route as IconaStrada } from 'lucide-react';
 import type { Modello } from '../../app/modello';
 import { RAGGIO_HOME_KM } from '../../app/modello';
 import type { HomeModel } from '../home/homeModel';
@@ -28,11 +28,15 @@ import { distanza, etaPrezzo, indirizzo, minutiGuida } from '../kit/formatoUi';
 import { MappaCarburanti } from '../mappa/MappaCarburanti';
 import type { ComandiMappa } from '../mappa/MappaCarburanti';
 import { unitaPrezzo } from '../prezzi/formatoPrezzi';
+import type { QuadroUmore } from '../../domain/umore';
+import { fraseUmore } from '../../domain/umore';
+import { Termometro } from '../kit/Termometro';
 import { FoglioPerche } from './FoglioPerche';
 
 interface Props {
   m: Modello;
   home: HomeModel | null;
+  umore: QuadroUmore;
   punti: CollezionePunti | null;
   onApriImpianto: (id: string) => void;
   onApriMappa: () => void;
@@ -58,7 +62,7 @@ const RISPARMIO_MINIMO = 0.3;
  * (un distributore solo, con quanto si risparmia davvero), la mappa
  * intorno e la lista dei distributori entro 15 km.
  */
-export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpostazioni, onScegliLuogo }: Props) {
+export function Home({ m, home, umore, punti, onApriImpianto, onApriMappa, onApriImpostazioni, onScegliLuogo }: Props) {
   const [perche, setPerche] = useState(false);
   const [tutti, setTutti] = useState(false);
   const fuel = m.impostazioni.carburante;
@@ -97,21 +101,24 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
         <button
           type="button"
           onClick={m.posizione.fase === 'gps' ? () => void aggiornaPosizione() : onScegliLuogo}
-          className="mf-press flex min-w-0 items-center gap-1.5 rounded-full bg-mf-surface px-3 py-1.5 text-mf-ink-2"
+          className="mf-press mf-vetro flex min-w-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-mf-ink"
         >
-          {m.posizione.fase === 'gps' ? <LocateFixed size={15} className="shrink-0" /> : <MapPin size={15} className="shrink-0" />}
+          {m.posizione.fase === 'gps' ? <LocateFixed size={15} className="shrink-0" style={{ color: 'var(--mf-umore)' }} /> : <MapPin size={15} className="shrink-0" style={{ color: 'var(--mf-umore)' }} />}
           <span className="mf-footnote truncate">{testoPosizione(m)}</span>
         </button>
         <span className="flex-1" />
-        <PulsanteIcona etichetta="Impostazioni" onClick={onApriImpostazioni}>
+        <PulsanteIcona etichetta="Impostazioni" className="mf-vetro" onClick={onApriImpostazioni}>
           <Settings size={19} />
         </PulsanteIcona>
       </header>
 
-      <h1 className="mf-large-title mt-1">Dove conviene</h1>
+      <h1 className="mf-large-title mt-3">
+        Dove <span className="mf-testo-umore">conviene</span>
+      </h1>
+      {fraseUmore(umore) && <p className="mf-subhead mt-1.5 text-mf-ink-2">{fraseUmore(umore)}</p>}
 
       <Segmentato
-        className="mt-3"
+        className="mt-4"
         etichetta="Carburante"
         valore={fuel}
         opzioni={OPZIONI_CARBURANTE}
@@ -146,7 +153,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
             onApri={() => onApriImpianto(best.row.id)}
           />
         ) : (
-          <div className="rounded-mf-lg bg-mf-surface">
+          <div className="mf-carta">
             {home && home.list.length > 0 ? (
               <Vuoto
                 titolo={`Nessun distributore da consigliare entro ${RAGGIO_HOME_KM} km`}
@@ -166,7 +173,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
 
       {/* La mappa intorno: un tocco apre la scheda Mappa. */}
       {m.posizione.punto && (
-        <section className="relative mt-4 h-[200px] overflow-hidden rounded-mf-lg ring-1 ring-mf-hairline">
+        <section className="relative mt-4 h-[188px] overflow-hidden rounded-mf-lg ring-1 ring-[rgb(255_255_255/0.08)] shadow-[0_18px_40px_-26px_rgb(0_0_0/0.9)]">
           <MappaCarburanti
             comandi={miniMappa}
             punti={punti}
@@ -177,10 +184,15 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
           />
           <button type="button" onClick={onApriMappa} className="absolute inset-0" aria-label="Apri la mappa" />
           <span className="pointer-events-none absolute left-2 top-2 rounded bg-mf-veil px-1.5 py-0.5 text-[10px] text-mf-ink-2">© OpenStreetMap</span>
-          <span className="pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-mf-veil px-2.5 py-1 text-[12px] font-medium text-mf-ink">
+          <span className="mf-vetro pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold text-mf-ink">
             Mappa <ChevronRight size={14} />
           </span>
         </section>
+      )}
+
+      {/* La zona: dove sta la mediana qui intorno rispetto all'Italia. */}
+      {umore.umore !== 'neutro' && umore.mediana !== null && umore.scarto !== null && (
+        <Termometro className="mt-4" mediana={umore.mediana} scarto={umore.scarto} n={umore.n} />
       )}
 
       {/* La lista */}
@@ -196,7 +208,7 @@ export function Home({ m, home, punti, onApriImpianto, onApriMappa, onApriImpost
             opzioni={OPZIONI_ORDINE}
             onCambia={(v) => aggiornaImpostazioni({ ordineLista: v })}
           />
-          <ul className="mt-3 overflow-hidden rounded-mf-lg bg-mf-surface [&>li+li]:border-t [&>li+li]:border-mf-hairline">
+          <ul className="mf-carta mt-3 overflow-hidden [&>li+li]:border-t [&>li+li]:border-mf-hairline">
             {(tutti ? lista : lista.slice(0, RIGHE_INIZIALI)).map((it) => (
               <RigaImpianto
                 key={it.id}
@@ -250,7 +262,7 @@ function testoPosizione(m: Modello): string {
 function SenzaPosizione({ m, onScegliLuogo }: { m: Modello; onScegliLuogo: () => void }) {
   const cerco = m.posizione.fase === 'cerco';
   return (
-    <div className="rounded-mf-lg bg-mf-surface">
+    <div className="mf-carta">
       <Vuoto
         icona={<MapPin size={30} />}
         titolo={cerco ? 'Cerco dove sei…' : 'Non so dove sei'}
@@ -285,11 +297,16 @@ function SchedaConsiglio({ best, m, servito, onPerche, onApri }: SchedaProps) {
   const vecchio = (best.ritardoH ?? 0) > ORE_PREZZO_VECCHIO;
   const titolo = nomeMarchio(r.brand);
   return (
-    <article className="rounded-mf-lg bg-mf-surface p-4">
-      <p className="mf-footnote font-semibold text-mf-accent">Vai qui</p>
+    <article className="mf-eroe p-5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-mf-accent-soft px-2.5 py-1 text-[12px] font-bold text-mf-accent">
+          <Navigation size={12} strokeWidth={2.6} /> Vai qui
+        </span>
+        <span className={`mf-caption ${vecchio ? 'text-mf-warn' : 'text-mf-ink-2'}`}>prezzo {etaPrezzo(r.updated, m.adesso)}</span>
+      </div>
 
-      <button type="button" onClick={onApri} className="mf-press mt-2 flex w-full items-center gap-3 text-left">
-        <LogoMarchio marchio={r.brand} misura={44} />
+      <button type="button" onClick={onApri} className="mf-press mt-4 flex w-full items-center gap-3 text-left">
+        <LogoMarchio marchio={r.brand} misura={46} />
         <span className="min-w-0 flex-1">
           <span className="mf-headline block truncate">{titolo}</span>
           <span className="mf-footnote block truncate text-mf-ink-2">{indirizzo(r.address, r.city)}</span>
@@ -297,36 +314,36 @@ function SchedaConsiglio({ best, m, servito, onPerche, onApri }: SchedaProps) {
         <ChevronRight size={18} className="shrink-0 text-mf-ink-3" />
       </button>
 
-      <div className="mt-4 flex items-end gap-4">
+      <div className="mt-5 flex items-end gap-4">
         <div>
-          <Prezzo valore={best.price} livello={best.level} spento={vecchio} misura="eroe" />
-          <p className="mf-caption mt-1 text-mf-ink-2">{etichettaPrezzo(m.impostazioni.carburante, best.alServito)}</p>
+          <Prezzo valore={best.price} livello={best.level} spento={vecchio} misura="eroe" bagliore />
+          <p className="mf-caption mt-1.5 text-mf-ink-2">{etichettaPrezzo(m.impostazioni.carburante, best.alServito)}</p>
         </div>
         {servito !== null && servito !== best.price && (
-          <div className="pb-[22px]">
+          <div className="pb-[24px]">
             <span className="mf-num text-[17px] font-semibold text-mf-ink-2">{formatoPrezzo(servito)}</span>
             <p className="mf-caption text-mf-ink-3">servito</p>
           </div>
         )}
       </div>
 
-      <p className="mf-subhead mt-3 text-mf-ink">
-        {netto >= RISPARMIO_MINIMO ? (
-          <>
-            Risparmi <span className="mf-num font-semibold text-mf-best">{euro(netto)}</span> sul pieno
-            <span className="text-mf-ink-2">, già tolta la strada per arrivarci.</span>
-          </>
-        ) : (
-          <span className="text-mf-ink-2">È il più conveniente qui vicino, contando strada e tempo.</span>
-        )}
+      {netto >= RISPARMIO_MINIMO ? (
+        <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-[rgb(46_229_157/0.12)] px-3 py-1.5 ring-1 ring-inset ring-[rgb(46_229_157/0.25)]">
+          <span className="mf-subhead text-mf-ink">
+            Risparmi <span className="mf-num font-bold text-mf-best">{euro(netto)}</span> sul pieno
+          </span>
+        </p>
+      ) : (
+        <p className="mf-subhead mt-4 text-mf-ink-2">È il più conveniente qui vicino, contando strada e tempo.</p>
+      )}
+      {netto >= RISPARMIO_MINIMO && <p className="mf-caption mt-1.5 text-mf-ink-3">Già tolta la strada per arrivarci.</p>}
+
+      <p className="mf-footnote mt-3 flex items-center gap-3 text-mf-ink-2">
+        <span className="inline-flex items-center gap-1"><IconaStrada size={14} /> {distanza(best.distanceKm)}</span>
+        <span className="inline-flex items-center gap-1"><Clock size={14} /> circa {minutiGuida(best.distanceKm)} min</span>
       </p>
 
-      <p className="mf-footnote mt-1.5 text-mf-ink-2">
-        {distanza(best.distanceKm)} · circa {minutiGuida(best.distanceKm)} min ·{' '}
-        <span className={vecchio ? 'text-mf-warn' : ''}>prezzo {etaPrezzo(r.updated, m.adesso)}</span>
-      </p>
-
-      <div className="mt-4 flex gap-2.5">
+      <div className="mt-5 flex gap-2.5">
         <Pulsante
           largo
           misura="grande"
@@ -363,7 +380,7 @@ function RigaImpianto({ it, m, ordine, consigliato, bestPrice, onApri }: RigaPro
 
   return (
     <li>
-      <button type="button" onClick={onApri} className="mf-press flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-mf-surface-2">
+      <button type="button" onClick={onApri} className="mf-press flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-[rgb(255_255_255/0.04)]">
         <LogoMarchio marchio={it.brand} misura={38} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">

@@ -13,9 +13,9 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'
 }
 
 const TONI: Record<Tono, string> = {
-  pieno: 'bg-mf-accent text-mf-accent-ink',
+  pieno: 'mf-cta text-mf-accent-ink',
   tinta: 'bg-mf-accent-soft text-mf-accent',
-  grigio: 'bg-mf-surface-2 text-mf-ink',
+  grigio: 'bg-[rgb(255_255_255/0.08)] text-mf-ink ring-1 ring-inset ring-[rgb(255_255_255/0.08)]',
   semplice: 'bg-transparent text-mf-ink',
 };
 
@@ -60,7 +60,7 @@ export function PulsanteIcona({ etichetta, children, className = '', onClick, ..
         void triggerHaptic('light');
         onClick?.(e);
       }}
-      className={`mf-press grid h-10 w-10 place-items-center rounded-full bg-mf-surface-2 text-mf-ink ${className}`}
+      className={`mf-press grid h-10 w-10 place-items-center rounded-full bg-[rgb(255_255_255/0.08)] text-mf-ink ${className}`}
     >
       {children}
     </button>

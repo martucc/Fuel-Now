@@ -36,7 +36,7 @@ export function CartaAndamento({ fuel, storico, previsione, finestra, onFinestra
 
   if (!ultimo || !a.estremi) {
     return (
-      <div className="rounded-mf-lg bg-mf-surface p-4">
+      <div className="mf-carta p-4">
         <p className="mf-subhead text-mf-ink-2">Lo storico {delCarburante(fuel)} non è disponibile in questo file dei prezzi.</p>
       </div>
     );
@@ -50,7 +50,7 @@ export function CartaAndamento({ fuel, storico, previsione, finestra, onFinestra
     `minimo ${formatoPrezzo(a.estremi.minimo.prezzo)} il ${dataBreve(a.estremi.minimo.ts)}.`;
 
   return (
-    <div className="rounded-mf-lg bg-mf-surface p-4">
+    <div className="mf-carta p-4">
       <p className="mf-footnote text-mf-ink-2">Media italiana {delCarburante(fuel)}</p>
       <div className="mt-1 flex items-baseline gap-1.5">
         <Prezzo valore={ultimo.prezzo} misura="grande" />
@@ -89,7 +89,7 @@ function dataLocale(d: Date): string {
 function Confronto({ titolo, v }: { titolo: string; v: Variazione | null }) {
   const Icona = !v || Math.abs(v.deltaC) < 0.05 ? Minus : v.deltaC < 0 ? ArrowDownRight : ArrowUpRight;
   return (
-    <div className="rounded-mf-md bg-mf-surface-2 px-3 py-2.5">
+    <div className="rounded-mf-md bg-[rgb(255_255_255/0.05)] ring-1 ring-inset ring-[rgb(255_255_255/0.06)] px-3 py-2.5">
       <p className="mf-caption text-mf-ink-2">{titolo}</p>
       {v ? (
         <>

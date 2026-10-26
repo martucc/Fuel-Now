@@ -85,9 +85,12 @@ describe('parseStations sul dataset reale', () => {
   });
 
   it('lascia qualche riga senza provincia, senza scartarla', () => {
+    // Senza provincia restano gli impianti aperti dopo l'ultima anagrafica
+    // buona: quando il CSV del Ministero non arriva, la live non la dice.
+    // Crescono col tempo, quindi la soglia e una quota e non un numero.
     const orphans = rows.filter((r) => r.prov === null);
     expect(orphans.length).toBeGreaterThan(0);
-    expect(orphans.length).toBeLessThan(100);
+    expect(orphans.length / rows.length).toBeLessThan(0.02);
   });
 
   it('ogni riga conservata ha almeno un prezzo, self o servito', () => {

@@ -5,6 +5,7 @@ import { avviaAggiornamentiAutomatici } from '../services/aggiornamentiAutomatic
 import { aggiornaPosizione, scegliLuogo, usaGps } from './posizione';
 import { caricaAuto } from './dati';
 import { useHome, useModello, usePuntiMappa } from './modello';
+import { useUmore } from './umore';
 import { BarraSchede } from './BarraSchede';
 import type { Scheda } from './BarraSchede';
 import { aggiungiIndietro } from '../ui/kit/indietro';
@@ -31,6 +32,7 @@ export function App() {
   const m = useModello();
   const home = useHome(m);
   const punti = usePuntiMappa(m);
+  const umore = useUmore(m, home);
 
   const [scheda, setScheda] = useState<Scheda>('home');
   const [aperte, setAperte] = useState<ReadonlySet<Scheda>>(() => new Set(['home']));
@@ -77,7 +79,7 @@ export function App() {
         key={s}
         aria-hidden={scheda !== s}
         className={`absolute inset-0 ${scorre ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'} transition-opacity duration-150 ${scheda === s ? 'visible opacity-100' : 'invisible opacity-0'}`}
-        style={scorre ? { paddingBottom: 'calc(var(--mf-tabbar-h) + var(--mf-safe-bottom) + 16px)' } : undefined}
+        style={scorre ? { paddingBottom: 'var(--mf-sotto-barra)' } : undefined}
       >
         {contenuto}
       </section>
@@ -85,11 +87,14 @@ export function App() {
 
   return (
     <div className="relative h-full overflow-hidden bg-mf-bg text-mf-ink">
+      {/* Lo sfondo col colore della zona, fermo dietro a tutte le schede. */}
+      <div aria-hidden className="mf-aurora pointer-events-none absolute inset-0" />
       {pannello(
         'home',
         <Home
           m={m}
           home={home}
+          umore={umore}
           punti={punti}
           onApriImpianto={apriImpianto}
           onApriMappa={() => cambiaScheda('mappa')}

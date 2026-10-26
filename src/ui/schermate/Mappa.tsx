@@ -35,7 +35,7 @@ export function Mappa({ m, punti, best, scelto, onApriImpianto }: Props) {
   const utente = m.posizione.punto;
 
   return (
-    <div className="absolute inset-x-0 top-0" style={{ bottom: 'calc(var(--mf-tabbar-h) + var(--mf-safe-bottom))' }}>
+    <div className="mf-mappa-piena absolute inset-0">
       <MappaCarburanti
         comandi={comandi}
         punti={punti}
@@ -48,7 +48,7 @@ export function Mappa({ m, punti, best, scelto, onApriImpianto }: Props) {
 
       {/* In alto: il carburante, sopra la mappa. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 px-3" style={{ paddingTop: 'calc(var(--mf-safe-top) + 8px)' }}>
-        <div className="pointer-events-auto mx-auto max-w-md rounded-[12px] bg-[rgb(28_28_30/0.94)] p-1 shadow-[0_8px_24px_rgb(0_0_0/0.45)]">
+        <div className="mf-vetro pointer-events-auto mx-auto max-w-md rounded-[18px] p-1">
           <Segmentato
             etichetta="Carburante"
             valore={m.impostazioni.carburante}
@@ -60,7 +60,7 @@ export function Mappa({ m, punti, best, scelto, onApriImpianto }: Props) {
           <button
             type="button"
             onClick={() => setLegenda(false)}
-            className="pointer-events-auto mx-auto mt-2 flex max-w-md items-center gap-3 rounded-full bg-[rgb(28_28_30/0.94)] px-3.5 py-1.5 text-[12px] text-mf-ink-2"
+            className="mf-vetro pointer-events-auto mx-auto mt-2 flex max-w-md items-center gap-3 rounded-full px-3.5 py-1.5 text-[12px] text-mf-ink-2"
             aria-label="Nascondi la legenda"
           >
             <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-mf-best" /> economico</span>
@@ -72,17 +72,17 @@ export function Mappa({ m, punti, best, scelto, onApriImpianto }: Props) {
       </div>
 
       {/* In basso a destra: aggiorna e torna a dove sei. */}
-      <div className="absolute right-3 flex flex-col gap-2.5" style={{ bottom: 34 }}>
+      <div className="absolute right-4 flex flex-col gap-2.5" style={{ bottom: 'calc(var(--mf-tabbar-h) + var(--mf-tabbar-gap) + var(--mf-safe-bottom) + 44px)' }}>
         <PulsanteIcona
           etichetta="Aggiorna i prezzi"
-          className="h-11 w-11 bg-[rgb(28_28_30/0.94)] shadow-[0_6px_18px_rgb(0_0_0/0.5)]"
+          className="mf-vetro h-12 w-12"
           onClick={() => void datasetStore().aggiorna('manuale')}
         >
           <RefreshCw size={19} className={m.dataset.fase === 'aggiorno' ? 'animate-spin' : ''} />
         </PulsanteIcona>
         <PulsanteIcona
           etichetta="Torna alla tua posizione"
-          className="h-11 w-11 bg-[rgb(28_28_30/0.94)] shadow-[0_6px_18px_rgb(0_0_0/0.5)]"
+          className="mf-vetro h-12 w-12"
           onClick={() => {
             void aggiornaPosizione();
             if (utente) comandi.current?.vola(utente, 13.5);

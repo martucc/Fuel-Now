@@ -87,7 +87,7 @@ export function Viaggio({ m, onApriImpianto }: Props) {
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-6" style={{ paddingTop: 'calc(var(--mf-safe-top) + 8px)' }}>
-      <h1 className="mf-large-title mt-1">Viaggio</h1>
+      <h1 className="mf-large-title mt-1"><span className="mf-titolo-umore">Viaggio</span></h1>
       <p className="mf-subhead mt-1 text-mf-ink-2">Dove fare benzina lungo la strada, spendendo meno.</p>
 
       <div className="mt-4">

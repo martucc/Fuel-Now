@@ -16,11 +16,11 @@ export function Segmentato<T extends string>({ valore, opzioni, onCambia, etiche
   const i = Math.max(0, opzioni.findIndex((o) => o.valore === valore));
   const n = opzioni.length;
   return (
-    <div role="radiogroup" aria-label={etichetta} className={`relative flex h-9 rounded-[10px] bg-mf-surface-2 p-[2px] ${className}`}>
+    <div role="radiogroup" aria-label={etichetta} className={`relative flex h-10 rounded-[14px] bg-[rgb(255_255_255/0.06)] p-[3px] ring-1 ring-inset ring-[rgb(255_255_255/0.06)] ${className}`}>
       <span
         aria-hidden
-        className="absolute bottom-[2px] top-[2px] rounded-[8px] bg-mf-surface-3 shadow-[0_1px_3px_rgb(0_0_0/0.35)] transition-transform duration-300 ease-[var(--ease-mf)]"
-        style={{ width: `calc((100% - 4px) / ${n})`, transform: `translateX(${i * 100}%)` }}
+        className="absolute bottom-[3px] top-[3px] rounded-[11px] bg-[rgb(255_255_255/0.14)] shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_4px_12px_-4px_rgb(0_0_0/0.6)] transition-transform duration-300 ease-[var(--ease-mf)]"
+        style={{ width: `calc((100% - 6px) / ${n})`, transform: `translateX(${i * 100}%)` }}
       />
       {opzioni.map((o) => (
         <button

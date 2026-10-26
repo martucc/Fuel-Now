@@ -11,21 +11,21 @@ export const COLORE_LIVELLO: Record<PriceLevel, string> = {
 
 /** Le stesse tinte in esadecimale, per MapLibre che non legge le variabili CSS. */
 export const HEX_LIVELLO: Record<PriceLevel, string> = {
-  best: '#30d158',
-  good: '#9ee37d',
-  normal: '#f5f5f7',
-  high: '#ff9f0a',
-  worst: '#ff453a',
+  best: '#2ee59d',
+  good: '#a6ef6b',
+  normal: '#f6f7fb',
+  high: '#ffb020',
+  worst: '#ff5a5f',
 };
 
 export const HEX = {
-  bg: '#000000',
-  surface: '#1c1c1e',
-  surface2: '#2c2c2e',
-  ink: '#f5f5f7',
-  ink2: '#a1a1a6',
-  accent: '#0a84ff',
-  stale: '#8e8e93',
+  bg: '#05070a',
+  surface: '#12151b',
+  surface2: '#1b1f27',
+  ink: '#f6f7fb',
+  ink2: '#a3a9b8',
+  accent: '#2f8cff',
+  stale: '#8b90a0',
 } as const;
 
 export const ETICHETTA_LIVELLO: Record<PriceLevel, string> = {

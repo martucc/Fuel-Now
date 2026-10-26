@@ -83,6 +83,7 @@ scripts/      seed.mjs, copia-worker-maplibre.mjs
 - **Test:** girano in ambiente `node` e prendono solo `src/**/*.test.ts`, mai `.tsx`. La logica sta nei moduli puri; i componenti fanno solo la resa.
 - **I test non devono fissare valori del dataset**: cambiano a ogni `seed` (i test del ranking usano una coorte finta apposta).
 - **Il blu vuol dire «vai qui»** e nient'altro: distributore consigliato, soste del viaggio, «Portami lì». Mai schede, link, interruttori, la posizione dell'utente o i grafici.
+- **Il colore d'atmosfera viene dai prezzi della zona** (`domain/umore.ts`, `app/umore.ts`): la mediana dei prezzi entro 15 km contro la media italiana, nelle stesse cinque fasce dei prezzi (verde, verde chiaro, turchese per la media, ambra, rosso). `<html data-umore>` lo passa a `tema.css` (`--mf-umore`, `--mf-umore-2`), che tinge sfondo, titoli, scheda attiva della barra e carta del consiglio. Mai blu: il blu resta «vai qui».
 - **Stili di base dentro `@layer base`.** Una regola CSS fuori dai layer di Tailwind vince sulle classi di utilità: un `button { background: none }` sciolto spegneva tutti i bottoni blu.
 - **Niente service worker dentro l'APK.** Serviva la build vecchia e l'app sembrava non aggiornarsi. `main.tsx` toglie quelli rimasti.
 - **Il download dei prezzi:** indirizzo fisso e `cache: 'no-cache'`, così GitHub risponde 304 quando il file non è cambiato. Niente parametri per «rompere la cache» (la CDN li ignora) e niente intestazioni fatte a mano (il preflight CORS di raw.githubusercontent risponde 403).

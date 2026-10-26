@@ -76,8 +76,13 @@ export function Foglio({ titolo, sottotitolo, onChiudi, children, altezza = 'aut
             if (info.offset.y > 120 || info.velocity.y > 600) onChiudi();
             else velo.set(0.6);
           }}
-          className="mf-foglio relative flex w-full flex-col rounded-t-mf-xl bg-mf-surface"
-          style={{ maxHeight: '90vh', minHeight: altezza === 'alto' ? '75vh' : undefined }}
+          className="mf-foglio relative flex w-full flex-col rounded-t-mf-xl bg-mf-surface shadow-[inset_0_1px_0_rgb(255_255_255/0.08)]"
+          style={{
+            maxHeight: '90vh',
+            minHeight: altezza === 'alto' ? '75vh' : undefined,
+            // Un velo del colore della zona in cima: il foglio e parte della stessa app.
+            backgroundImage: 'linear-gradient(180deg, color-mix(in srgb, var(--mf-umore) 9%, transparent), transparent 140px)',
+          }}
         >
           <div onPointerDown={(e) => trascina.start(e)} className="shrink-0 cursor-grab" style={{ touchAction: 'none' }}>
             <div className="flex justify-center pb-1 pt-2">

@@ -32,7 +32,7 @@ export function SezioneIa({ ia, inAttesaDeiDati, onApriImpostazioni }: Props) {
       </div>
 
       {!ia.attiva ? (
-        <div className="rounded-mf-lg bg-mf-surface p-4">
+        <div className="mf-carta p-4">
           <div className="flex gap-3">
             <Sparkles size={22} className="mt-0.5 shrink-0 text-mf-ink-2" aria-hidden />
             <p className="mf-subhead text-mf-ink-2">
@@ -46,7 +46,7 @@ export function SezioneIa({ ia, inAttesaDeiDati, onApriImpostazioni }: Props) {
         </div>
       ) : (
         <>
-          <div className="rounded-mf-lg bg-mf-surface p-4">
+          <div className="mf-carta p-4">
             {ia.errore && (
               <Errore codice={ia.errore} onRiprova={ia.rigenera} onApriImpostazioni={onApriImpostazioni} />
             )}
@@ -146,7 +146,7 @@ function Domanda({ ia, disattiva, onApriImpostazioni }: { ia: StatoIa; disattiva
   };
 
   return (
-    <div className="mt-5 rounded-mf-lg bg-mf-surface p-4">
+    <div className="mt-5 mf-carta p-4">
       <h3 className="mf-headline">Chiedi all’IA</h3>
       <form
         className="mt-3 flex items-center gap-2"

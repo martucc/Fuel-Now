@@ -43,8 +43,8 @@ export function daNascondere(id: string, sourceLayer: string | undefined): boole
 
 /** Le tinte di fondo, accordate al nero dell'app. */
 export const TINTE_BASE: Record<string, string> = {
-  background: '#0a0a0b',
-  water: '#0b1622',
+  background: '#07090d',
+  water: '#0a1826',
 };
 
 /* ── Le targhette ───────────────────────────────────────────────────── */
@@ -62,7 +62,7 @@ export const ASPETTO: Record<TipoTarghetta, AspettoTarghetta> = {
   normal: { fondo: HEX.surface, bordo: 'rgba(255,255,255,0.28)' },
   high: { fondo: HEX.surface, bordo: HEX_LIVELLO.high },
   worst: { fondo: HEX.surface, bordo: HEX_LIVELLO.worst },
-  spento: { fondo: '#141416', bordo: 'rgba(255,255,255,0.12)' },
+  spento: { fondo: '#12151b', bordo: 'rgba(255,255,255,0.12)' },
   consigliato: { fondo: HEX.accent, bordo: '#ffffff' },
   scelto: { fondo: '#ffffff', bordo: '#ffffff' },
 };
