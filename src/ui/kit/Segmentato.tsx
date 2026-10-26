@@ -30,8 +30,10 @@ export function Segmentato<T extends string>({ valore, opzioni, onCambia, etiche
           aria-checked={o.valore === valore}
           onClick={() => {
             if (o.valore !== valore) {
-              void triggerHaptic('selection');
+              // Prima il cambio, poi il tocco: scegliendo la vibrazione
+              // si sente subito il livello nuovo.
               onCambia(o.valore);
+              void triggerHaptic('selection');
             }
           }}
           className={`relative z-10 flex-1 text-[13px] font-semibold transition-colors ${o.valore === valore ? 'text-mf-ink' : 'text-mf-ink-2'}`}

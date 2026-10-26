@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import type { FuelKey } from '../domain/raw';
 import { FUEL_KEYS } from '../domain/raw';
+import type { LivelloVibrazione } from '../domain/vibrazione';
+import { LIVELLI_VIBRAZIONE, VIBRAZIONE_PREDEFINITA } from '../domain/vibrazione';
 
 /**
  * Le scelte dell'utente. Poche e piccole: stanno in localStorage, che nella
@@ -16,6 +18,8 @@ export interface Impostazioni {
   chiaveGemini: string;
   modelloGemini: string;
   ordineLista: OrdineLista;
+  /** Quanto vibra l'app ai tocchi: spenta, leggera (tocco di sistema) o decisa. */
+  vibrazione: LivelloVibrazione;
 }
 
 export const MODELLO_GEMINI_PREDEFINITO = 'gemini-2.5-flash';
@@ -26,6 +30,7 @@ export const PREDEFINITE: Impostazioni = {
   chiaveGemini: '',
   modelloGemini: MODELLO_GEMINI_PREDEFINITO,
   ordineLista: 'risparmio',
+  vibrazione: VIBRAZIONE_PREDEFINITA,
 };
 
 const CHIAVE = 'mf2_impostazioni';
@@ -43,6 +48,9 @@ export function normalizza(v: unknown): Impostazioni {
         ? o.modelloGemini.trim()
         : PREDEFINITE.modelloGemini,
     ordineLista: ORDINI.includes(o.ordineLista as OrdineLista) ? (o.ordineLista as OrdineLista) : PREDEFINITE.ordineLista,
+    vibrazione: LIVELLI_VIBRAZIONE.includes(o.vibrazione as LivelloVibrazione)
+      ? (o.vibrazione as LivelloVibrazione)
+      : PREDEFINITE.vibrazione,
   };
 }
 

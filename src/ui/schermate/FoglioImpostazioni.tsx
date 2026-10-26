@@ -15,6 +15,8 @@ import { chiediModelli, provaChiave, MODELLI_DI_RIPIEGO } from '../../services/g
 import { Foglio } from '../kit/Foglio';
 import { Gruppo, Riga } from '../kit/Gruppo';
 import { Pulsante } from '../kit/Pulsante';
+import { Segmentato } from '../kit/Segmentato';
+import type { LivelloVibrazione } from '../../domain/vibrazione';
 import { descriviAuto, quantita } from '../kit/formatoUi';
 import { FUEL_LABEL } from '../../domain/fuel';
 import { autoPerCarburante, unitaQuantita } from '../../domain/units';
@@ -40,7 +42,19 @@ function notaAuto(m: Modello): string {
 }
 
 /** Versione mostrata nelle impostazioni: tenerla allineata a android/app/build.gradle. */
-export const VERSIONE_APP = '2.2.0';
+export const VERSIONE_APP = '2.2.1';
+
+const OPZIONI_VIBRAZIONE: ReadonlyArray<{ valore: LivelloVibrazione; etichetta: string }> = [
+  { valore: 'spenta', etichetta: 'Spenta' },
+  { valore: 'leggera', etichetta: 'Leggera' },
+  { valore: 'decisa', etichetta: 'Decisa' },
+];
+
+const NOTA_VIBRAZIONE: Record<LivelloVibrazione, string> = {
+  spenta: 'L’app non vibra mai.',
+  leggera: 'Un tocco corto, come la tastiera. Segue la «vibrazione al tocco» del telefono: se lì è spenta, non vibra.',
+  decisa: 'Un colpo più forte a ogni scheda e a ogni bottone.',
+};
 
 /**
  * Le impostazioni: poche, e tutte cose che cambiano i conti. L'auto (litri
@@ -115,6 +129,17 @@ export function FoglioImpostazioni({ m, onChiudi, onScegliLuogo }: { m: Modello;
               onClick={() => { for (const id of [...m.nascosti]) impostaNascosto(id, false); }}
             />
           )}
+        </Gruppo>
+
+        <Gruppo titolo="Vibrazione" nota={NOTA_VIBRAZIONE[m.impostazioni.vibrazione]}>
+          <div className="px-3 py-3">
+            <Segmentato
+              etichetta="Vibrazione"
+              valore={m.impostazioni.vibrazione}
+              opzioni={OPZIONI_VIBRAZIONE}
+              onCambia={(v) => aggiornaImpostazioni({ vibrazione: v })}
+            />
+          </div>
         </Gruppo>
 
         <Gruppo titolo="Informazioni">

@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // I plugin dell'app vanno registrati prima che parta il bridge.
         registerPlugin(NavigazionePlugin.class);
+        registerPlugin(VibrazionePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
