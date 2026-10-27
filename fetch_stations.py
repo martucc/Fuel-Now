@@ -7,6 +7,7 @@ Fallback: CSV "prezzo alle 8" se l'API live non risponde.
 """
 import csv
 import json
+import math
 import os
 import sys
 import time
@@ -389,6 +390,50 @@ def anagrafica_salvata():
     return meta
 
 
+KM_VICINO_ANAGRAFICA = 4.0
+
+
+def completa_provincia(stations):
+    """La provincia, per chi non ce l'ha, dal distributore piu vicino.
+
+    Succede agli impianti aperti dopo l'ultima anagrafica buona, quando il
+    CSV del Ministero non arriva (vedi anagrafica_salvata): la live da nome
+    e coordinate ma non il comune. Senza provincia restavano fuori dalle
+    medie provinciali. Entro KM_VICINO_ANAGRAFICA il vicino sta quasi sempre
+    nella stessa provincia; piu lontano non si indovina.
+    """
+    passo = 0.05  # gradi: celle di circa 5 km
+    griglia = defaultdict(list)
+    for st in stations:
+        if st["prov"]:
+            griglia[(int(st["lat"] // passo), int(st["lng"] // passo))].append(st)
+
+    def km(a, b):
+        dlat = (a["lat"] - b["lat"]) * 111.2
+        dlng = (a["lng"] - b["lng"]) * 111.2 * math.cos(math.radians(a["lat"]))
+        return math.hypot(dlat, dlng)
+
+    completati = 0
+    for st in stations:
+        if st["prov"]:
+            continue
+        cx, cy = int(st["lat"] // passo), int(st["lng"] // passo)
+        migliore, distanza = None, KM_VICINO_ANAGRAFICA
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for altro in griglia.get((cx + dx, cy + dy), ()):
+                    d = km(st, altro)
+                    if d < distanza:
+                        migliore, distanza = altro, d
+        if migliore is not None:
+            # Solo la provincia: e giusta 98 volte su 100. Il comune no (90
+            # su 100 anche entro 800 m, i confini passano vicino alle pompe),
+            # e un comune sbagliato nell'indirizzo e peggio di nessun comune.
+            st["prov"] = migliore["prov"]
+            completati += 1
+    return completati
+
+
 def main():
     by_id, source, snapshot_date = fetch_prices_primary_live()
 
@@ -451,6 +496,11 @@ def main():
         })
 
     print(f"Impianti totali con prezzi validi: {len(stations)}", flush=True)
+
+    completati = completa_provincia(stations)
+    if completati:
+        source["registry_filled_from_neighbour"] = completati
+        print(f"Provincia presa dal vicino per {completati} impianti", flush=True)
 
     # Statistiche nazionali per carburante.
     # Diesel/Benzina: solo prezzi self (più uniformi).

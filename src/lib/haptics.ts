@@ -1,66 +1,49 @@
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { impostazioni } from '../app/impostazioni';
+import { comeVibrare } from '../domain/vibrazione';
+import type { Tocco, ToccoSistema } from '../domain/vibrazione';
 
-export async function triggerHaptic(style: 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'error') {
+export type { Tocco } from '../domain/vibrazione';
+
+interface PluginVibrazione {
+  tocca(opzioni: { tipo: ToccoSistema }): Promise<void>;
+}
+const Vibrazione = registerPlugin<PluginVibrazione>('Vibrazione');
+
+/**
+ * Un tocco che si sente, uno solo, al livello scelto nelle impostazioni
+ * (vedi domain/vibrazione.ts). «Leggera» passa dal tocco di sistema di
+ * Android; «Decisa» dagli impatti del plugin Haptics.
+ */
+export async function triggerHaptic(tocco: Tocco): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  // Il livello si legge subito: chi cambia l'impostazione sente il nuovo.
+  const v = comeVibrare(impostazioni().vibrazione, tocco);
+  if (!v) return;
   try {
-    // Controlla se l'utente ha disattivato il feedback tattile nelle impostazioni
-    const hapticsDisabled = localStorage.getItem('mf_haptics_disabled') === 'true';
-    if (hapticsDisabled) return;
-
-    // Controlla se siamo in esecuzione in un ambiente Capacitor nativo
-    const isCapacitorAvailable = typeof window !== 'undefined' && 'Capacitor' in (window as any);
-
-    if (isCapacitorAvailable) {
-      switch (style) {
-        case 'light':
-        case 'selection':
-          try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
-          try { await Haptics.vibrate({ duration: 15 }); } catch {}
-          break;
-        case 'medium':
-          try { await Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
-          try { await Haptics.vibrate({ duration: 30 }); } catch {}
-          break;
-        case 'heavy':
-          try { await Haptics.impact({ style: ImpactStyle.Heavy }); } catch {}
-          try { await Haptics.vibrate({ duration: 60 }); } catch {}
-          break;
-        case 'success':
-          try { await Haptics.notification({ type: 'SUCCESS' as any }); } catch {}
-          try {
-            await Haptics.vibrate({ duration: 30 });
-            setTimeout(() => { Haptics.vibrate({ duration: 30 }).catch(() => {}); }, 80);
-          } catch {}
-          break;
-        case 'error':
-          try { await Haptics.notification({ type: 'ERROR' as any }); } catch {}
-          try {
-            await Haptics.vibrate({ duration: 70 });
-            setTimeout(() => { Haptics.vibrate({ duration: 120 }).catch(() => {}); }, 120);
-          } catch {}
-          break;
-      }
-    } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      // Fallback per PWA standard sul browser mobile usando la Web Vibration API
-      switch (style) {
-        case 'light':
-        case 'selection':
-          navigator.vibrate(12); // Micro-vibrazione reattiva premium
-          break;
-        case 'medium':
-          navigator.vibrate(25); // Feedback intermedio per azioni principali
-          break;
-        case 'heavy':
-          navigator.vibrate(50); // Feedback forte
-          break;
-        case 'success':
-          navigator.vibrate([30, 45, 30]); // Elegantissimo doppio impulso premium (successo)
-          break;
-        case 'error':
-          navigator.vibrate([60, 40, 120]); // Pattern asincrono forte per notificare errori
-          break;
-      }
+    if (v.via === 'sistema') {
+      await Vibrazione.tocca({ tipo: v.tipo });
+      return;
     }
-  } catch (err) {
-    console.debug('Haptics/Vibration engine fallback error:', err);
+    switch (v.tipo) {
+      case 'impatto-leggero':
+        await Haptics.impact({ style: ImpactStyle.Light });
+        break;
+      case 'impatto-medio':
+        await Haptics.impact({ style: ImpactStyle.Medium });
+        break;
+      case 'impatto-forte':
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+        break;
+      case 'successo':
+        await Haptics.notification({ type: NotificationType.Success });
+        break;
+      case 'errore':
+        await Haptics.notification({ type: NotificationType.Error });
+        break;
+    }
+  } catch {
+    /* senza vibrazione l'app funziona uguale */
   }
 }

@@ -1,0 +1,356 @@
+import { describe, it, expect } from 'vitest';
+import {
+  calcolaViaggio,
+  FRAZIONE_SERBATOIO,
+  KM_PARTENZA,
+  SCOSTAMENTO_STRATEGIA,
+  serbatoioDi,
+  tappeCandidate,
+  testoImpossibile,
+  testoSottoRiserva,
+  type DatiViaggio,
+} from './tappeViaggio';
+import { impiantiLungoPercorso, type ImpiantoSulPercorso } from './lungoPercorso';
+import { buildCohorts } from './market';
+import type { StationRow } from './parse';
+import { DEFAULT_TANK_L } from './units';
+import type { Piano } from './viaggio';
+import { numero } from '../lib/formato';
+
+const ADESSO = new Date(2026, 9, 13, 12, 0);
+
+function quando(oreFa: number): string {
+  const d = new Date(ADESSO.getTime() - oreFa * 3_600_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function riga(id: string, prezzo: number, over: Partial<StationRow> = {}): StationRow {
+  return {
+    id,
+    name: `Impianto ${id}`,
+    brand: 'Marchio',
+    operator: '',
+    prov: 'BO',
+    city: 'Bologna',
+    address: 'Via Emilia 1',
+    isHighway: false,
+    lat: 44.5,
+    lng: 11.3,
+    prices: { diesel: prezzo },
+    servito: {},
+    updated: quando(2),
+    ...over,
+  };
+}
+
+/**
+ * La coorte di provincia: venti impianti fra 1,70 e 1,80. Media 1,75 e
+ * scarto 0,05, cosi lo z di un prezzo si fa a mente.
+ */
+const COORTI = buildCohorts(Array.from({ length: 20 }, (_, i) => riga(`c${i}`, i % 2 ? 1.8 : 1.7)));
+
+function sulPercorso(id: string, prezzo: number, kmDaPartenza: number, scostamentoKm = 0.1, over: Partial<StationRow> = {}, aSinistra = false): ImpiantoSulPercorso {
+  return { row: riga(id, prezzo, over), prezzo, kmDaPartenza, scostamentoKm, aSinistra };
+}
+
+function dati(over: Partial<DatiViaggio> = {}): DatiViaggio {
+  return {
+    impianti: [],
+    cohorts: COORTI,
+    fuel: 'diesel',
+    adesso: ADESSO,
+    strategia: 'bilanciato',
+    distanzaKm: 400,
+    kml: 15,
+    serbatoioL: 45,
+    livello: 'meta',
+    ...over,
+  };
+}
+
+describe('serbatoioDi', () => {
+  it('usa il serbatoio dell auto, o quello medio se l auto manca o il dato e assurdo', () => {
+    expect(serbatoioDi(null)).toBe(DEFAULT_TANK_L);
+    expect(serbatoioDi({ model: 'x', liters: 52, kml: 15 })).toBe(52);
+    expect(serbatoioDi({ model: 'x', liters: 0, kml: 15 })).toBe(DEFAULT_TANK_L);
+    expect(serbatoioDi({ model: 'x', liters: 900, kml: 15 })).toBe(DEFAULT_TANK_L);
+  });
+});
+
+describe('tappeCandidate', () => {
+  const o = { fuel: 'diesel' as const, cohorts: COORTI, adesso: ADESSO };
+
+  it('la strategia decide quanto ci si allontana dalla strada', () => {
+    const impianti = [
+      sulPercorso('sulla-strada', 1.75, 10, 0.3),
+      sulPercorso('a-800-m', 1.75, 20, 0.8),
+      sulPercorso('a-2-km', 1.75, 30, 2),
+    ];
+    const ids = (s: 'veloce' | 'bilanciato' | 'risparmio') => tappeCandidate(impianti, { ...o, strategia: s }).map((t) => t.id);
+    expect(ids('veloce')).toEqual(['sulla-strada']);
+    expect(ids('bilanciato')).toEqual(['sulla-strada', 'a-800-m']);
+    expect(ids('risparmio')).toEqual(['sulla-strada', 'a-800-m', 'a-2-km']);
+    expect(SCOSTAMENTO_STRATEGIA.veloce).toBeLessThan(SCOSTAMENTO_STRATEGIA.bilanciato);
+    expect(SCOSTAMENTO_STRATEGIA.bilanciato).toBeLessThan(SCOSTAMENTO_STRATEGIA.risparmio);
+  });
+
+  it('passa al piano la deviazione di sola andata e i km dalla partenza', () => {
+    const [t] = tappeCandidate([sulPercorso('a', 1.75, 123, 0.7)], { ...o, strategia: 'bilanciato' });
+    expect(t!.deviazioneKm).toBeCloseTo(0.7, 6);
+    expect(t!.kmDaPartenza).toBe(123);
+    expect(t!.prezzo).toBe(1.75);
+    expect(t!.nome).toBe('Impianto a');
+  });
+
+  it('colora col livello della coorte dell impianto', () => {
+    const tappe = tappeCandidate(
+      [sulPercorso('economico', 1.65, 10), sulPercorso('medio', 1.75, 20), sulPercorso('caro', 1.83, 30)],
+      { ...o, strategia: 'bilanciato' },
+    );
+    expect(tappe.map((t) => t.level)).toEqual(['best', 'normal', 'worst']);
+  });
+
+  it('scarta i prezzi fuori scala e quelli bassi e vecchi, con lo stesso giudice della Home', () => {
+    // Lungo la strada dieci pompe fra 1,72 e 1,78, un km l'una dall'altra.
+    const strada = Array.from({ length: 10 }, (_, i) =>
+      sulPercorso(`s${i}`, 1.72 + (i % 4) * 0.02, 5 + i, 0.1, { lng: 11.3 + i * 0.013 }));
+    const tappe = tappeCandidate(
+      [
+        ...strada,
+        sulPercorso('assurdo', 2.3, 10, 0.1, { lng: 11.31 }),
+        sulPercorso('errore', 1.45, 12, 0.1, { lng: 11.33 }),
+        sulPercorso('fantasma', 1.6, 20, 0.1, { lng: 11.35, updated: quando(72) }),
+        sulPercorso('basso-di-oggi', 1.66, 30, 0.1, { lng: 11.37 }),
+      ],
+      { ...o, strategia: 'bilanciato' },
+    );
+    const ids = tappe.map((t) => t.id);
+    expect(ids).not.toContain('assurdo');
+    expect(ids).not.toContain('errore');
+    expect(ids).not.toContain('fantasma');
+    expect(ids).toContain('basso-di-oggi');
+  });
+
+  it('da Bormio a Livigno tiene i prezzi del paese, che la Home consiglia', () => {
+    // Prima: z di provincia sotto −2,5 e prezzo di due giorni, quindi
+    // scartato, mentre la Home lo consigliava. Ora il metro è la zona.
+    const so = buildCohorts([
+      ...Array.from({ length: 50 }, (_, i) => riga(`so${i}`, 2.25 + (i % 5) * 0.01, { prov: 'SO', lat: 0, lng: 0 })),
+      ...Array.from({ length: 12 }, (_, i) => riga(`liv${i}`, 1.72, { prov: 'SO', lat: 0, lng: 0 })),
+    ]);
+    const livigno = [1.29, 1.32, 1.35, 1.38, 1.41, 1.44].map((p, i) =>
+      sulPercorso(`l${i}`, p, 30 + i, 0.05, { prov: 'SO', lat: 46.53, lng: 10.13 + i * 0.01, updated: quando(i === 0 ? 52 : 3) }));
+    const bormio = [2.195, 2.48].map((p, i) => sulPercorso(`b${i}`, p, 1 + i, 0.05, { prov: 'SO', lat: 46.467, lng: 10.37 + i * 0.003 }));
+    const tappe = tappeCandidate([...bormio, ...livigno], { ...o, cohorts: so, strategia: 'bilanciato' });
+    expect(tappe.map((t) => t.id)).toEqual(['b0', 'b1', 'l0', 'l1', 'l2', 'l3', 'l4', 'l5']);
+  });
+
+  it('in autostrada scarta le aree di servizio sull altra carreggiata', () => {
+    // Come Sillaro Ovest e Sillaro Est sull A14: andando verso Bologna la
+    // prima sta a 43 m, ma a sinistra, sulla carreggiata per Ancona.
+    const tappe = tappeCandidate(
+      [
+        sulPercorso('ovest-opposta', 1.74, 33, 0.04, { isHighway: true }, true),
+        sulPercorso('est-giusta', 1.76, 33.1, 0.05, { isHighway: true }, false),
+        // In citta a sinistra si gira: resta.
+        sulPercorso('citta-a-sinistra', 1.75, 40, 0.05, {}, true),
+      ],
+      { ...o, strategia: 'bilanciato' },
+    );
+    expect(tappe.map((t) => t.id)).toEqual(['est-giusta', 'citta-a-sinistra']);
+  });
+
+  it('un area di servizio segnata quasi sulla carreggiata opposta si scarta, nei due versi', () => {
+    // Come Lucignano sull A1. La linea e la carreggiata sud; «Est» ha le
+    // coordinate su quella nord, 11 m a est, e costa meno di «Ovest», 33 m
+    // a ovest. Andando a sud Est sta a sinistra e si scarta; andando a nord
+    // (qui sulla stessa linea) e Ovest a stare a sinistra.
+    const KM_LAT = (6371 * Math.PI) / 180;
+    const nord = Array.from({ length: 201 }, (_, i) => ({ lat: 43 + i / 10 / KM_LAT, lng: 11.77 }));
+    const k = KM_LAT * Math.cos((43.1 * Math.PI) / 180);
+    const est = riga('est', 1.7, { isHighway: true, lat: 43 + 10 / KM_LAT, lng: 11.77 + 0.011 / k });
+    const ovest = riga('ovest', 1.76, { isHighway: true, lat: 43 + 10.2 / KM_LAT, lng: 11.77 - 0.033 / k });
+    const scelte = (strada: typeof nord) =>
+      tappeCandidate(impiantiLungoPercorso(strada, [est, ovest], { fuel: 'diesel' }), { ...o, strategia: 'bilanciato' }).map((t) => t.id);
+    expect(scelte(nord)).toEqual(['est']);
+    expect(scelte([...nord].reverse())).toEqual(['ovest']);
+  });
+});
+
+describe('calcolaViaggio', () => {
+  it('col pieno e un viaggio corto non si ferma nessuno', () => {
+    const e = calcolaViaggio(
+      dati({ livello: 'pieno', distanzaKm: 300, impianti: [sulPercorso('casa', 1.7, 2), sulPercorso('via', 1.8, 150)] }),
+    );
+    expect(e.piano.fattibile).toBe(true);
+    expect(e.piano.soste).toEqual([]);
+    expect(e.litriAdesso).toBe(45);
+    expect(e.prezzoPartenza).toBe(1.7);
+    expect(e.litriConsumati).toBeCloseTo(20, 6);
+    expect(e.costoStimato).toBeCloseTo(20 * 1.7, 6);
+  });
+
+  it('il livello del serbatoio diventa litri', () => {
+    for (const [livello, f] of Object.entries(FRAZIONE_SERBATOIO)) {
+      expect(calcolaViaggio(dati({ livello: livello as DatiViaggio['livello'] })).litriAdesso).toBeCloseTo(45 * f, 6);
+    }
+    expect(FRAZIONE_SERBATOIO.riserva).toBeLessThan(FRAZIONE_SERBATOIO.quarto);
+  });
+
+  it('il prezzo di partenza e il piu basso nei primi km, e solo li', () => {
+    const e = calcolaViaggio(
+      dati({
+        impianti: [
+          sulPercorso('a', 1.78, 1),
+          sulPercorso('b', 1.74, KM_PARTENZA - 1),
+          sulPercorso('lontano', 1.66, KM_PARTENZA + 5),
+        ],
+      }),
+    );
+    expect(e.prezzoPartenza).toBe(1.74);
+  });
+
+  it('senza distributori vicino alla partenza non si ferma al primo che capita', () => {
+    // Mezzo serbatoio: 22,5 L, riserva 5,4 L, quindi 256 km di autonomia.
+    const e = calcolaViaggio(
+      dati({
+        distanzaKm: 450,
+        impianti: [sulPercorso('primo-caro', 1.83, 50), sulPercorso('economico', 1.66, 120), sulPercorso('medio', 1.77, 200)],
+      }),
+    );
+    expect(e.prezzoPartenza).toBeNull();
+    expect(e.piano.fattibile).toBe(true);
+    expect(e.piano.soste[0]!.tappa.id).toBe('economico');
+    // Senza una pompa alla partenza il confronto col pieno prima non si fa.
+    expect(e.piano.spesaPienoPrima).toBeNull();
+    expect(e.piano.risparmioEur).toBeNull();
+  });
+
+  it('con un distributore alla partenza fa il confronto col pieno prima di partire', () => {
+    const e = calcolaViaggio(
+      dati({
+        distanzaKm: 450,
+        livello: 'quarto',
+        impianti: [sulPercorso('casa', 1.82, 3), sulPercorso('economico', 1.66, 60)],
+      }),
+    );
+    expect(e.prezzoPartenza).toBe(1.82);
+    expect(e.piano.soste.map((s) => s.tappa.id)).toContain('economico');
+    expect(e.piano.risparmioEur).not.toBeNull();
+    expect(e.piano.risparmioEur!).toBeGreaterThan(0);
+  });
+
+  it('la strategia cambia le tappe possibili', () => {
+    const impianti = [sulPercorso('casa', 1.8, 3, 0.1), sulPercorso('fuori-strada', 1.66, 100, 2), sulPercorso('sulla-strada', 1.79, 110, 0.1)];
+    const risparmio = calcolaViaggio(dati({ distanzaKm: 450, impianti, strategia: 'risparmio' }));
+    const veloce = calcolaViaggio(dati({ distanzaKm: 450, impianti, strategia: 'veloce' }));
+    expect(risparmio.piano.soste.map((s) => s.tappa.id)).toContain('fuori-strada');
+    expect(veloce.piano.soste.map((s) => s.tappa.id)).not.toContain('fuori-strada');
+    expect(veloce.candidate.map((t) => t.id)).toEqual(['casa', 'sulla-strada']);
+  });
+
+  it('il carburante del viaggio comprende le deviazioni', () => {
+    const e = calcolaViaggio(
+      dati({ distanzaKm: 450, strategia: 'risparmio', impianti: [sulPercorso('casa', 1.8, 3), sulPercorso('fuori', 1.66, 100, 2)] }),
+    );
+    expect(e.piano.litriDeviazione).toBeGreaterThan(0);
+    expect(e.litriConsumati).toBeCloseTo(450 / 15 + e.piano.litriDeviazione, 6);
+    expect(e.costoStimato).not.toBeNull();
+  });
+
+  it('senza nessun prezzo non inventa un costo', () => {
+    const e = calcolaViaggio(dati({ livello: 'pieno', distanzaKm: 100 }));
+    expect(e.piano.fattibile).toBe(true);
+    expect(e.costoStimato).toBeNull();
+  });
+
+  it('in riserva ti manda al distributore vicino e ti fa arrivare con la riserva', () => {
+    // 4,5 L su 45: la spia e accesa. Il viaggio da 60 km si farebbe anche
+    // cosi, ma arrivando quasi a secco: il piano fa fermare, e a quello
+    // vicino. All'altro si arriverebbe con 1,8 L, meno della meta di quello
+    // che c'e alla partenza: troppo poco per sette centesimi al litro.
+    const e = calcolaViaggio(
+      dati({
+        livello: 'riserva',
+        distanzaKm: 60,
+        impianti: [sulPercorso('vicino', 1.82, 8), sulPercorso('lontano', 1.75, 40)],
+      }),
+    );
+    expect(e.piano.fattibile).toBe(true);
+    expect(e.piano.arrivoSottoRiserva).toBe(false);
+    expect(e.piano.sostaInRiserva).toBe(1);
+    expect(e.piano.soste.map((s) => s.tappa.id)).toEqual(['vicino']);
+    expect(e.piano.litriAllArrivo).toBeGreaterThanOrEqual(45 * 0.12);
+  });
+
+  it('con un quarto di serbatoio si ferma alla pompa sulla strada invece di arrivare in riserva', () => {
+    // 45 L a 15 km/l, «1/4»: 11,25 L, appena sopra la riserva di 5,4 L. La
+    // pompa al km 100 sta oltre 0,13 × 45 × 15 ≈ 88 km: prima il piano non
+    // la guardava, e diceva «Ci arrivi, ma in riserva» o «resti a secco
+    // intorno al km 88», dove restavano 5,4 L.
+    for (const distanzaKm of [150, 300]) {
+      const e = calcolaViaggio(
+        dati({ livello: 'quarto', distanzaKm, impianti: [sulPercorso('km100', 1.75, 100), sulPercorso('km200', 1.75, 200)] }),
+      );
+      expect(e.piano.fattibile).toBe(true);
+      expect(e.piano.arrivoSottoRiserva).toBe(false);
+      expect(e.piano.soste[0]!.tappa.id).toBe('km100');
+      expect(e.piano.sostaInRiserva).toBe(1);
+    }
+  });
+
+  it('dice quando con il carburante che hai non arrivi al primo distributore', () => {
+    const e = calcolaViaggio(dati({ livello: 'riserva', distanzaKm: 600, impianti: [sulPercorso('lontano', 1.7, 300)] }));
+    expect(e.piano.fattibile).toBe(false);
+    expect(e.piano.motivo).toBe('buco-troppo-lungo');
+  });
+});
+
+describe('testoImpossibile', () => {
+  const piano = (soste: number, bloccoAlKm?: number): Piano => ({
+    fattibile: false,
+    motivo: 'buco-troppo-lungo',
+    bloccoAlKm,
+    soste: Array.from({ length: soste }, () => ({
+      tappa: { id: 'x', nome: '', brand: '', prezzo: 1.7, level: 'normal', kmDaPartenza: 10, deviazioneKm: 0 },
+      litri: 10,
+      spesa: 17,
+      litriDopo: 40,
+      kmRimanenti: 500,
+      pieno: false,
+    })),
+    litriComprati: 0,
+    spesaCarburante: 0,
+    kmDeviazione: 0,
+    litriDeviazione: 0,
+    litriAllArrivo: 0,
+    arrivoSottoRiserva: false,
+    sostaInRiserva: null,
+    spesaPienoPrima: null,
+    risparmioEur: null,
+  });
+
+  it('senza soste dice dove si resta a secco', () => {
+    const t = testoImpossibile(piano(0, 1234.4), 'risparmio');
+    expect(t).toContain('resti a secco');
+    expect(t).toContain(`km ${numero(1234)}`);
+    expect(t).not.toContain('Prova con Risparmio');
+  });
+
+  it('quando si arriva in riserva lo dice, coi litri all arrivo', () => {
+    const p = { ...piano(0), fattibile: true, motivo: undefined, arrivoSottoRiserva: true, litriAllArrivo: 2.34 };
+    const t = testoSottoRiserva(p, 'bilanciato');
+    expect(t).toContain('arrivi con circa 2,3 L, sotto la riserva');
+    expect(t).toContain('Con Risparmio');
+    expect(testoSottoRiserva(p, 'risparmio')).not.toContain('Con Risparmio');
+    // Non dice che un distributore non c'e: magari c'e, e non conveniva.
+    expect(t).not.toMatch(/non c.è un distributore/);
+    expect(testoSottoRiserva({ ...p, soste: piano(2).soste }, 'risparmio')).toMatch(/^Con le 2 soste qui sotto arrivi/);
+  });
+
+  it('con una strategia stretta suggerisce di allargare', () => {
+    expect(testoImpossibile(piano(0, 80), 'veloce')).toContain('Prova con Risparmio');
+    expect(testoImpossibile(piano(2, 800), 'bilanciato')).toContain('resti a secco intorno al km 800');
+  });
+});
