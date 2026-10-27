@@ -24,19 +24,29 @@ export function ageHours(updated: string | null | undefined, now: Date): number 
  * Spec § 6.2. Quanto ci si fida di un prezzo, in base a quanto è vecchio.
  * Un dato senza data vale quanto il più vecchio: non sapere non è una scusa
  * per fidarsi.
+ *
+ * Gli scalini sono dolci: il gestore comunica il prezzo quando lo cambia, e
+ * un prezzo fermo da tre o quattro giorni è normale (l'Eni di via Piratello
+ * a Lugo, ottobre 2026). Prima a 72 ore il risparmio si dimezzava e un
+ * distributore più vicino e 6 centesimi più economico perdeva contro uno
+ * aggiornato da poche ore. Il dubbio vero comincia oltre i cinque giorni:
+ * lì un centesimo in meno non deve battere un prezzo di oggi.
  */
 export function confidenceFor(ageH: number | null): number {
   if (ageH === null) return 0.3;
   if (ageH <= 24) return 1.0;
-  if (ageH <= 48) return 0.9;
-  if (ageH <= 72) return 0.75;
-  if (ageH <= 120) return 0.5;
+  if (ageH <= 72) return 0.95;
+  if (ageH <= 120) return 0.9;
   return 0.3;
 }
 
 /** Oltre una settimana senza un prezzo nuovo l'impianto e quasi sempre chiuso. */
 export const ORE_FORSE_CHIUSO = 168;
-/** Oltre tre giorni il prezzo non e piu recente: si scrive in arancio e conta meno. */
+/**
+ * Oltre tre giorni il prezzo si scrive in arancio: va detto che non e di
+ * oggi. Si consiglia lo stesso fino a cinque (ORE_RIFERIMENTO_FRESCO in
+ * ranking.ts): il gestore comunica quando cambia.
+ */
 export const ORE_PREZZO_VECCHIO = 72;
 
 /** Oltre tre giorni il prezzo non e piu «di oggi» e va detto. */

@@ -39,7 +39,7 @@ export function FoglioPerche({ best, m, onChiudi }: { best: RankedStation; m: Mo
       </dl>
       <div className="mf-footnote mt-3 space-y-2 text-mf-ink-3">
         <p>
-          Il risparmio si misura contro il pieno che faresti comunque: il distributore più vicino con un prezzo recente, cioè di non più di tre giorni prima degli ultimi arrivati quando qui intorno ce ne sono almeno tre. Se il più vicino ha solo il servito e un self a portata ti conviene, contando strada e tempo, il pieno lo faresti al self; e se al massimo {numero(KM_ALTERNATIVA_VICINA)} km più in là del self più vicino ce n’è uno che ti conviene già, il confronto si fa con quello. I km sono stimati dalla linea d’aria, aumentata del {numero((FATTORE_STRADA - 1) * 100)}%.
+          Il risparmio si misura contro il pieno che faresti comunque: il distributore più vicino con un prezzo recente, cioè di non più di cinque giorni prima degli ultimi arrivati, se qui intorno ce n’è almeno uno. Se il più vicino ha solo il servito e un self a portata ti conviene, contando strada e tempo, il pieno lo faresti al self; e se al massimo {numero(KM_ALTERNATIVA_VICINA)} km più in là del self più vicino ce n’è uno che ti conviene già, il confronto si fa con quello. I km sono stimati dalla linea d’aria, aumentata del {numero((FATTORE_STRADA - 1) * 100)}%.
         </p>
         <p>
           Il tempo non entra nel risparmio ma nella scelta: uno più lontano vince solo se ogni minuto in più ti fa risparmiare almeno {numero(EURO_PER_MINUTO * 100)} centesimi, e mai oltre {MAX_MINUTI_IN_PIU} minuti in più rispetto al più vicino, anche se ha solo il servito. A parità, entro {numero(TIE_EURO * 100)} centesimi, vince il più vicino. E il consigliato non costa mai più del pieno che faresti comunque.

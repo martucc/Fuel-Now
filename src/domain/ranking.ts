@@ -62,16 +62,21 @@ export const MAX_MINUTI_IN_PIU = 20;
 export const RAGGIO_ZONA_KM = 15;
 
 /**
- * L'eta dei prezzi, sul lotto. Un prezzo di non piu di tre giorni prima
- * degli ultimi arrivati e recente; fino a cinque e ancora buono. Se intorno
- * al piu vicino (entro la strada che si fa in MAX_MINUTI_IN_PIU) ci sono
- * almeno tre prezzi recenti, si sceglie fra quelli; altrimenti fino a cinque
- * giorni, altrimenti qualunque. La regola vale insieme per il consiglio e
- * per il pieno che faresti comunque.
+ * L'eta dei prezzi, sul lotto. Un prezzo di non piu di cinque giorni prima
+ * degli ultimi arrivati e recente. Se intorno al piu vicino (entro la strada
+ * che si fa in MAX_MINUTI_IN_PIU) ce n'e almeno uno recente si sceglie fra
+ * quelli, altrimenti fra tutti (oltre sette giorni l'impianto e forse chiuso
+ * e non conta comunque). La regola vale insieme per il consiglio e per il
+ * pieno che faresti comunque.
+ *
+ * Era tre giorni, con un secondo gradino a cinque: a Lugo l'Eni di via
+ * Piratello, a un km e 6 centesimi sotto tutti, fermo allo stesso prezzo da
+ * 72 ore e mezza, spariva dal consiglio per mezz'ora di troppo. Il gestore
+ * comunica quando cambia: un prezzo fermo da qualche giorno e quasi sempre
+ * quello vero. Fra i recenti, quanto e vecchio lo dice la fiducia
+ * (confidenceFor), che sconta il risparmio.
  */
-export const ORE_RIFERIMENTO_FRESCO = 72;
-const ORE_ANCORA_BUONO = 120;
-const MIN_RECENTI = 3;
+export const ORE_RIFERIMENTO_FRESCO = 120;
 
 /**
  * Il pieno «senza pensarci» lo faresti dal piu vicino, oppure da uno al
@@ -295,15 +300,11 @@ function sogliaEta(utilizzabili: Candidato[]): number {
   const primo = utilizzabili[0];
   if (!primo) return Infinity;
   const portata = primo.distanceKm + KM_PORTATA;
-  let recenti = 0;
-  let buoni = 0;
   for (const c of utilizzabili) {
     if (c.distanceKm > portata) break;
-    const r = c.ritardoH ?? Infinity;
-    if (r <= ORE_RIFERIMENTO_FRESCO) recenti++;
-    if (r <= ORE_ANCORA_BUONO) buoni++;
+    if ((c.ritardoH ?? Infinity) <= ORE_RIFERIMENTO_FRESCO) return ORE_RIFERIMENTO_FRESCO;
   }
-  return recenti >= MIN_RECENTI ? ORE_RIFERIMENTO_FRESCO : buoni > 0 ? ORE_ANCORA_BUONO : Infinity;
+  return Infinity;
 }
 
 export function rankStations(rows: StationRow[], ctx: RankContext): RankedStation[] {

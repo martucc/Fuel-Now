@@ -29,7 +29,7 @@ describe('foglio Perché', () => {
     // Talmassons: «il più vicino con un prezzo recente» era falso, perché
     // più vicino c'era un servito col prezzo recente.
     const { best, voci, voce } = foglio([
-      riga({ id: 'vecchio', ...aKm(0.3), prices: { diesel: 2.2 }, updated: oreFa(100) }),
+      riga({ id: 'vecchio', ...aKm(0.3), prices: { diesel: 2.2 }, updated: oreFa(144) }),
       riga({ id: 'servito', ...aKm(0.8), prices: {}, servito: { diesel: 2.45 } }),
       riga({ id: 'self', ...aKm(1.2), prices: { diesel: 2.2 } }),
       riga({ id: 'altro', ...aKm(1.6), prices: { diesel: 2.21 } }),
@@ -65,10 +65,11 @@ describe('foglio Perché', () => {
 
   it('il consigliato più vicino del riferimento non ha «strada in più», e lo dice giusto', () => {
     // Il più vicino è caro; il riferimento sta un km più in là; il
-    // consigliato sta in mezzo, mezzo centesimo sotto il riferimento.
+    // consigliato sta in mezzo, tre millesimi sotto il riferimento, con un
+    // prezzo di quattro giorni: abbastanza per vincere, non per fare da metro.
     const { best, voce } = foglio([
       riga({ id: 'caro', ...aKm(0.3), prices: { diesel: 2.4 } }),
-      riga({ id: 'medio', ...aKm(0.8), prices: { diesel: 2.19 }, updated: oreFa(60) }),
+      riga({ id: 'medio', ...aKm(0.8), prices: { diesel: 2.192 }, updated: oreFa(100) }),
       riga({ id: 'rif', ...aKm(1.3), prices: { diesel: 2.195 } }),
       ...[2.21, 2.22, 2.23].map((p, k) => riga({ ...aKm(6 + k), prices: { diesel: p } })),
     ]);
@@ -81,7 +82,7 @@ describe('foglio Perché', () => {
   it('«in tasca» non è mai negativo, anche con un prezzo meno recente in mezzo', () => {
     const { best, voce } = foglio([
       riga({ id: 'caro', ...aKm(0.3), prices: { diesel: 2.4 } }),
-      riga({ id: 'medio', ...aKm(0.8), prices: { diesel: 2.205 }, updated: oreFa(60) }),
+      riga({ id: 'medio', ...aKm(0.8), prices: { diesel: 2.205 }, updated: oreFa(100) }),
       riga({ id: 'rif', ...aKm(1.3), prices: { diesel: 2.2 } }),
       ...[2.21, 2.22, 2.23].map((p, k) => riga({ ...aKm(6 + k), prices: { diesel: p } })),
     ]);

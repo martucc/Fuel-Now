@@ -41,12 +41,10 @@ describe('confidenceFor', () => {
   it('applica la tabella della spec ai bordi', () => {
     expect(confidenceFor(0)).toBe(1.0);
     expect(confidenceFor(24)).toBe(1.0);
-    expect(confidenceFor(24.1)).toBe(0.9);
-    expect(confidenceFor(48)).toBe(0.9);
-    expect(confidenceFor(48.1)).toBe(0.75);
-    expect(confidenceFor(72)).toBe(0.75);
-    expect(confidenceFor(72.1)).toBe(0.5);
-    expect(confidenceFor(120)).toBe(0.5);
+    expect(confidenceFor(24.1)).toBe(0.95);
+    expect(confidenceFor(72)).toBe(0.95);
+    expect(confidenceFor(72.1)).toBe(0.9);
+    expect(confidenceFor(120)).toBe(0.9);
     expect(confidenceFor(120.1)).toBe(0.3);
     expect(confidenceFor(10000)).toBe(0.3);
   });

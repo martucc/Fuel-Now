@@ -42,7 +42,7 @@ function notaAuto(m: Modello): string {
 }
 
 /** Versione mostrata nelle impostazioni: tenerla allineata a android/app/build.gradle. */
-export const VERSIONE_APP = '2.2.1';
+export const VERSIONE_APP = '2.2.2';
 
 const OPZIONI_VIBRAZIONE: ReadonlyArray<{ valore: LivelloVibrazione; etichetta: string }> = [
   { valore: 'spenta', etichetta: 'Spenta' },

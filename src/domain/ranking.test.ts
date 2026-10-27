@@ -110,10 +110,24 @@ describe('rankStations', () => {
     expect(h.level).toBe('normal');
   });
 
-  it('con almeno tre prezzi freschi non consiglia un prezzo di quattro giorni fa', () => {
-    const vecchiotto = riga({ id: 'quattro-giorni', prices: { diesel: 1.96 }, updated: oreFa(4 * 24) });
+  it('con almeno tre prezzi freschi non consiglia un prezzo di sei giorni fa', () => {
+    const vecchiotto = riga({ id: 'sei-giorni', prices: { diesel: 1.96 }, updated: oreFa(6 * 24) });
     const f = [1.97, 1.98, 1.99].map((p, k) => riga({ id: `f${k}`, prices: { diesel: p }, ...aKm(1 + k * 0.1) }));
-    expect(pickBest(rankStations([vecchiotto, ...f], ctx))!.row.id).not.toBe('quattro-giorni');
+    expect(pickBest(rankStations([vecchiotto, ...f], ctx))!.row.id).not.toBe('sei-giorni');
+  });
+
+  it('un prezzo fermo da tre giorni, più vicino e più economico, vince (Lugo, Eni di via Piratello)', () => {
+    // 2,190 fermo da 72 ore e mezza a un km; tutti gli altri aggiornati da
+    // poche ore e più cari. Con la soglia a tre giorni spariva dal consiglio
+    // e vinceva un 2,254 più lontano.
+    const coh = buildCohorts(coorte('RA', 'diesel', 2.3));
+    const eni = riga({ id: 'eni', ...aKm(0.99), prices: { diesel: 2.19 }, updated: oreFa(72.6) });
+    const vicino = riga({ id: 'avia', ...aKm(0.04), prices: { diesel: 2.339 }, updated: oreFa(44) });
+    const altri = [[1.18, 2.329], [1.23, 2.299], [1.4, 2.254], [1.84, 2.299], [3, 2.239]].map(([k, p], i) =>
+      riga({ id: `a${i}`, ...aKm(k!), prices: { diesel: p! }, updated: oreFa(10) }));
+    const ranked = rankStations([eni, vicino, ...altri], { ...ctx, cohorts: coh, raggioKm: 15 });
+    expect(trova(ranked, 'eni').consigliabile).toBe(true);
+    expect(pickBest(ranked)!.row.id).toBe('eni');
   });
 });
 
@@ -312,8 +326,10 @@ describe('revisione: il consigliato non costa più del pieno che faresti comunqu
   const lontani = [2.21, 2.22, 2.23].map((p, k) => riga({ ...aKm(6 + k), prices: { diesel: p } }));
 
   it('un prezzo meno recente fra il vicino caro e il riferimento non vince con un netto negativo', () => {
+    // Quattro giorni: ancora consigliabile, ma col risparmio scontato quanto
+    // basta perché mezzo centesimo in più non lo faccia scegliere.
     const caro = riga({ id: 'caro', ...aKm(0.3), prices: { diesel: 2.4 } });
-    const medio = riga({ id: 'medio', ...aKm(0.8), prices: { diesel: 2.205 }, updated: oreFa(60) });
+    const medio = riga({ id: 'medio', ...aKm(0.8), prices: { diesel: 2.205 }, updated: oreFa(100) });
     const rif = riga({ id: 'rif', ...aKm(1.3), prices: { diesel: 2.2 } });
     const ranked = rankStations([caro, medio, rif, ...lontani], { ...ctx, cohorts: coh, raggioKm: 15 });
     const { best, lista } = classifica(ranked);
@@ -408,7 +424,7 @@ describe('revisione: riferimento e consiglio con le stesse regole di età', () =
   });
 
   it('se però intorno al più vicino ci sono tre prezzi recenti, il riferimento è fra quelli e lo dice', () => {
-    const vecchio = riga({ id: 'vecchio', ...aKm(0.3), prices: { diesel: 1.97 }, updated: oreFa(96) });
+    const vecchio = riga({ id: 'vecchio', ...aKm(0.3), prices: { diesel: 1.97 }, updated: oreFa(144) });
     const f = [1.99, 2.0, 2.01].map((p, k) => riga({ id: `f${k}`, ...aKm(1 + k * 0.3), prices: { diesel: p } }));
     const ranked = rankStations([vecchio, ...f], { ...ctx, raggioKm: 15 });
     const best = pickBest(ranked)!;
@@ -450,7 +466,7 @@ describe('revisione: la lista dice quello che la carta dice', () => {
     const vicino = riga({ id: 'vicino', ...aKm(0.5), prices: { diesel: 2.0 } });
     const altri = [[1.2, 1.97], [2.0, 1.95], [3.5, 1.9], [5.5, 1.85], [9, 1.78]].map(([k, p], i) =>
       riga({ id: `a${i}`, ...aKm(k!), prices: { diesel: p! } }));
-    const vecchio = riga({ id: 'vecchio', ...aKm(1), prices: { diesel: 1.96 }, updated: oreFa(110) });
+    const vecchio = riga({ id: 'vecchio', ...aKm(1), prices: { diesel: 1.96 }, updated: oreFa(144) });
     const hw = riga({ id: 'hw', isHighway: true, ...aKm(0.8), prices: { diesel: 2.2 } });
     const { best, lista } = classifica(rankStations([vicino, ...altri, vecchio, hw], { ...ctx, raggioKm: 15 }));
     expect(lista[0]).toBe(best);
