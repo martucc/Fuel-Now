@@ -8,7 +8,9 @@ import { FATTORE_STRADA, minutiStrada } from '../../domain/ranking';
 /** «850 m», «1,2 km», «14 km». */
 export function distanza(km: number): string {
   if (!Number.isFinite(km)) return '—';
-  if (km < 1) return `${Math.max(50, Math.round((km * 1000) / 50) * 50)} m`;
+  // 990 m arrotondati ai 50 fanno 1000: da lì si scrive in km.
+  const metri = Math.max(50, Math.round((km * 1000) / 50) * 50);
+  if (metri < 1000) return `${metri} m`;
   return `${numero(km, km < 10 ? 1 : 0)} km`;
 }
 
